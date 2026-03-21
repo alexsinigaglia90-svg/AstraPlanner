@@ -25,7 +25,7 @@ const navItems: NavItem[] = [
   { label: 'Planning', href: '/planning', icon: Calendar },
   { label: 'Employees', href: '/employees', icon: Users },
   { label: 'Demand', href: '/demand', icon: TrendingUp },
-  { label: 'Settings', href: '/settings', icon: Settings },
+  { label: 'Settings', href: '/dashboard/settings', icon: Settings },
 ]
 
 interface SidebarProps {
