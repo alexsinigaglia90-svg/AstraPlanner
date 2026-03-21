@@ -8,6 +8,10 @@ import { trpc } from '@/lib/trpc/client'
 import { fadeInUp, containerStagger, bouncy, scalePress } from '@/lib/motion'
 import { Avatar } from '@/components/domain/avatar'
 import { ProficiencyDots } from '@/components/domain/proficiency-dots'
+import { SlideOver } from '@/components/domain/slide-over'
+import { AddSkillForm } from '@/components/domain/add-skill-form'
+import { AbsenceForm } from '@/components/domain/absence-form'
+import { AvailabilityCalendar } from '@/components/domain/availability-calendar'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -126,7 +130,9 @@ export default function EmployeeDetailPage() {
   const router = useRouter()
   const params = useParams()
   const employeeId = params.employeeId as string
-  const [editOpen, setEditOpen] = useState(false)
+  const [editOpen, setEditOpen]         = useState(false)
+  const [addSkillOpen, setAddSkillOpen] = useState(false)
+  const [absenceOpen, setAbsenceOpen]   = useState(false)
 
   const { data: emp, isLoading, error } = trpc.workforce.getEmployee.useQuery(
     { id: employeeId },
@@ -471,19 +477,18 @@ export default function EmployeeDetailPage() {
         <motion.button
           variants={scalePress}
           whileTap="press"
-          disabled
+          onClick={() => setAddSkillOpen(true)}
           style={{
             alignSelf: 'flex-start',
             padding: '7px 14px',
             borderRadius: 'var(--radius-sm)',
             border: '1px solid var(--border)',
             backgroundColor: 'var(--card)',
-            color: 'var(--muted-foreground)',
+            color: 'var(--foreground)',
             fontFamily: 'var(--font-body)',
             fontSize: '13px',
             fontWeight: 500,
-            cursor: 'not-allowed',
-            opacity: 0.5,
+            cursor: 'pointer',
           }}
         >
           + Add Skill
@@ -492,6 +497,10 @@ export default function EmployeeDetailPage() {
 
       {/* Card 4: Availability Overrides */}
       <SectionCard title={`Availability Overrides (${emp.availability_overrides.length})`}>
+        {/* Weekly calendar */}
+        <AvailabilityCalendar overrides={emp.availability_overrides} />
+
+        {/* Detail list */}
         {emp.availability_overrides.length === 0 ? (
           <p style={{ fontFamily: 'var(--font-body)', fontSize: '14px', color: 'var(--muted-foreground)', margin: 0 }}>
             No overrides recorded.
@@ -574,19 +583,18 @@ export default function EmployeeDetailPage() {
         <motion.button
           variants={scalePress}
           whileTap="press"
-          disabled
+          onClick={() => setAbsenceOpen(true)}
           style={{
             alignSelf: 'flex-start',
             padding: '7px 14px',
             borderRadius: 'var(--radius-sm)',
             border: '1px solid var(--border)',
             backgroundColor: 'var(--card)',
-            color: 'var(--muted-foreground)',
+            color: 'var(--foreground)',
             fontFamily: 'var(--font-body)',
             fontSize: '13px',
             fontWeight: 500,
-            cursor: 'not-allowed',
-            opacity: 0.5,
+            cursor: 'pointer',
           }}
         >
           Report Absence
@@ -595,6 +603,30 @@ export default function EmployeeDetailPage() {
 
       {/* Suppress unused editOpen warning */}
       {editOpen && null}
+
+      {/* Add Skill slide-over */}
+      <SlideOver
+        open={addSkillOpen}
+        onClose={() => setAddSkillOpen(false)}
+        title="Add Skill"
+      >
+        <AddSkillForm
+          employeeId={employeeId}
+          onClose={() => setAddSkillOpen(false)}
+        />
+      </SlideOver>
+
+      {/* Report Absence slide-over */}
+      <SlideOver
+        open={absenceOpen}
+        onClose={() => setAbsenceOpen(false)}
+        title="Report Absence"
+      >
+        <AbsenceForm
+          employeeId={employeeId}
+          onClose={() => setAbsenceOpen(false)}
+        />
+      </SlideOver>
     </motion.div>
   )
 }
