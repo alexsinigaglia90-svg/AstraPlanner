@@ -1,0 +1,231 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,700;1,400&family=Nunito:wght@700;800;900&family=JetBrains+Mono:wght@400;500&display=swap');
+
+@import "tailwindcss";
+
+/* ============================================================
+   LIGHT MODE TOKENS
+   ============================================================ */
+:root {
+  /* Brand palette — Cosmic Indigo */
+  --primary: #6366F1;
+  --primary-hover: #4F46E5;
+  --primary-foreground: #FFFFFF;
+  --secondary: #818CF8;
+  --accent: #F97316;
+  --accent-foreground: #FFFFFF;
+  --success: #10B981;
+  --warning: #F59E0B;
+  --destructive: #EF4444;
+
+  /* Surfaces */
+  --background: #F5F3FF;
+  --foreground: #1E1B4B;
+  --card: #FFFFFF;
+  --card-foreground: #1E1B4B;
+  --muted: #E8E5F5;
+  --muted-foreground: #64748B;
+  --border: #E0E7FF;
+  --ring: #6366F1;
+
+  /* Coverage status colors */
+  --coverage-over: #3B82F6;
+  --coverage-met: #10B981;
+  --coverage-under: #F59E0B;
+  --coverage-gap: #EF4444;
+  --coverage-empty: #CBD5E1;
+
+  /* Border radius scale */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-2xl: 24px;
+  --radius-full: 9999px;
+
+  /* Elevation / Shadow scale — brand-tinted indigo */
+  --elevation-0: none;
+  --elevation-1: 0 1px 3px rgba(99, 102, 241, 0.08);
+  --elevation-2: 0 4px 12px rgba(99, 102, 241, 0.12);
+  --elevation-3: 0 8px 24px rgba(99, 102, 241, 0.16);
+  --elevation-4: 0 16px 48px rgba(99, 102, 241, 0.20);
+
+  /* Z-index scale */
+  --z-base: 0;
+  --z-dropdown: 10;
+  --z-sticky: 20;
+  --z-overlay: 30;
+  --z-modal: 40;
+  --z-popover: 50;
+  --z-toast: 60;
+  --z-maximum: 100;
+
+  /* Font families */
+  --font-display: 'Nunito', system-ui, sans-serif;
+  --font-body: 'DM Sans', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+/* ============================================================
+   DARK MODE TOKENS — media query
+   ============================================================ */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --primary: #818CF8;
+    --primary-hover: #6366F1;
+    --primary-foreground: #FFFFFF;
+    --secondary: #A5B4FC;
+    --accent: #FB923C;
+    --accent-foreground: #0F172A;
+    --success: #34D399;
+    --warning: #FBBF24;
+    --destructive: #F87171;
+
+    --background: #0F0E1A;
+    --foreground: #F5F3FF;
+    --card: #1A1830;
+    --card-foreground: #E8E5F5;
+    --muted: #2A2845;
+    --muted-foreground: #94A3B8;
+    --border: #3730A3;
+    --ring: #818CF8;
+  }
+}
+
+/* ============================================================
+   DARK MODE TOKENS — .dark class (runtime toggle)
+   ============================================================ */
+.dark {
+  --primary: #818CF8;
+  --primary-hover: #6366F1;
+  --primary-foreground: #FFFFFF;
+  --secondary: #A5B4FC;
+  --accent: #FB923C;
+  --accent-foreground: #0F172A;
+  --success: #34D399;
+  --warning: #FBBF24;
+  --destructive: #F87171;
+
+  --background: #0F0E1A;
+  --foreground: #F5F3FF;
+  --card: #1A1830;
+  --card-foreground: #E8E5F5;
+  --muted: #2A2845;
+  --muted-foreground: #94A3B8;
+  --border: #3730A3;
+  --ring: #818CF8;
+}
+
+/* ============================================================
+   TAILWIND v4 THEME MAPPING
+   ============================================================ */
+@theme inline {
+  /* Colors */
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-destructive: var(--destructive);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-ring: var(--ring);
+
+  /* Coverage status colors */
+  --color-coverage-over: var(--coverage-over);
+  --color-coverage-met: var(--coverage-met);
+  --color-coverage-under: var(--coverage-under);
+  --color-coverage-gap: var(--coverage-gap);
+  --color-coverage-empty: var(--coverage-empty);
+
+  /* Border radius */
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+  --radius-xl: var(--radius-xl);
+  --radius-2xl: var(--radius-2xl);
+  --radius-full: var(--radius-full);
+
+  /* Shadows */
+  --shadow-elevation-0: var(--elevation-0);
+  --shadow-elevation-1: var(--elevation-1);
+  --shadow-elevation-2: var(--elevation-2);
+  --shadow-elevation-3: var(--elevation-3);
+  --shadow-elevation-4: var(--elevation-4);
+
+  /* Z-index */
+  --z-index-base: var(--z-base);
+  --z-index-dropdown: var(--z-dropdown);
+  --z-index-sticky: var(--z-sticky);
+  --z-index-overlay: var(--z-overlay);
+  --z-index-modal: var(--z-modal);
+  --z-index-popover: var(--z-popover);
+  --z-index-toast: var(--z-toast);
+  --z-index-maximum: var(--z-maximum);
+
+  /* Font families */
+  --font-display: var(--font-display);
+  --font-body: var(--font-body);
+  --font-mono: var(--font-mono);
+}
+
+/* ============================================================
+   BASE STYLES
+   ============================================================ */
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Tabular figures for number columns */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Selection color */
+::selection {
+  background-color: rgba(99, 102, 241, 0.2);
+  color: var(--foreground);
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--muted);
+  border-radius: var(--radius-full);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: var(--radius-full);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--secondary);
+}
+
+/* Reduced motion — disable all transitions and animations */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
