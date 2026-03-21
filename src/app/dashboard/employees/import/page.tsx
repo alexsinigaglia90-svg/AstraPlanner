@@ -19,8 +19,6 @@ const TEMPLATE_COLUMNS = [
   { key: 'weekly_hours', label: 'Weekly Hours', example: '40', required: true },
   { key: 'hourly_rate', label: 'Hourly Rate (€)', example: '22.50', required: true },
   { key: 'shift_pattern', label: 'Shift Pattern', example: 'day', required: true },
-  { key: 'email', label: 'Email', example: 'l.vanderberg@company.nl', required: false },
-  { key: 'phone', label: 'Phone', example: '+31 6 1234 5678', required: false },
 ]
 
 type ImportState = 'ready' | 'validating' | 'importing' | 'done' | 'error'
@@ -35,11 +33,8 @@ interface ValidationResult {
 function downloadTemplate() {
   const headers = TEMPLATE_COLUMNS.map((c) => c.label)
   const exampleRow = TEMPLATE_COLUMNS.map((c) => c.example)
-  const instructions = TEMPLATE_COLUMNS.map((c) => c.required ? 'Required' : 'Optional')
 
-  const ws = XLSX.utils.aoa_to_sheet([headers, instructions, exampleRow])
-
-  // Set column widths
+  const ws = XLSX.utils.aoa_to_sheet([headers, exampleRow])
   ws['!cols'] = TEMPLATE_COLUMNS.map(() => ({ wch: 22 }))
 
   const wb = XLSX.utils.book_new()
@@ -243,76 +238,123 @@ export default function EmployeeImportPage() {
               <div>
                 <div className="flex items-center gap-2 mb-3">
                   <div style={{
-                    width: 22, height: 22, borderRadius: 'var(--radius-full)',
-                    backgroundColor: 'var(--primary)', color: '#fff',
+                    width: 24, height: 24, borderRadius: 'var(--radius-full)',
+                    background: 'linear-gradient(135deg, var(--primary), #8B5CF6)', color: '#fff',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     fontFamily: 'var(--font-body)', fontSize: '11px', fontWeight: 700,
+                    boxShadow: '0 2px 8px rgba(99,102,241,0.25)',
                   }}>1</div>
-                  <span style={{ fontFamily: 'var(--font-body)', fontSize: '13px', fontWeight: 600, color: 'var(--foreground)' }}>
+                  <span style={{ fontFamily: 'var(--font-body)', fontSize: '14px', fontWeight: 600, color: 'var(--foreground)' }}>
                     Download the template
                   </span>
                 </div>
                 <motion.button
                   variants={scalePress} whileTap="press"
+                  whileHover={{ y: -1 }}
+                  transition={snappy}
                   onClick={downloadTemplate}
-                  className="flex items-center gap-2 w-full justify-center"
+                  className="flex items-center gap-3 w-full group"
                   style={{
-                    padding: '12px 20px', borderRadius: 'var(--radius-sm)',
-                    border: '1.5px solid var(--border)', backgroundColor: 'var(--background)',
-                    fontFamily: 'var(--font-body)', fontSize: '13px', fontWeight: 500,
-                    color: 'var(--foreground)', cursor: 'pointer',
-                    transition: 'border-color 0.15s, background-color 0.15s',
+                    padding: '14px 18px', borderRadius: 'var(--radius-md)',
+                    border: '1.5px solid rgba(99,102,241,0.12)',
+                    background: 'linear-gradient(135deg, rgba(99,102,241,0.04), rgba(139,92,246,0.02))',
+                    cursor: 'pointer', transition: 'all 0.2s',
                   }}
-                  onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'rgba(99,102,241,0.3)'; e.currentTarget.style.backgroundColor = 'rgba(99,102,241,0.03)' }}
-                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.backgroundColor = 'var(--background)' }}
+                  onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'rgba(99,102,241,0.25)'; e.currentTarget.style.boxShadow = '0 4px 16px rgba(99,102,241,0.08)' }}
+                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'rgba(99,102,241,0.12)'; e.currentTarget.style.boxShadow = 'none' }}
                 >
-                  <Download size={15} />
-                  AstraPlanner_Employee_Import_Template.xlsx
+                  <div style={{
+                    width: 40, height: 40, borderRadius: 'var(--radius-sm)',
+                    background: 'linear-gradient(135deg, rgba(99,102,241,0.12), rgba(139,92,246,0.08))',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                  }}>
+                    <Download size={18} style={{ color: 'var(--primary)' }} />
+                  </div>
+                  <div style={{ textAlign: 'left', flex: 1 }}>
+                    <div style={{ fontFamily: 'var(--font-body)', fontSize: '13px', fontWeight: 600, color: 'var(--foreground)' }}>
+                      Download Excel Template
+                    </div>
+                    <div style={{ fontFamily: 'var(--font-body)', fontSize: '11px', color: 'var(--muted-foreground)', marginTop: 2 }}>
+                      Pre-configured with all required columns
+                    </div>
+                  </div>
+                  <div style={{ color: 'var(--muted-foreground)', transition: 'transform 0.15s' }} className="group-hover:translate-y-0.5">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 5v14" /><path d="m19 12-7 7-7-7" />
+                    </svg>
+                  </div>
                 </motion.button>
-                <p style={{ fontFamily: 'var(--font-body)', fontSize: '11px', color: 'var(--muted-foreground)', marginTop: 6 }}>
-                  Fill in the columns and save. Required: Employee Number, Name, Department, Contract Type, Hours, Rate, Shift Pattern.
-                </p>
               </div>
 
               {/* ── Step 2: Upload filled template ────────────────────── */}
               <div>
                 <div className="flex items-center gap-2 mb-3">
                   <div style={{
-                    width: 22, height: 22, borderRadius: 'var(--radius-full)',
-                    backgroundColor: validation ? 'var(--primary)' : 'var(--muted)',
+                    width: 24, height: 24, borderRadius: 'var(--radius-full)',
+                    background: validation
+                      ? 'linear-gradient(135deg, var(--success), #059669)'
+                      : 'linear-gradient(135deg, var(--muted), var(--muted))',
                     color: validation ? '#fff' : 'var(--muted-foreground)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     fontFamily: 'var(--font-body)', fontSize: '11px', fontWeight: 700,
-                  }}>2</div>
-                  <span style={{ fontFamily: 'var(--font-body)', fontSize: '13px', fontWeight: 600, color: 'var(--foreground)' }}>
+                    boxShadow: validation ? '0 2px 8px rgba(16,185,129,0.25)' : 'none',
+                    transition: 'all 0.3s',
+                  }}>
+                    {validation ? <Check size={13} /> : '2'}
+                  </div>
+                  <span style={{ fontFamily: 'var(--font-body)', fontSize: '14px', fontWeight: 600, color: 'var(--foreground)' }}>
                     Upload your filled template
                   </span>
                 </div>
 
-                <div
+                <motion.div
+                  animate={dragOver ? { scale: 1.01 } : { scale: 1 }}
+                  transition={snappy}
                   onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
                   onDragLeave={() => setDragOver(false)}
                   onDrop={handleDrop}
                   onClick={() => fileRef.current?.click()}
                   style={{
-                    border: `2px dashed ${dragOver ? 'var(--primary)' : 'var(--border)'}`,
-                    borderRadius: 'var(--radius-md)',
-                    padding: '28px 20px',
+                    border: `2px dashed ${dragOver ? 'var(--primary)' : 'rgba(99,102,241,0.15)'}`,
+                    borderRadius: 'var(--radius-lg)',
+                    padding: '32px 20px',
                     textAlign: 'center',
                     cursor: 'pointer',
-                    backgroundColor: dragOver ? 'rgba(99,102,241,0.04)' : 'transparent',
-                    transition: 'all 0.2s',
+                    background: dragOver
+                      ? 'linear-gradient(135deg, rgba(99,102,241,0.06), rgba(139,92,246,0.03))'
+                      : 'linear-gradient(135deg, rgba(99,102,241,0.02), transparent)',
+                    transition: 'all 0.25s',
                   }}
                 >
                   <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleFileSelect} style={{ display: 'none' }} />
-                  <Upload size={24} style={{ color: 'var(--muted-foreground)', margin: '0 auto 8px' }} />
-                  <p style={{ fontFamily: 'var(--font-body)', fontSize: '13px', fontWeight: 500, color: 'var(--foreground)' }}>
-                    {fileName || 'Drop your Excel file here'}
-                  </p>
-                  <p style={{ fontFamily: 'var(--font-body)', fontSize: '11px', color: 'var(--muted-foreground)', marginTop: 4 }}>
-                    .xlsx, .xls, or .csv
-                  </p>
-                </div>
+                  <div style={{
+                    width: 48, height: 48, borderRadius: 'var(--radius-md)',
+                    background: 'rgba(99,102,241,0.08)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    margin: '0 auto 12px',
+                  }}>
+                    <Upload size={22} style={{ color: 'var(--primary)' }} />
+                  </div>
+                  {fileName ? (
+                    <>
+                      <p style={{ fontFamily: 'var(--font-body)', fontSize: '14px', fontWeight: 600, color: 'var(--foreground)' }}>
+                        {fileName}
+                      </p>
+                      <p style={{ fontFamily: 'var(--font-body)', fontSize: '11px', color: 'var(--primary)', marginTop: 4, fontWeight: 500 }}>
+                        Click to replace
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <p style={{ fontFamily: 'var(--font-body)', fontSize: '14px', fontWeight: 500, color: 'var(--foreground)' }}>
+                        Drop your Excel file here
+                      </p>
+                      <p style={{ fontFamily: 'var(--font-body)', fontSize: '12px', color: 'var(--muted-foreground)', marginTop: 4 }}>
+                        or click to browse &middot; .xlsx, .xls, .csv
+                      </p>
+                    </>
+                  )}
+                </motion.div>
               </div>
 
               {/* ── Validation results ────────────────────────────────── */}
