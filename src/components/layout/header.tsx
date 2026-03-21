@@ -6,6 +6,7 @@ import { Bell, LogOut } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { scalePress, bouncy } from '@/lib/motion'
 import { createClient } from '@/lib/supabase/client'
+import { SiteSelector } from '@/components/domain/site-selector'
 
 export function Header() {
   const router = useRouter()
@@ -25,10 +26,17 @@ export function Header() {
       className="h-14 flex-shrink-0 flex items-center justify-between px-6 sticky top-0 z-[var(--z-sticky)] bg-[var(--card)] border-b border-[var(--border)]"
       style={{ boxShadow: 'var(--elevation-1)' }}
     >
-      {/* Logo */}
-      <span className="font-display font-bold text-xl text-[var(--foreground)]">
-        AstraPlanner
-      </span>
+      {/* Logo + Site selector */}
+      <div className="flex items-center gap-4">
+        <span className="font-display font-bold text-xl text-[var(--foreground)]">
+          AstraPlanner
+        </span>
+        <div
+          className="w-px h-6"
+          style={{ backgroundColor: 'var(--border)' }}
+        />
+        <SiteSelector />
+      </div>
 
       {/* Right actions */}
       <div className="flex items-center gap-3">
