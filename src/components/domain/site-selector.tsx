@@ -92,7 +92,7 @@ export function SiteSelector() {
         <span style={{
           fontFamily: 'var(--font-body)', fontSize: '12px', fontWeight: 600,
           color: 'var(--foreground)',
-          maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          whiteSpace: 'nowrap',
         }}>
           {activeSite?.name ?? 'Select site'}
         </span>
