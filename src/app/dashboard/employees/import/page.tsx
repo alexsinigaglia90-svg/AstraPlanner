@@ -1,45 +1,405 @@
 'use client'
 
+import { useState, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { CSVImportWizard, FieldDefinition, ImportError } from '@/components/domain/csv-import-wizard'
+import { motion, AnimatePresence } from 'framer-motion'
+import { Download, Upload, FileSpreadsheet, Check, AlertCircle, ArrowLeft, X } from 'lucide-react'
+import { bouncy, snappy, wobbly, scalePress } from '@/lib/motion'
+import * as XLSX from 'xlsx'
 
-// ── Employee field schema ─────────────────────────────────────────────────────
+// ── Dataloader column definitions ───────────────────────────────────────────
+// These match what the solver needs (no skills — those are graded individually)
 
-const EMPLOYEE_FIELDS: FieldDefinition[] = [
-  { key: 'employee_number', label: 'Employee Number', required: true,  type: 'string' },
-  { key: 'first_name',      label: 'First Name',      required: true,  type: 'string' },
-  { key: 'last_name',       label: 'Last Name',       required: true,  type: 'string' },
-  { key: 'email',           label: 'Email',           required: false, type: 'email'  },
-  { key: 'contract_type',   label: 'Contract Type',   required: true,  type: 'string' },
-  { key: 'weekly_hours_contracted', label: 'Weekly Hours', required: true, type: 'number' },
-  { key: 'hourly_rate',     label: 'Hourly Rate',     required: true,  type: 'number' },
+const TEMPLATE_COLUMNS = [
+  { key: 'employee_number', label: 'Employee Number', example: 'EMP-001', required: true },
+  { key: 'first_name', label: 'First Name', example: 'Lars', required: true },
+  { key: 'last_name', label: 'Last Name', example: 'van der Berg', required: true },
+  { key: 'department', label: 'Department', example: 'Operations', required: true },
+  { key: 'contract_type', label: 'Contract Type', example: 'full_time', required: true },
+  { key: 'weekly_hours', label: 'Weekly Hours', example: '40', required: true },
+  { key: 'hourly_rate', label: 'Hourly Rate (€)', example: '22.50', required: true },
+  { key: 'shift_pattern', label: 'Shift Pattern', example: 'day', required: true },
+  { key: 'email', label: 'Email', example: 'l.vanderberg@company.nl', required: false },
+  { key: 'phone', label: 'Phone', example: '+31 6 1234 5678', required: false },
 ]
 
-// ── Page ──────────────────────────────────────────────────────────────────────
+type ImportState = 'ready' | 'validating' | 'importing' | 'done' | 'error'
+
+interface ValidationResult {
+  valid: { row: number; data: Record<string, string> }[]
+  errors: { row: number; field: string; message: string }[]
+}
+
+// ── Template download ───────────────────────────────────────────────────────
+
+function downloadTemplate() {
+  const headers = TEMPLATE_COLUMNS.map((c) => c.label)
+  const exampleRow = TEMPLATE_COLUMNS.map((c) => c.example)
+  const instructions = TEMPLATE_COLUMNS.map((c) => c.required ? 'Required' : 'Optional')
+
+  const ws = XLSX.utils.aoa_to_sheet([headers, instructions, exampleRow])
+
+  // Set column widths
+  ws['!cols'] = TEMPLATE_COLUMNS.map(() => ({ wch: 22 }))
+
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws, 'Employees')
+  XLSX.writeFile(wb, 'AstraPlanner_Employee_Import_Template.xlsx')
+}
+
+// ── Validate parsed data ────────────────────────────────────────────────────
+
+function validateData(rows: Record<string, string>[]): ValidationResult {
+  const valid: ValidationResult['valid'] = []
+  const errors: ValidationResult['errors'] = []
+
+  rows.forEach((row, i) => {
+    const rowNum = i + 2 // +2 for header + 1-indexed
+    let hasError = false
+
+    for (const col of TEMPLATE_COLUMNS) {
+      if (col.required && !row[col.label]?.trim()) {
+        errors.push({ row: rowNum, field: col.label, message: `${col.label} is required` })
+        hasError = true
+      }
+    }
+
+    // Type validations
+    const hours = row['Weekly Hours']
+    if (hours && isNaN(Number(hours))) {
+      errors.push({ row: rowNum, field: 'Weekly Hours', message: 'Must be a number' })
+      hasError = true
+    }
+    const rate = row['Hourly Rate (€)']
+    if (rate && isNaN(Number(rate))) {
+      errors.push({ row: rowNum, field: 'Hourly Rate (€)', message: 'Must be a number' })
+      hasError = true
+    }
+
+    const validContractTypes = ['full_time', 'part_time', 'temporary', 'seasonal', 'contractor']
+    const ct = row['Contract Type']?.trim().toLowerCase()
+    if (ct && !validContractTypes.includes(ct)) {
+      errors.push({ row: rowNum, field: 'Contract Type', message: `Must be one of: ${validContractTypes.join(', ')}` })
+      hasError = true
+    }
+
+    const validShifts = ['day', 'afternoon', 'night']
+    const sp = row['Shift Pattern']?.trim().toLowerCase()
+    if (sp && !validShifts.includes(sp)) {
+      errors.push({ row: rowNum, field: 'Shift Pattern', message: `Must be one of: ${validShifts.join(', ')}` })
+      hasError = true
+    }
+
+    if (!hasError) {
+      valid.push({ row: rowNum, data: row })
+    }
+  })
+
+  return { valid, errors }
+}
+
+// ── Main page ───────────────────────────────────────────────────────────────
 
 export default function EmployeeImportPage() {
   const router = useRouter()
+  const fileRef = useRef<HTMLInputElement>(null)
+  const [state, setState] = useState<ImportState>('ready')
+  const [dragOver, setDragOver] = useState(false)
+  const [fileName, setFileName] = useState('')
+  const [validation, setValidation] = useState<ValidationResult | null>(null)
+  const [showErrors, setShowErrors] = useState(false)
 
-  const handleClose = () => {
-    router.push('/dashboard/employees')
-  }
+  const processFile = useCallback(async (file: File) => {
+    setFileName(file.name)
+    setState('validating')
 
-  const handleImport = async (
-    mappedRows: Record<string, string>[]
-  ): Promise<{ success: number; errors: ImportError[] }> => {
-    // TODO: wire up to tRPC bulk-create endpoint when available
-    // For now, simulate a short delay and return a success summary
-    await new Promise((resolve) => setTimeout(resolve, 1200))
-    return { success: mappedRows.length, errors: [] }
+    try {
+      const buffer = await file.arrayBuffer()
+      const wb = XLSX.read(buffer)
+      const ws = wb.Sheets[wb.SheetNames[0]!]!
+      const rows = XLSX.utils.sheet_to_json<Record<string, string>>(ws, { defval: '' })
+
+      // Skip the "Required/Optional" instruction row if present
+      const dataRows = rows.filter((r) => {
+        const first = Object.values(r)[0]?.toLowerCase()
+        return first !== 'required' && first !== 'optional'
+      })
+
+      const result = validateData(dataRows)
+      setValidation(result)
+      setState(result.valid.length > 0 ? 'ready' : 'error')
+    } catch {
+      setValidation({ valid: [], errors: [{ row: 0, field: 'File', message: 'Could not read file. Please use the template.' }] })
+      setState('error')
+    }
+  }, [])
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    setDragOver(false)
+    const file = e.dataTransfer.files[0]
+    if (file) processFile(file)
+  }, [processFile])
+
+  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) processFile(file)
+  }, [processFile])
+
+  const handleImport = async () => {
+    if (!validation) return
+    setState('importing')
+    // TODO: wire to tRPC bulk-create
+    await new Promise((resolve) => setTimeout(resolve, 1500))
+    setState('done')
   }
 
   return (
-    <CSVImportWizard
-      open
-      onClose={handleClose}
-      title="Import Employees"
-      targetFields={EMPLOYEE_FIELDS}
-      onImport={handleImport}
-    />
+    <div className="fixed inset-0 flex items-center justify-center"
+      style={{ zIndex: 'var(--z-modal)', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(4px)' }}
+    >
+      <motion.div
+        initial={{ opacity: 0, scale: 0.97, y: 10 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        transition={bouncy}
+        style={{
+          width: '100%', maxWidth: 640,
+          backgroundColor: 'var(--card)', borderRadius: 'var(--radius-xl)',
+          boxShadow: 'var(--elevation-4)', overflow: 'hidden',
+        }}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4"
+          style={{ borderBottom: '1px solid var(--border)' }}
+        >
+          <div className="flex items-center gap-3">
+            <div style={{
+              width: 36, height: 36, borderRadius: 'var(--radius-sm)',
+              backgroundColor: 'rgba(99,102,241,0.1)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <FileSpreadsheet size={18} style={{ color: 'var(--primary)' }} />
+            </div>
+            <div>
+              <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '18px', fontWeight: 700, color: 'var(--foreground)', margin: 0 }}>
+                Import Employees
+              </h2>
+              <p style={{ fontFamily: 'var(--font-body)', fontSize: '12px', color: 'var(--muted-foreground)', margin: 0 }}>
+                Download template, fill in your data, upload
+              </p>
+            </div>
+          </div>
+          <button onClick={() => router.push('/dashboard/employees')}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: 'var(--muted-foreground)' }}
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="px-6 py-5" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          {state === 'done' ? (
+            /* ── Success state ──────────────────────────────────────── */
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={wobbly}
+              className="text-center py-8"
+            >
+              <motion.div
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ ...wobbly, delay: 0.15 }}
+                style={{
+                  width: 64, height: 64, borderRadius: 'var(--radius-lg)',
+                  backgroundColor: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.2)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  margin: '0 auto 16px',
+                }}
+              >
+                <Check size={28} style={{ color: 'var(--success)' }} />
+              </motion.div>
+              <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '20px', fontWeight: 700, color: 'var(--foreground)' }}>
+                Import Complete
+              </h3>
+              <p style={{ fontFamily: 'var(--font-body)', fontSize: '14px', color: 'var(--muted-foreground)', marginTop: 8 }}>
+                {validation?.valid.length} employees imported successfully
+              </p>
+              <motion.button
+                variants={scalePress} whileTap="press"
+                onClick={() => router.push('/dashboard/employees')}
+                style={{
+                  marginTop: 24, padding: '10px 24px', borderRadius: 'var(--radius-sm)',
+                  background: 'linear-gradient(135deg, var(--primary), #8B5CF6)',
+                  color: '#fff', border: 'none', fontFamily: 'var(--font-body)',
+                  fontSize: '14px', fontWeight: 600, cursor: 'pointer',
+                }}
+              >
+                View Employees
+              </motion.button>
+            </motion.div>
+          ) : (
+            <>
+              {/* ── Step 1: Download template ────────────────────────── */}
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <div style={{
+                    width: 22, height: 22, borderRadius: 'var(--radius-full)',
+                    backgroundColor: 'var(--primary)', color: '#fff',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontFamily: 'var(--font-body)', fontSize: '11px', fontWeight: 700,
+                  }}>1</div>
+                  <span style={{ fontFamily: 'var(--font-body)', fontSize: '13px', fontWeight: 600, color: 'var(--foreground)' }}>
+                    Download the template
+                  </span>
+                </div>
+                <motion.button
+                  variants={scalePress} whileTap="press"
+                  onClick={downloadTemplate}
+                  className="flex items-center gap-2 w-full justify-center"
+                  style={{
+                    padding: '12px 20px', borderRadius: 'var(--radius-sm)',
+                    border: '1.5px solid var(--border)', backgroundColor: 'var(--background)',
+                    fontFamily: 'var(--font-body)', fontSize: '13px', fontWeight: 500,
+                    color: 'var(--foreground)', cursor: 'pointer',
+                    transition: 'border-color 0.15s, background-color 0.15s',
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'rgba(99,102,241,0.3)'; e.currentTarget.style.backgroundColor = 'rgba(99,102,241,0.03)' }}
+                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.backgroundColor = 'var(--background)' }}
+                >
+                  <Download size={15} />
+                  AstraPlanner_Employee_Import_Template.xlsx
+                </motion.button>
+                <p style={{ fontFamily: 'var(--font-body)', fontSize: '11px', color: 'var(--muted-foreground)', marginTop: 6 }}>
+                  Fill in the columns and save. Required: Employee Number, Name, Department, Contract Type, Hours, Rate, Shift Pattern.
+                </p>
+              </div>
+
+              {/* ── Step 2: Upload filled template ────────────────────── */}
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <div style={{
+                    width: 22, height: 22, borderRadius: 'var(--radius-full)',
+                    backgroundColor: validation ? 'var(--primary)' : 'var(--muted)',
+                    color: validation ? '#fff' : 'var(--muted-foreground)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontFamily: 'var(--font-body)', fontSize: '11px', fontWeight: 700,
+                  }}>2</div>
+                  <span style={{ fontFamily: 'var(--font-body)', fontSize: '13px', fontWeight: 600, color: 'var(--foreground)' }}>
+                    Upload your filled template
+                  </span>
+                </div>
+
+                <div
+                  onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
+                  onDragLeave={() => setDragOver(false)}
+                  onDrop={handleDrop}
+                  onClick={() => fileRef.current?.click()}
+                  style={{
+                    border: `2px dashed ${dragOver ? 'var(--primary)' : 'var(--border)'}`,
+                    borderRadius: 'var(--radius-md)',
+                    padding: '28px 20px',
+                    textAlign: 'center',
+                    cursor: 'pointer',
+                    backgroundColor: dragOver ? 'rgba(99,102,241,0.04)' : 'transparent',
+                    transition: 'all 0.2s',
+                  }}
+                >
+                  <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleFileSelect} style={{ display: 'none' }} />
+                  <Upload size={24} style={{ color: 'var(--muted-foreground)', margin: '0 auto 8px' }} />
+                  <p style={{ fontFamily: 'var(--font-body)', fontSize: '13px', fontWeight: 500, color: 'var(--foreground)' }}>
+                    {fileName || 'Drop your Excel file here'}
+                  </p>
+                  <p style={{ fontFamily: 'var(--font-body)', fontSize: '11px', color: 'var(--muted-foreground)', marginTop: 4 }}>
+                    .xlsx, .xls, or .csv
+                  </p>
+                </div>
+              </div>
+
+              {/* ── Validation results ────────────────────────────────── */}
+              <AnimatePresence>
+                {validation && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    transition={bouncy}
+                  >
+                    <div className="flex items-center gap-4 mb-3">
+                      {validation.valid.length > 0 && (
+                        <div className="flex items-center gap-1.5">
+                          <Check size={14} style={{ color: 'var(--success)' }} />
+                          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '13px', fontWeight: 600, color: 'var(--success)' }}>
+                            {validation.valid.length} valid
+                          </span>
+                        </div>
+                      )}
+                      {validation.errors.length > 0 && (
+                        <button onClick={() => setShowErrors(!showErrors)}
+                          className="flex items-center gap-1.5"
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                        >
+                          <AlertCircle size={14} style={{ color: 'var(--destructive)' }} />
+                          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '13px', fontWeight: 600, color: 'var(--destructive)' }}>
+                            {validation.errors.length} errors
+                          </span>
+                        </button>
+                      )}
+                    </div>
+
+                    {showErrors && validation.errors.length > 0 && (
+                      <div style={{
+                        maxHeight: 150, overflowY: 'auto',
+                        backgroundColor: 'rgba(239,68,68,0.04)', border: '1px solid rgba(239,68,68,0.1)',
+                        borderRadius: 'var(--radius-sm)', padding: '8px 12px',
+                      }}>
+                        {validation.errors.slice(0, 20).map((err, i) => (
+                          <div key={i} style={{ fontFamily: 'var(--font-body)', fontSize: '11px', color: 'var(--destructive)', padding: '2px 0' }}>
+                            Row {err.row}: {err.field} — {err.message}
+                          </div>
+                        ))}
+                        {validation.errors.length > 20 && (
+                          <div style={{ fontFamily: 'var(--font-body)', fontSize: '11px', color: 'var(--muted-foreground)', padding: '4px 0' }}>
+                            +{validation.errors.length - 20} more errors
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* ── Import button ─────────────────────────────────────── */}
+              {validation && validation.valid.length > 0 && (
+                <motion.button
+                  variants={scalePress} whileTap="press"
+                  onClick={handleImport}
+                  disabled={state === 'importing'}
+                  className="w-full flex items-center justify-center gap-2"
+                  style={{
+                    padding: '12px 20px', borderRadius: 'var(--radius-sm)',
+                    background: 'linear-gradient(135deg, var(--primary), #8B5CF6)',
+                    color: '#fff', border: 'none', fontFamily: 'var(--font-body)',
+                    fontSize: '14px', fontWeight: 600,
+                    cursor: state === 'importing' ? 'not-allowed' : 'pointer',
+                    opacity: state === 'importing' ? 0.7 : 1,
+                  }}
+                >
+                  {state === 'importing' ? (
+                    <>
+                      <svg className="animate-spin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                        <circle cx="12" cy="12" r="10" strokeOpacity="0.3" /><path d="M12 2a10 10 0 0 1 10 10" strokeLinecap="round" />
+                      </svg>
+                      Importing...
+                    </>
+                  ) : (
+                    <>Import {validation.valid.length} employees</>
+                  )}
+                </motion.button>
+              )}
+            </>
+          )}
+        </div>
+      </motion.div>
+    </div>
   )
 }
