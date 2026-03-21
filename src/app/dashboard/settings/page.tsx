@@ -223,14 +223,18 @@ export default function OrgSettingsPage() {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-          {(['timezone', 'locale', 'currency'] as const).map((key) => (
+          {([
+            { key: 'default_timezone', label: 'Timezone' },
+            { key: 'default_locale', label: 'Locale' },
+            { key: 'default_currency', label: 'Currency' },
+          ] as const).map(({ key, label }) => (
             <div key={key}>
-              <label className="block text-xs font-medium mb-1.5 capitalize" style={{ color: 'var(--muted-foreground)', fontFamily: 'var(--font-body)' }}>
-                {key}
+              <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--muted-foreground)', fontFamily: 'var(--font-body)' }}>
+                {label}
               </label>
               {isLoading ? <SkeletonField /> : (
                 <p className="text-sm font-medium" style={{ color: 'var(--foreground)', fontFamily: 'var(--font-body)' }}>
-                  {settings?.[key] ?? <span style={{ color: 'var(--muted-foreground)' }}>—</span>}
+                  {(data as Record<string, unknown>)?.[key] as string ?? <span style={{ color: 'var(--muted-foreground)' }}>—</span>}
                 </p>
               )}
             </div>

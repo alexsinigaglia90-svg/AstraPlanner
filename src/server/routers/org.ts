@@ -70,7 +70,7 @@ export const orgRouter = router({
     const { data, error } = await ctx.supabase
       .from('organization')
       .select(
-        'id, name, slug, subscription_tier, settings_json, created_at, updated_at',
+        'id, name, slug, subscription_tier, default_timezone, default_locale, default_currency, settings_json, created_at, updated_at',
       )
       .eq('id', ctx.organizationId)
       .single()
@@ -144,20 +144,22 @@ export const orgRouter = router({
   listSites: viewerProcedure.query(async ({ ctx }) => {
     const { data, error } = await ctx.supabase
       .from('site')
-      .select('id, name, timezone, address, settings_json, is_active, created_at')
+      .select('id, name, code, site_type, timezone, address_line1, city, country_code, settings_json, created_at, status')
       .order('name')
 
     assertNoError(error, 'listSites')
 
-    return (data ?? []) as Array<{
-      id: string
-      name: string
-      timezone: string
-      address: string | null
-      settings_json: Record<string, unknown>
-      is_active: boolean
-      created_at: string
-    }>
+    return (data ?? []).map((site) => ({
+      id: site.id as string,
+      name: site.name as string,
+      code: site.code as string,
+      site_type: site.site_type as string,
+      timezone: site.timezone as string,
+      address: [site.address_line1, site.city, site.country_code].filter(Boolean).join(', '),
+      settings_json: (site.settings_json ?? {}) as Record<string, unknown>,
+      is_active: site.status === 'active',
+      created_at: site.created_at as string,
+    }))
   }),
 
   // -------------------------------------------------------------------------
@@ -169,7 +171,7 @@ export const orgRouter = router({
       const { data, error } = await ctx.supabase
         .from('site')
         .select(
-          'id, name, timezone, address, settings_json, is_active, created_at, updated_at',
+          'id, name, code, site_type, timezone, address_line1, city, postal_code, country_code, settings_json, status, created_at, updated_at',
         )
         .eq('id', input.id)
         .single()
@@ -180,9 +182,15 @@ export const orgRouter = router({
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Site not found' })
       }
 
-      return data as {
+      return {
+        ...data,
+        address: [data.address_line1, data.city, data.country_code].filter(Boolean).join(', '),
+        is_active: data.status === 'active',
+      } as {
         id: string
         name: string
+        code: string
+        site_type: string
         timezone: string
         address: string | null
         settings_json: {
