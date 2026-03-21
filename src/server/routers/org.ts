@@ -290,8 +290,8 @@ export const orgRouter = router({
       let query = ctx.supabase
         .from('process')
         .select(
-          `id, name, unit_of_measure, department_id, min_skill_level, hazard_level,
-           requires_certification, is_active,
+          `id, name, code, category, description, unit_of_measure, department_id,
+           min_skill_level, hazard_level, requires_certification, equipment_required, is_active,
            productivity_standard(skill_level, units_per_hour, site_id)`,
         )
         .eq('is_active', true)
@@ -307,11 +307,15 @@ export const orgRouter = router({
       return (data ?? []).map((p: Record<string, unknown>) => ({
         id: p.id,
         name: p.name,
+        code: p.code,
+        category: p.category,
+        description: p.description ?? null,
         unit_of_measure: p.unit_of_measure,
         department_id: p.department_id ?? null,
         min_skill_level: p.min_skill_level,
         hazard_level: p.hazard_level,
         requires_certification: p.requires_certification,
+        equipment_required: (p.equipment_required as string[] | null) ?? [],
         is_active: p.is_active,
         productivity_standards: (
           (p.productivity_standard as Array<{

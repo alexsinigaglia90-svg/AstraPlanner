@@ -9,6 +9,7 @@ import {
   Settings,
   ChevronLeft,
   ChevronRight,
+  GitBranch,
 } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
@@ -24,6 +25,7 @@ const navItems: NavItem[] = [
   { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { label: 'Planning', href: '/planning', icon: Calendar },
   { label: 'Employees', href: '/employees', icon: Users },
+  { label: 'Processes', href: '/dashboard/processes', icon: GitBranch },
   { label: 'Demand', href: '/demand', icon: TrendingUp },
   { label: 'Settings', href: '/dashboard/settings', icon: Settings },
 ]
