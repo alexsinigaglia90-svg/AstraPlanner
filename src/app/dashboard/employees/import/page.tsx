@@ -53,7 +53,9 @@ function validateData(rows: Record<string, string>[]): ValidationResult {
     let hasError = false
 
     for (const col of TEMPLATE_COLUMNS) {
-      if (col.required && !row[col.label]?.trim()) {
+      const rawVal = row[col.label]
+      const strVal = rawVal != null ? String(rawVal).trim() : ''
+      if (col.required && !strVal) {
         errors.push({ row: rowNum, field: col.label, message: `${col.label} is required` })
         hasError = true
       }
@@ -72,14 +74,14 @@ function validateData(rows: Record<string, string>[]): ValidationResult {
     }
 
     const validContractTypes = ['full_time', 'part_time', 'temporary', 'seasonal', 'contractor']
-    const ct = row['Contract Type']?.trim().toLowerCase()
+    const ct = row['Contract Type'] != null ? String(row['Contract Type']).trim().toLowerCase() : ''
     if (ct && !validContractTypes.includes(ct)) {
       errors.push({ row: rowNum, field: 'Contract Type', message: `Must be one of: ${validContractTypes.join(', ')}` })
       hasError = true
     }
 
     const validShifts = ['day', 'afternoon', 'night']
-    const sp = row['Shift Pattern']?.trim().toLowerCase()
+    const sp = row['Shift Pattern'] != null ? String(row['Shift Pattern']).trim().toLowerCase() : ''
     if (sp && !validShifts.includes(sp)) {
       errors.push({ row: rowNum, field: 'Shift Pattern', message: `Must be one of: ${validShifts.join(', ')}` })
       hasError = true
@@ -109,22 +111,42 @@ export default function EmployeeImportPage() {
     setState('validating')
 
     try {
-      const buffer = await file.arrayBuffer()
-      const wb = XLSX.read(buffer)
-      const ws = wb.Sheets[wb.SheetNames[0]!]!
+      // Read file as ArrayBuffer using FileReader (broader browser support)
+      const buffer = await new Promise<ArrayBuffer>((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve(reader.result as ArrayBuffer)
+        reader.onerror = () => reject(new Error('Failed to read file'))
+        reader.readAsArrayBuffer(file)
+      })
+
+      const wb = XLSX.read(new Uint8Array(buffer), { type: 'array' })
+      const sheetName = wb.SheetNames[0]
+      if (!sheetName) throw new Error('No sheets found')
+      const ws = wb.Sheets[sheetName]
+      if (!ws) throw new Error('Empty sheet')
+
       const rows = XLSX.utils.sheet_to_json<Record<string, string>>(ws, { defval: '' })
 
-      // Skip the "Required/Optional" instruction row if present
+      // Filter out any instruction/example rows
       const dataRows = rows.filter((r) => {
-        const first = Object.values(r)[0]?.toLowerCase()
+        const vals = Object.values(r)
+        const first = vals[0]?.toString().toLowerCase() ?? ''
+        // Skip rows that look like instructions or the example row
         return first !== 'required' && first !== 'optional'
       })
+
+      if (dataRows.length === 0) {
+        setValidation({ valid: [], errors: [{ row: 0, field: 'File', message: 'No data rows found. Fill in the template and try again.' }] })
+        setState('error')
+        return
+      }
 
       const result = validateData(dataRows)
       setValidation(result)
       setState(result.valid.length > 0 ? 'ready' : 'error')
-    } catch {
-      setValidation({ valid: [], errors: [{ row: 0, field: 'File', message: 'Could not read file. Please use the template.' }] })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Could not read file'
+      setValidation({ valid: [], errors: [{ row: 0, field: 'File', message: msg }] })
       setState('error')
     }
   }, [])
