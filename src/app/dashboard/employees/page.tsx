@@ -2,8 +2,9 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { motion } from 'framer-motion'
-import { Search, X } from 'lucide-react'
+import { Search, X, Upload } from 'lucide-react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { trpc } from '@/lib/trpc/client'
 import { useSiteStore } from '@/stores/site-store'
 import { fadeInUp, containerStagger, bouncy, scalePress } from '@/lib/motion'
@@ -328,8 +329,9 @@ export default function EmployeesPage() {
 
       {/* Search + filters */}
       <motion.div variants={fadeInUp} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-        {/* Search */}
-        <div style={{ position: 'relative' }}>
+        {/* Search + Import button row */}
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+        <div style={{ position: 'relative', flex: 1 }}>
           <Search
             size={16}
             style={{
@@ -378,6 +380,33 @@ export default function EmployeesPage() {
               <X size={14} />
             </button>
           )}
+        </div>
+
+          {/* Import CSV button */}
+          <Link href="/dashboard/employees/import" style={{ textDecoration: 'none' }}>
+            <motion.button
+              variants={scalePress}
+              whileTap="press"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '9px 16px',
+                borderRadius: 'var(--radius-sm)',
+                border: '1px solid var(--border)',
+                backgroundColor: 'var(--card)',
+                color: 'var(--foreground)',
+                fontFamily: 'var(--font-body)',
+                fontSize: '13px',
+                fontWeight: 600,
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              <Upload size={14} />
+              Import CSV
+            </motion.button>
+          </Link>
         </div>
 
         {/* Filter chips */}
