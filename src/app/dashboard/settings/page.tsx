@@ -2,43 +2,185 @@
 
 import { useState } from 'react'
 import { motion } from 'framer-motion'
-import { Pencil, Check, X, Building2, Globe, CreditCard } from 'lucide-react'
+import {
+  Building2, Globe, CreditCard, Clock, DollarSign,
+  MapPin, Users, GitBranch, Check, X, Pencil,
+} from 'lucide-react'
 import { trpc } from '@/lib/trpc/client'
 import { fadeInUp, containerStagger, scalePress } from '@/lib/motion'
+import { AnimatedCounter } from '@/components/domain/animated-counter'
+import { SlideOver } from '@/components/domain/slide-over'
 
-function SkeletonField() {
+// ── Hardcoded counts (wire to real data later) ──────────────────────────────
+const STAT_SITES = 2
+const STAT_EMPLOYEES = 20
+const STAT_PROCESSES = 5
+
+// ── Tier badge config ────────────────────────────────────────────────────────
+const TIER_GRADIENT: Record<string, string> = {
+  trial: 'linear-gradient(135deg, #F59E0B, #FB923C)',
+  starter: 'linear-gradient(135deg, #818CF8, #6366F1)',
+  professional: 'linear-gradient(135deg, #6366F1, #8B5CF6)',
+  enterprise: 'linear-gradient(135deg, #10B981, #059669)',
+}
+
+function TierBadge({ tier }: { tier: string }) {
   return (
-    <div className="animate-pulse h-5 rounded" style={{ backgroundColor: 'var(--muted)', width: '60%' }} />
+    <span
+      style={{
+        background: TIER_GRADIENT[tier] ?? TIER_GRADIENT.trial,
+        color: '#FFFFFF',
+        fontFamily: 'var(--font-body)',
+        fontWeight: 600,
+        fontSize: '11px',
+        letterSpacing: '0.05em',
+        textTransform: 'uppercase' as const,
+        padding: '3px 10px',
+        borderRadius: 'var(--radius-full)',
+      }}
+    >
+      {tier}
+    </span>
   )
 }
 
-const TIER_COLORS: Record<string, string> = {
-  trial: 'var(--warning)',
-  starter: 'var(--secondary)',
-  professional: 'var(--primary)',
-  enterprise: 'var(--success)',
+function SkeletonField() {
+  return (
+    <div
+      className="animate-pulse h-5 rounded"
+      style={{ backgroundColor: 'var(--muted)', width: '60%' }}
+    />
+  )
 }
 
+// ── Mini stat card ────────────────────────────────────────────────────────────
+interface StatCardProps {
+  icon: React.ReactNode
+  label: string
+  value: number
+}
+
+function MiniStatCard({ icon, label, value }: StatCardProps) {
+  return (
+    <motion.div
+      variants={fadeInUp}
+      style={{
+        backgroundColor: 'var(--card)',
+        border: '1px solid var(--border)',
+        borderRadius: 'var(--radius-md)',
+        boxShadow: 'var(--elevation-1)',
+        padding: '16px 20px',
+        display: 'flex',
+        flexDirection: 'column' as const,
+        gap: '8px',
+      }}
+    >
+      <div
+        style={{
+          width: '32px',
+          height: '32px',
+          borderRadius: 'var(--radius-sm)',
+          backgroundColor: 'rgba(99,102,241,0.10)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        {icon}
+      </div>
+      <AnimatedCounter
+        value={value}
+        style={{
+          fontSize: '24px',
+          fontWeight: 700,
+          color: 'var(--foreground)',
+          lineHeight: 1,
+        }}
+      />
+      <span
+        style={{
+          fontFamily: 'var(--font-body)',
+          fontSize: '12px',
+          color: 'var(--muted-foreground)',
+        }}
+      >
+        {label}
+      </span>
+    </motion.div>
+  )
+}
+
+// ── Field row ─────────────────────────────────────────────────────────────────
+interface FieldRowProps {
+  label: string
+  value?: string | null
+  mono?: boolean
+  loading?: boolean
+  children?: React.ReactNode
+}
+
+function FieldRow({ label, value, mono, loading, children }: FieldRowProps) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column' as const, gap: '4px' }}>
+      <span
+        style={{
+          fontFamily: 'var(--font-body)',
+          fontSize: '11px',
+          fontWeight: 500,
+          textTransform: 'uppercase' as const,
+          letterSpacing: '0.06em',
+          color: 'var(--muted-foreground)',
+        }}
+      >
+        {label}
+      </span>
+      {loading ? (
+        <SkeletonField />
+      ) : children ? (
+        children
+      ) : (
+        <span
+          style={{
+            fontFamily: mono ? 'var(--font-mono)' : 'var(--font-body)',
+            fontSize: '14px',
+            fontWeight: mono ? 400 : 500,
+            color: 'var(--foreground)',
+          }}
+        >
+          {value ?? '—'}
+        </span>
+      )}
+    </div>
+  )
+}
+
+// ── Plan features ─────────────────────────────────────────────────────────────
+const PLAN_FEATURES: Record<string, string[]> = {
+  trial: ['1 site', '5 employees', 'Basic scheduling'],
+  starter: ['3 sites', '50 employees', 'Standard scheduling'],
+  professional: ['Up to 10 sites', '500 employees', 'AI Optimizer'],
+  enterprise: ['Unlimited sites', 'Unlimited employees', 'AI Optimizer', 'Priority support'],
+}
+
+// ── Main page ─────────────────────────────────────────────────────────────────
 export default function OrgSettingsPage() {
   const { data, isLoading, error } = trpc.org.getOrganization.useQuery()
   const utils = trpc.useUtils()
   const mutation = trpc.org.updateOrganization.useMutation({
     onSuccess: () => {
       utils.org.getOrganization.invalidate()
-      setEditing(false)
+      setSlideOpen(false)
     },
   })
 
-  const [editing, setEditing] = useState(false)
+  const [slideOpen, setSlideOpen] = useState(false)
   const [formName, setFormName] = useState('')
+  const [formEmail, setFormEmail] = useState('')
 
-  function handleEdit() {
+  function openEdit() {
     setFormName(data?.name ?? '')
-    setEditing(true)
-  }
-
-  function handleCancel() {
-    setEditing(false)
+    setFormEmail((data as Record<string, string> | undefined)?.billing_email ?? '')
+    setSlideOpen(true)
   }
 
   function handleSave() {
@@ -46,12 +188,18 @@ export default function OrgSettingsPage() {
   }
 
   const settings = data?.settings_json as Record<string, string> | undefined
+  const tier = data?.subscription_tier ?? 'trial'
+  const features: string[] = PLAN_FEATURES[tier] ?? ['Basic access']
 
   if (error) {
     return (
       <div
         className="rounded-[var(--radius-md)] p-6 text-sm"
-        style={{ backgroundColor: 'var(--card)', border: '1px solid var(--destructive)', color: 'var(--destructive)' }}
+        style={{
+          backgroundColor: 'var(--card)',
+          border: '1px solid var(--destructive)',
+          color: 'var(--destructive)',
+        }}
       >
         Failed to load organization: {error.message}
       </div>
@@ -59,195 +207,497 @@ export default function OrgSettingsPage() {
   }
 
   return (
-    <motion.div
-      variants={containerStagger}
-      initial="hidden"
-      animate="show"
-      className="max-w-2xl flex flex-col gap-6"
-    >
-      {/* Organization Info Card */}
+    <>
       <motion.div
-        variants={fadeInUp}
-        className="rounded-[var(--radius-lg)] p-6"
-        style={{
-          backgroundColor: 'var(--card)',
-          border: '1px solid var(--border)',
-          boxShadow: 'var(--elevation-1)',
-        }}
+        variants={containerStagger}
+        initial="hidden"
+        animate="show"
+        style={{ display: 'flex', flexDirection: 'column', gap: '28px', maxWidth: '900px' }}
       >
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-3">
+        {/* ── Hero section ──────────────────────────────────────────────────── */}
+        <motion.div variants={fadeInUp} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
             <div
-              className="w-10 h-10 rounded-[var(--radius-sm)] flex items-center justify-center"
-              style={{ backgroundColor: 'rgba(99,102,241,0.10)' }}
+              style={{
+                width: '44px',
+                height: '44px',
+                borderRadius: 'var(--radius-md)',
+                background: 'linear-gradient(135deg, rgba(99,102,241,0.15), rgba(139,92,246,0.12))',
+                border: '1px solid rgba(99,102,241,0.2)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+              }}
             >
-              <Building2 size={20} style={{ color: 'var(--primary)' }} />
+              <Building2 size={22} style={{ color: 'var(--primary)' }} />
             </div>
-            <h2
-              className="text-lg font-bold"
-              style={{ fontFamily: 'var(--font-display)', color: 'var(--foreground)' }}
-            >
-              Organization Info
-            </h2>
+            <div>
+              {isLoading ? (
+                <div className="animate-pulse h-7 w-48 rounded" style={{ backgroundColor: 'var(--muted)' }} />
+              ) : (
+                <h1
+                  style={{
+                    fontFamily: 'var(--font-display)',
+                    fontSize: '26px',
+                    fontWeight: 800,
+                    color: 'var(--foreground)',
+                    lineHeight: 1.2,
+                    margin: 0,
+                  }}
+                >
+                  {data?.name}
+                </h1>
+              )}
+              <div style={{ marginTop: '6px' }}>
+                <TierBadge tier={tier} />
+              </div>
+            </div>
           </div>
 
-          {!editing ? (
+          {/* Stat cards row */}
+          <motion.div
+            variants={containerStagger}
+            style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}
+          >
+            <MiniStatCard
+              icon={<MapPin size={16} style={{ color: 'var(--primary)' }} />}
+              label="Sites"
+              value={STAT_SITES}
+            />
+            <MiniStatCard
+              icon={<Users size={16} style={{ color: 'var(--primary)' }} />}
+              label="Employees"
+              value={STAT_EMPLOYEES}
+            />
+            <MiniStatCard
+              icon={<GitBranch size={16} style={{ color: 'var(--primary)' }} />}
+              label="Processes"
+              value={STAT_PROCESSES}
+            />
+          </motion.div>
+        </motion.div>
+
+        {/* ── Bento grid ────────────────────────────────────────────────────── */}
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: '1fr 1fr',
+            gridTemplateRows: 'auto auto',
+            gap: '16px',
+          }}
+        >
+          {/* Card 1 — Organization Details (tall, spans 2 rows on left) */}
+          <motion.div
+            variants={fadeInUp}
+            style={{
+              gridRow: '1 / 3',
+              backgroundColor: 'var(--card)',
+              border: '1px solid var(--border)',
+              borderRadius: 'var(--radius-lg)',
+              boxShadow: 'var(--elevation-1)',
+              padding: '24px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '20px',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div
+                  style={{
+                    width: '34px',
+                    height: '34px',
+                    borderRadius: 'var(--radius-sm)',
+                    backgroundColor: 'rgba(99,102,241,0.10)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Building2 size={17} style={{ color: 'var(--primary)' }} />
+                </div>
+                <h2
+                  style={{
+                    fontFamily: 'var(--font-display)',
+                    fontSize: '16px',
+                    fontWeight: 700,
+                    color: 'var(--foreground)',
+                    margin: 0,
+                  }}
+                >
+                  Organization Details
+                </h2>
+              </div>
+              <motion.button
+                variants={scalePress}
+                whileTap="press"
+                onClick={openEdit}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '6px 12px',
+                  borderRadius: 'var(--radius-sm)',
+                  border: 'none',
+                  backgroundColor: 'rgba(99,102,241,0.08)',
+                  color: 'var(--primary)',
+                  fontFamily: 'var(--font-body)',
+                  fontSize: '13px',
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                }}
+              >
+                <Pencil size={13} />
+                Edit
+              </motion.button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              <FieldRow label="Company Name" value={data?.name} loading={isLoading} />
+              <FieldRow label="Slug" value={data?.slug} loading={isLoading} mono />
+              <FieldRow label="Billing Email" loading={isLoading}>
+                <span
+                  style={{
+                    fontFamily: 'var(--font-body)',
+                    fontSize: '14px',
+                    fontWeight: 500,
+                    color: 'var(--foreground)',
+                  }}
+                >
+                  {(data as Record<string, string> | undefined)?.billing_email ?? 'Not set'}
+                </span>
+              </FieldRow>
+              <FieldRow label="Subscription Tier" loading={isLoading}>
+                <TierBadge tier={tier} />
+              </FieldRow>
+            </div>
+          </motion.div>
+
+          {/* Card 2 — Locale & Regional */}
+          <motion.div
+            variants={fadeInUp}
+            style={{
+              backgroundColor: 'var(--card)',
+              border: '1px solid var(--border)',
+              borderRadius: 'var(--radius-lg)',
+              boxShadow: 'var(--elevation-1)',
+              padding: '24px',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
+              <div
+                style={{
+                  width: '34px',
+                  height: '34px',
+                  borderRadius: 'var(--radius-sm)',
+                  backgroundColor: 'rgba(99,102,241,0.10)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Globe size={17} style={{ color: 'var(--primary)' }} />
+              </div>
+              <h2
+                style={{
+                  fontFamily: 'var(--font-display)',
+                  fontSize: '16px',
+                  fontWeight: 700,
+                  color: 'var(--foreground)',
+                  margin: 0,
+                }}
+              >
+                Locale &amp; Regional
+              </h2>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
+              {([
+                { key: 'default_timezone', label: 'Timezone', Icon: Clock },
+                { key: 'default_locale', label: 'Locale', Icon: Globe },
+                { key: 'default_currency', label: 'Currency', Icon: DollarSign },
+              ] as const).map(({ key, label, Icon }) => (
+                <div key={key} style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Icon size={13} style={{ color: 'var(--muted-foreground)' }} />
+                    <span
+                      style={{
+                        fontFamily: 'var(--font-body)',
+                        fontSize: '11px',
+                        fontWeight: 500,
+                        textTransform: 'uppercase' as const,
+                        letterSpacing: '0.06em',
+                        color: 'var(--muted-foreground)',
+                      }}
+                    >
+                      {label}
+                    </span>
+                  </div>
+                  {isLoading ? (
+                    <SkeletonField />
+                  ) : (
+                    <span
+                      style={{
+                        fontFamily: 'var(--font-body)',
+                        fontSize: '13px',
+                        fontWeight: 500,
+                        color: 'var(--foreground)',
+                      }}
+                    >
+                      {(data as Record<string, string> | undefined)?.[key] ?? '—'}
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          </motion.div>
+
+          {/* Card 3 — Plan & Billing */}
+          <motion.div
+            variants={fadeInUp}
+            style={{
+              backgroundColor: 'var(--card)',
+              border: '1px solid var(--border)',
+              borderRadius: 'var(--radius-lg)',
+              boxShadow: 'var(--elevation-1)',
+              padding: '24px',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
+              <div
+                style={{
+                  width: '34px',
+                  height: '34px',
+                  borderRadius: 'var(--radius-sm)',
+                  backgroundColor: 'rgba(99,102,241,0.10)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <CreditCard size={17} style={{ color: 'var(--primary)' }} />
+              </div>
+              <h2
+                style={{
+                  fontFamily: 'var(--font-display)',
+                  fontSize: '16px',
+                  fontWeight: 700,
+                  color: 'var(--foreground)',
+                  margin: 0,
+                }}
+              >
+                Plan &amp; Billing
+              </h2>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <TierBadge tier={tier} />
+                <a
+                  href="#"
+                  style={{
+                    fontFamily: 'var(--font-body)',
+                    fontSize: '13px',
+                    fontWeight: 500,
+                    color: 'var(--primary)',
+                    textDecoration: 'none',
+                  }}
+                >
+                  Manage subscription →
+                </a>
+              </div>
+
+              <div
+                style={{
+                  borderTop: '1px solid var(--border)',
+                  paddingTop: '14px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '8px',
+                }}
+              >
+                {features.map((feature) => (
+                  <div key={feature} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <div
+                      style={{
+                        width: '16px',
+                        height: '16px',
+                        borderRadius: 'var(--radius-full)',
+                        backgroundColor: 'rgba(16,185,129,0.12)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0,
+                      }}
+                    >
+                      <Check size={10} style={{ color: 'var(--success)' }} />
+                    </div>
+                    <span
+                      style={{
+                        fontFamily: 'var(--font-body)',
+                        fontSize: '13px',
+                        color: 'var(--foreground)',
+                      }}
+                    >
+                      {feature}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </motion.div>
+        </div>
+
+        {/* Mutation error */}
+        {mutation.error && (
+          <motion.p
+            variants={fadeInUp}
+            style={{ fontFamily: 'var(--font-body)', fontSize: '13px', color: 'var(--destructive)' }}
+          >
+            {mutation.error.message}
+          </motion.p>
+        )}
+      </motion.div>
+
+      {/* ── Edit slide-over ────────────────────────────────────────────────── */}
+      <SlideOver open={slideOpen} onClose={() => setSlideOpen(false)} title="Edit Organization">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          {/* Name field */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <label
+              style={{
+                fontFamily: 'var(--font-body)',
+                fontSize: '13px',
+                fontWeight: 500,
+                color: 'var(--foreground)',
+              }}
+            >
+              Organization Name
+            </label>
+            <input
+              value={formName}
+              onChange={(e) => setFormName(e.target.value)}
+              placeholder="Acme Corporation"
+              style={{
+                fontFamily: 'var(--font-body)',
+                fontSize: '14px',
+                color: 'var(--foreground)',
+                backgroundColor: 'var(--background)',
+                border: '1.5px solid var(--border)',
+                borderRadius: 'var(--radius-sm)',
+                padding: '10px 14px',
+                outline: 'none',
+                transition: 'border-color 0.15s, box-shadow 0.15s',
+                width: '100%',
+                boxSizing: 'border-box' as const,
+              }}
+              onFocus={(e) => {
+                e.target.style.borderColor = 'var(--primary)'
+                e.target.style.boxShadow = '0 0 0 3px rgba(99,102,241,0.12)'
+              }}
+              onBlur={(e) => {
+                e.target.style.borderColor = 'var(--border)'
+                e.target.style.boxShadow = 'none'
+              }}
+            />
+          </div>
+
+          {/* Billing email field */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <label
+              style={{
+                fontFamily: 'var(--font-body)',
+                fontSize: '13px',
+                fontWeight: 500,
+                color: 'var(--foreground)',
+              }}
+            >
+              Billing Email
+            </label>
+            <input
+              type="email"
+              value={formEmail}
+              onChange={(e) => setFormEmail(e.target.value)}
+              placeholder="billing@company.com"
+              style={{
+                fontFamily: 'var(--font-body)',
+                fontSize: '14px',
+                color: 'var(--foreground)',
+                backgroundColor: 'var(--background)',
+                border: '1.5px solid var(--border)',
+                borderRadius: 'var(--radius-sm)',
+                padding: '10px 14px',
+                outline: 'none',
+                transition: 'border-color 0.15s, box-shadow 0.15s',
+                width: '100%',
+                boxSizing: 'border-box' as const,
+              }}
+              onFocus={(e) => {
+                e.target.style.borderColor = 'var(--primary)'
+                e.target.style.boxShadow = '0 0 0 3px rgba(99,102,241,0.12)'
+              }}
+              onBlur={(e) => {
+                e.target.style.borderColor = 'var(--border)'
+                e.target.style.boxShadow = 'none'
+              }}
+            />
+          </div>
+
+          {/* Action buttons */}
+          <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
             <motion.button
               variants={scalePress}
               whileTap="press"
-              onClick={handleEdit}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-[var(--radius-sm)] text-sm font-medium transition-colors duration-150"
+              onClick={handleSave}
+              disabled={mutation.isPending}
               style={{
+                flex: 1,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '6px',
+                padding: '10px 20px',
+                borderRadius: 'var(--radius-sm)',
+                border: 'none',
+                background: 'linear-gradient(135deg, var(--primary), #8B5CF6)',
+                color: '#FFFFFF',
                 fontFamily: 'var(--font-body)',
-                backgroundColor: 'rgba(99,102,241,0.08)',
-                color: 'var(--primary)',
+                fontSize: '14px',
+                fontWeight: 600,
+                cursor: mutation.isPending ? 'not-allowed' : 'pointer',
+                opacity: mutation.isPending ? 0.6 : 1,
               }}
             >
-              <Pencil size={14} />
-              Edit
+              <Check size={15} />
+              {mutation.isPending ? 'Saving…' : 'Save Changes'}
             </motion.button>
-          ) : (
-            <div className="flex gap-2">
-              <motion.button
-                variants={scalePress}
-                whileTap="press"
-                onClick={handleSave}
-                disabled={mutation.isPending}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-[var(--radius-sm)] text-sm font-medium text-white transition-opacity"
-                style={{ backgroundColor: 'var(--primary)', fontFamily: 'var(--font-body)', opacity: mutation.isPending ? 0.6 : 1 }}
-              >
-                <Check size={14} />
-                {mutation.isPending ? 'Saving…' : 'Save'}
-              </motion.button>
-              <motion.button
-                variants={scalePress}
-                whileTap="press"
-                onClick={handleCancel}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-[var(--radius-sm)] text-sm font-medium transition-colors"
-                style={{ backgroundColor: 'var(--muted)', color: 'var(--muted-foreground)', fontFamily: 'var(--font-body)' }}
-              >
-                <X size={14} />
-                Cancel
-              </motion.button>
-            </div>
-          )}
-        </div>
-
-        <div className="grid grid-cols-1 gap-5">
-          {/* Name */}
-          <div>
-            <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--muted-foreground)', fontFamily: 'var(--font-body)' }}>
-              Organization Name
-            </label>
-            {isLoading ? (
-              <SkeletonField />
-            ) : editing ? (
-              <input
-                value={formName}
-                onChange={(e) => setFormName(e.target.value)}
-                className="w-full px-3 py-2 rounded-[var(--radius-sm)] text-sm outline-none transition-shadow"
-                style={{
-                  fontFamily: 'var(--font-body)',
-                  color: 'var(--foreground)',
-                  backgroundColor: 'var(--background)',
-                  border: '1.5px solid var(--primary)',
-                  boxShadow: '0 0 0 3px rgba(99,102,241,0.12)',
-                }}
-              />
-            ) : (
-              <p className="text-sm font-medium" style={{ color: 'var(--foreground)', fontFamily: 'var(--font-body)' }}>
-                {data?.name}
-              </p>
-            )}
-          </div>
-
-          {/* Slug */}
-          <div>
-            <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--muted-foreground)', fontFamily: 'var(--font-body)' }}>
-              Slug
-            </label>
-            {isLoading ? <SkeletonField /> : (
-              <p className="text-sm font-mono" style={{ color: 'var(--muted-foreground)', fontFamily: 'var(--font-mono)' }}>
-                {data?.slug}
-              </p>
-            )}
-          </div>
-
-          {/* Subscription tier */}
-          <div>
-            <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--muted-foreground)', fontFamily: 'var(--font-body)' }}>
-              Subscription Tier
-            </label>
-            {isLoading ? <SkeletonField /> : (
-              <div className="flex items-center gap-2">
-                <CreditCard size={14} style={{ color: 'var(--muted-foreground)' }} />
-                <span
-                  className="text-sm font-medium px-2 py-0.5 rounded-[var(--radius-full)] capitalize"
-                  style={{
-                    backgroundColor: `color-mix(in srgb, ${TIER_COLORS[data?.subscription_tier ?? 'trial']} 12%, transparent)`,
-                    color: TIER_COLORS[data?.subscription_tier ?? 'trial'],
-                    fontFamily: 'var(--font-body)',
-                  }}
-                >
-                  {data?.subscription_tier}
-                </span>
-              </div>
-            )}
+            <motion.button
+              variants={scalePress}
+              whileTap="press"
+              onClick={() => setSlideOpen(false)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '6px',
+                padding: '10px 16px',
+                borderRadius: 'var(--radius-sm)',
+                border: '1px solid var(--border)',
+                backgroundColor: 'transparent',
+                color: 'var(--muted-foreground)',
+                fontFamily: 'var(--font-body)',
+                fontSize: '14px',
+                fontWeight: 500,
+                cursor: 'pointer',
+              }}
+            >
+              <X size={15} />
+              Cancel
+            </motion.button>
           </div>
         </div>
-      </motion.div>
-
-      {/* Locale Settings Card */}
-      <motion.div
-        variants={fadeInUp}
-        className="rounded-[var(--radius-lg)] p-6"
-        style={{
-          backgroundColor: 'var(--card)',
-          border: '1px solid var(--border)',
-          boxShadow: 'var(--elevation-1)',
-        }}
-      >
-        <div className="flex items-center gap-3 mb-6">
-          <div
-            className="w-10 h-10 rounded-[var(--radius-sm)] flex items-center justify-center"
-            style={{ backgroundColor: 'rgba(99,102,241,0.10)' }}
-          >
-            <Globe size={20} style={{ color: 'var(--primary)' }} />
-          </div>
-          <h2
-            className="text-lg font-bold"
-            style={{ fontFamily: 'var(--font-display)', color: 'var(--foreground)' }}
-          >
-            Locale &amp; Regional
-          </h2>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-          {([
-            { key: 'default_timezone', label: 'Timezone' },
-            { key: 'default_locale', label: 'Locale' },
-            { key: 'default_currency', label: 'Currency' },
-          ] as const).map(({ key, label }) => (
-            <div key={key}>
-              <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--muted-foreground)', fontFamily: 'var(--font-body)' }}>
-                {label}
-              </label>
-              {isLoading ? <SkeletonField /> : (
-                <p className="text-sm font-medium" style={{ color: 'var(--foreground)', fontFamily: 'var(--font-body)' }}>
-                  {(data as Record<string, unknown>)?.[key] as string ?? <span style={{ color: 'var(--muted-foreground)' }}>—</span>}
-                </p>
-              )}
-            </div>
-          ))}
-        </div>
-      </motion.div>
-
-      {/* Error from mutation */}
-      {mutation.error && (
-        <motion.p variants={fadeInUp} className="text-sm" style={{ color: 'var(--destructive)', fontFamily: 'var(--font-body)' }}>
-          {mutation.error.message}
-        </motion.p>
-      )}
-    </motion.div>
+      </SlideOver>
+    </>
   )
 }
