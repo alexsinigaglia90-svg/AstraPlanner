@@ -8,6 +8,7 @@ import { gentle } from '@/lib/motion'
 const tabs = [
   { label: 'Organization', href: '/dashboard/settings' },
   { label: 'Sites', href: '/dashboard/settings/sites' },
+  { label: 'Audit Log', href: '/dashboard/settings/audit' },
 ]
 
 export default function SettingsLayout({ children }: { children: React.ReactNode }) {
