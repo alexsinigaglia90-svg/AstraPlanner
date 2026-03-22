@@ -6,7 +6,7 @@
  * Hour rows span 06:00–22:00 (16 hours visible).
  */
 
-import { useMemo, useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { scalePress } from '@/lib/motion'
@@ -204,10 +204,9 @@ export function AvailabilityCalendar({ overrides }: AvailabilityCalendarProps) {
 
           {/* Hour rows */}
           {HOURS.map((hour) => (
-            <>
+            <React.Fragment key={`hr-${hour}`}>
               {/* Hour label */}
               <div
-                key={`lbl-${hour}`}
                 style={{
                   fontFamily: 'var(--font-mono)',
                   fontSize: '9px',
@@ -276,7 +275,7 @@ export function AvailabilityCalendar({ overrides }: AvailabilityCalendarProps) {
                   </div>
                 )
               })}
-            </>
+            </React.Fragment>
           ))}
         </div>
       </div>

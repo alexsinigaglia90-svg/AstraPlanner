@@ -264,6 +264,7 @@ export default function EmployeesPage() {
       site_id: activeSiteId!,
       search: search || undefined,
       status: statusFilter,
+      contract_type: contractFilter,
       limit: 50,
       cursor,
     },
@@ -404,7 +405,7 @@ export default function EmployeesPage() {
               }}
             >
               <Upload size={14} />
-              Import CSV
+              Import
             </motion.button>
           </Link>
         </div>

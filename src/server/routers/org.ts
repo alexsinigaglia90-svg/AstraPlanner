@@ -10,6 +10,7 @@ import {
   adminProcedure,
   managerProcedure,
 } from '../trpc'
+import { createAdminClient } from '../../lib/supabase/admin'
 
 // ---------------------------------------------------------------------------
 // Shared site settings shape
@@ -254,76 +255,123 @@ export const orgRouter = router({
   // listDepartments
   // -------------------------------------------------------------------------
   listDepartments: viewerProcedure
-    .input(
-      z.object({
-        site_id: z.string().uuid().describe('Site to list departments for'),
-      }),
-    )
+    .input(z.object({ site_id: z.string().uuid() }))
     .query(async ({ ctx, input }) => {
-      const { data, error } = await ctx.supabase
+      const admin = createAdminClient()
+      const { data, error } = await admin
         .from('department')
-        .select('id, name, parent_department_id, site_id')
+        .select('id, name, code, color, site_id')
         .eq('site_id', input.site_id)
+        .eq('organization_id', ctx.organizationId)
+        .eq('status', 'active')
         .order('name')
-
       assertNoError(error, 'listDepartments')
+      const deptIds = (data ?? []).map((d) => (d as Record<string, unknown>).id as string)
+      let processCounts: Record<string, number> = {}
+      if (deptIds.length > 0) {
+        const { data: counts, error: countErr } = await admin
+          .from('process')
+          .select('department_id')
+          .eq('organization_id', ctx.organizationId)
+          .eq('is_active', true)
+          .in('department_id', deptIds)
+        assertNoError(countErr, 'listDepartments:counts')
+        processCounts = (counts ?? []).reduce((acc, row) => {
+          const deptId = (row as Record<string, unknown>).department_id as string
+          acc[deptId] = (acc[deptId] ?? 0) + 1
+          return acc
+        }, {} as Record<string, number>)
+      }
+      return (data ?? []).map((d) => {
+        const dept = d as Record<string, unknown>
+        return {
+          id: dept.id as string,
+          name: dept.name as string,
+          code: dept.code as string,
+          color: (dept.color as string) ?? 'indigo',
+          site_id: dept.site_id as string,
+          process_count: processCounts[dept.id as string] ?? 0,
+        }
+      })
+    }),
 
-      return (data ?? []) as Array<{
-        id: string
-        name: string
-        parent_department_id: string | null
-        site_id: string
-      }>
+  // -------------------------------------------------------------------------
+  // upsertDepartment
+  // -------------------------------------------------------------------------
+  upsertDepartment: managerProcedure
+    .input(z.object({
+      id: z.string().uuid().optional(),
+      name: z.string().min(1),
+      site_id: z.string().uuid(),
+      color: z.string().default('indigo'),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const admin = createAdminClient()
+      const baseCode = input.name.toUpperCase().replace(/[^A-Z0-9\s]/g, '').replace(/\s+/g, '_').substring(0, 16)
+      const code = input.id ? baseCode : `${baseCode}_${Date.now().toString(36).slice(-4)}`.substring(0, 20)
+      const row = {
+        ...(input.id ? { id: input.id } : {}),
+        name: input.name, code, site_id: input.site_id, color: input.color,
+        organization_id: ctx.organizationId,
+      }
+      const { data, error } = await admin.from('department').upsert(row, { onConflict: 'id' }).select('id, name, code, color, site_id').single()
+      assertNoError(error, 'upsertDepartment')
+      if (!data) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Department upsert returned no data' })
+      return data as { id: string; name: string; code: string; color: string; site_id: string }
+    }),
+
+  // -------------------------------------------------------------------------
+  // deleteDepartment
+  // -------------------------------------------------------------------------
+  deleteDepartment: managerProcedure
+    .input(z.object({ id: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      const admin = createAdminClient()
+      const { count, error: countErr } = await admin.from('process').select('id', { count: 'exact', head: true }).eq('department_id', input.id).eq('is_active', true)
+      assertNoError(countErr, 'deleteDepartment:checkProcesses')
+      if (count && count > 0) throw new TRPCError({ code: 'PRECONDITION_FAILED', message: `Cannot delete: department has ${count} active process(es). Remove or reassign them first.` })
+      const { error } = await admin.from('department').update({ status: 'inactive', updated_at: new Date().toISOString() }).eq('id', input.id).eq('organization_id', ctx.organizationId)
+      assertNoError(error, 'deleteDepartment')
+      return { deleted: true }
     }),
 
   // -------------------------------------------------------------------------
   // listProcesses
   // -------------------------------------------------------------------------
   listProcesses: viewerProcedure
-    .input(
-      z.object({
-        site_id: z.string().uuid().describe('Site context (required by caller)'),
-        department_id: z.string().uuid().optional().describe('Filter by department'),
-      }),
-    )
+    .input(z.object({ site_id: z.string().uuid() }))
     .query(async ({ ctx, input }) => {
-      let query = ctx.supabase
+      const admin = createAdminClient()
+      const { data: depts, error: deptErr } = await admin.from('department').select('id').eq('site_id', input.site_id).eq('organization_id', ctx.organizationId)
+      assertNoError(deptErr, 'listProcesses:depts')
+      const deptIds = (depts ?? []).map((d) => (d as Record<string, unknown>).id as string)
+      if (deptIds.length === 0) return []
+      const { data, error } = await admin
         .from('process')
-        .select(
-          `id, name, code, category, description, unit_of_measure, department_id,
-           min_skill_level, hazard_level, requires_certification, equipment_required, is_active,
-           productivity_standard(skill_level, units_per_hour, site_id)`,
-        )
+        .select('id, name, code, unit_of_measure, norm_uph, department_id, process_type, support_type, parent_process_id, support_ratio_self, support_ratio_parent, fixed_headcount, priority, min_skill_level, certifications_required, conversion_input_uom, conversion_output_qty')
+        .eq('organization_id', ctx.organizationId)
         .eq('is_active', true)
-
-      if (input.department_id) {
-        query = query.eq('department_id', input.department_id)
-      }
-
-      const { data, error } = await query.order('name')
-
+        .in('department_id', deptIds)
+        .order('name')
       assertNoError(error, 'listProcesses')
-
       return (data ?? []).map((p: Record<string, unknown>) => ({
-        id: p.id,
-        name: p.name,
-        code: p.code,
-        category: p.category,
-        description: p.description ?? null,
-        unit_of_measure: p.unit_of_measure,
-        department_id: p.department_id ?? null,
-        min_skill_level: p.min_skill_level,
-        hazard_level: p.hazard_level,
-        requires_certification: p.requires_certification,
-        equipment_required: (p.equipment_required as string[] | null) ?? [],
-        is_active: p.is_active,
-        productivity_standards: (
-          (p.productivity_standard as Array<{
-            skill_level: number
-            units_per_hour: number
-            site_id: string | null
-          }>) ?? []
-        ),
+        id: p.id as string,
+        name: p.name as string,
+        code: p.code as string,
+        unit_of_measure: (p.unit_of_measure as string) ?? '',
+        norm_uph: (p.norm_uph as number) ?? 0,
+        department_id: p.department_id as string,
+        process_type: (p.process_type as string) ?? 'productive',
+        support_type: (p.support_type as string) ?? null,
+        parent_process_id: (p.parent_process_id as string) ?? null,
+        support_ratio_self: (p.support_ratio_self as number) ?? 1,
+        support_ratio_parent: (p.support_ratio_parent as number) ?? 1,
+        fixed_headcount: (p.fixed_headcount as number) ?? null,
+        priority: (p.priority as string) ?? 'important',
+        min_skill_level: (p.min_skill_level as number) ?? 1,
+        certifications_required: (p.certifications_required as string[]) ?? [],
+        conversion_input_uom: (p.conversion_input_uom as string) ?? null,
+        conversion_output_qty: (p.conversion_output_qty as number) ?? null,
       }))
     }),
 
@@ -331,66 +379,75 @@ export const orgRouter = router({
   // upsertProcess
   // -------------------------------------------------------------------------
   upsertProcess: managerProcedure
-    .input(
-      z
-        .object({
-          id: z.string().uuid().optional().describe('Omit to create'),
-          name: z.string().min(1),
-          unit_of_measure: z.string().min(1),
-          department_id: z.string().uuid().nullable().optional(),
-          min_skill_level: z.number().int().min(1).max(5).default(1),
-          hazard_level: z.number().int().min(0).default(0),
-          requires_certification: z.boolean().optional(),
-          productivity_standards: z
-            .array(
-              z.object({
-                skill_level: z.number().int().min(1).max(5),
-                units_per_hour: z.number().positive(),
-                site_id: z.string().uuid().nullable().optional(),
-              }),
-            )
-            .length(5, 'Must include all 5 proficiency levels')
-            .describe('Productivity standards for all 5 skill levels'),
-        })
-        .refine(
-          (v) =>
-            v.productivity_standards.every((s) => s.units_per_hour > 0),
-          { message: 'units_per_hour must be > 0 for each standard' },
-        ),
-    )
+    .input(z.object({
+      id: z.string().uuid().optional(),
+      name: z.string().min(1),
+      department_id: z.string().uuid(),
+      process_type: z.enum(['productive', 'supportive']).default('productive'),
+      // Productive fields
+      unit_of_measure: z.string().optional(),
+      norm_uph: z.number().nonnegative().optional(),
+      conversion_input_uom: z.string().nullable().optional(),
+      conversion_output_qty: z.number().nullable().optional(),
+      // Supportive fields
+      support_type: z.enum(['linked', 'standalone']).nullable().optional(),
+      parent_process_id: z.string().uuid().nullable().optional(),
+      support_ratio_self: z.number().int().positive().optional(),
+      support_ratio_parent: z.number().int().positive().optional(),
+      fixed_headcount: z.number().int().positive().nullable().optional(),
+      // Common fields
+      priority: z.enum(['critical', 'important', 'flexible']).default('important'),
+      min_skill_level: z.number().int().min(1).max(5).default(1),
+      certifications_required: z.array(z.string()).default([]),
+    }))
     .mutation(async ({ ctx, input }) => {
-      const { productivity_standards, ...processData } = input
-
-      // Upsert the process record
-      const { data: process, error: processError } = await ctx.supabase
-        .from('process')
-        .upsert(processData)
-        .select('id, name, updated_at')
+      const admin = createAdminClient()
+      const code = input.name.toUpperCase().replace(/[^A-Z0-9\s]/g, '').replace(/\s+/g, '_').substring(0, 30)
+      const row = {
+        ...(input.id ? { id: input.id } : {}),
+        name: input.name,
+        code,
+        department_id: input.department_id,
+        organization_id: ctx.organizationId,
+        category: 'support',
+        applicable_site_types: ['warehouse'],
+        process_type: input.process_type,
+        unit_of_measure: input.unit_of_measure ?? 'units',
+        norm_uph: input.norm_uph ?? 0,
+        conversion_input_uom: input.conversion_input_uom ?? null,
+        conversion_output_qty: input.conversion_output_qty ?? null,
+        support_type: input.support_type ?? null,
+        parent_process_id: input.parent_process_id ?? null,
+        support_ratio_self: input.support_ratio_self ?? 1,
+        support_ratio_parent: input.support_ratio_parent ?? 1,
+        fixed_headcount: input.fixed_headcount ?? null,
+        priority: input.priority,
+        min_skill_level: input.min_skill_level,
+        certifications_required: input.certifications_required,
+      }
+      const { data, error } = await admin.from('process').upsert(row, { onConflict: 'id' })
+        .select('id, name, code, unit_of_measure, norm_uph, department_id, process_type, priority')
         .single()
+      assertNoError(error, 'upsertProcess')
+      if (!data) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Process upsert returned no data' })
+      return data as { id: string; name: string; code: string; unit_of_measure: string; norm_uph: number; department_id: string; process_type: string; priority: string }
+    }),
 
-      assertNoError(processError, 'upsertProcess')
-
-      if (!process) {
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Process upsert returned no data',
-        })
-      }
-
-      // Replace productivity standards
-      if (productivity_standards.length > 0) {
-        const standards = productivity_standards.map((s) => ({
-          ...s,
-          process_id: process.id,
-        }))
-
-        const { error: stdError } = await ctx.supabase
-          .from('productivity_standard')
-          .upsert(standards, { onConflict: 'process_id,skill_level,site_id' })
-
-        assertNoError(stdError, 'upsertProcess.productivity_standards')
-      }
-
-      return process as { id: string; name: string; updated_at: string }
+  // -------------------------------------------------------------------------
+  // deleteProcess
+  // -------------------------------------------------------------------------
+  deleteProcess: managerProcedure
+    .input(z.object({ id: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      const admin = createAdminClient()
+      const { count: skillCount, error: skillErr } = await admin.from('employee_skill').select('id', { count: 'exact', head: true }).eq('process_id', input.id)
+      assertNoError(skillErr, 'deleteProcess:checkSkills')
+      const { count: assignCount, error: assignErr } = await admin.from('shift_assignment').select('id', { count: 'exact', head: true }).eq('process_id', input.id)
+      assertNoError(assignErr, 'deleteProcess:checkAssignments')
+      const total = (skillCount ?? 0) + (assignCount ?? 0)
+      if (total > 0) throw new TRPCError({ code: 'PRECONDITION_FAILED', message: `Cannot delete: ${skillCount ?? 0} employee skill(s) and ${assignCount ?? 0} shift assignment(s) reference this process.` })
+      const { error } = await admin.from('process').delete().eq('id', input.id).eq('organization_id', ctx.organizationId)
+      assertNoError(error, 'deleteProcess')
+      return { deleted: true }
     }),
 })

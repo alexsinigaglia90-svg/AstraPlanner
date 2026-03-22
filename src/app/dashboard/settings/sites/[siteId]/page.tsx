@@ -368,9 +368,9 @@ export default function SiteDetailPage({ params }: PageProps) {
                 <span className="text-sm font-medium" style={{ color: 'var(--foreground)', fontFamily: 'var(--font-body)' }}>
                   {dept.name}
                 </span>
-                {dept.parent_department_id && (
+                {dept.process_count > 0 && (
                   <span className="text-xs ml-auto" style={{ color: 'var(--muted-foreground)', fontFamily: 'var(--font-body)' }}>
-                    Sub-department
+                    {dept.process_count} process{dept.process_count !== 1 ? 'es' : ''}
                   </span>
                 )}
               </motion.li>

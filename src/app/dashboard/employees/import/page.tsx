@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Download, Upload, FileSpreadsheet, Check, AlertCircle, ArrowLeft, X } from 'lucide-react'
 import { bouncy, snappy, wobbly, scalePress } from '@/lib/motion'
+import { trpc } from '@/lib/trpc/client'
+import { useSiteStore } from '@/stores/site-store'
 import * as XLSX from 'xlsx'
 
 // ── Dataloader column definitions ───────────────────────────────────────────
@@ -99,12 +101,15 @@ function validateData(rows: Record<string, string>[]): ValidationResult {
 
 export default function EmployeeImportPage() {
   const router = useRouter()
+  const { activeSiteId } = useSiteStore()
+  const bulkImport = trpc.workforce.bulkImportEmployees.useMutation()
   const fileRef = useRef<HTMLInputElement>(null)
   const [state, setState] = useState<ImportState>('ready')
   const [dragOver, setDragOver] = useState(false)
   const [fileName, setFileName] = useState('')
   const [validation, setValidation] = useState<ValidationResult | null>(null)
   const [showErrors, setShowErrors] = useState(false)
+  const [importError, setImportError] = useState<string | null>(null)
 
   const processFile = useCallback(async (file: File) => {
     setFileName(file.name)
@@ -164,11 +169,33 @@ export default function EmployeeImportPage() {
   }, [processFile])
 
   const handleImport = async () => {
-    if (!validation) return
+    if (!validation || !activeSiteId) return
     setState('importing')
-    // TODO: wire to tRPC bulk-create
-    await new Promise((resolve) => setTimeout(resolve, 1500))
-    setState('done')
+    setImportError(null)
+
+    try {
+      const employees = validation.valid.map((v) => {
+        const d = v.data
+        return {
+          employee_number: String(d['Employee Number'] ?? '').trim(),
+          first_name: String(d['First Name'] ?? '').trim(),
+          last_name: String(d['Last Name'] ?? '').trim(),
+          department: String(d['Department'] ?? '').trim() || undefined,
+          contract_type: String(d['Contract Type'] ?? '').trim().toLowerCase() as
+            'full_time' | 'part_time' | 'temporary' | 'seasonal' | 'contractor',
+          weekly_hours_contracted: Number(d['Weekly Hours']),
+          hourly_rate: Number(d['Hourly Rate (€)']),
+          shift_pattern: String(d['Shift Pattern'] ?? '').trim().toLowerCase() || undefined,
+        }
+      })
+
+      await bulkImport.mutateAsync({ site_id: activeSiteId, employees })
+      setState('done')
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Import failed'
+      setImportError(msg)
+      setState('error')
+    }
   }
 
   return (
@@ -431,6 +458,25 @@ export default function EmployeeImportPage() {
                   </motion.div>
                 )}
               </AnimatePresence>
+
+              {/* ── Import error ──────────────────────────────────────── */}
+              {importError && (
+                <motion.div
+                  initial={{ opacity: 0, y: -4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={bouncy}
+                  style={{
+                    padding: '10px 14px', borderRadius: 'var(--radius-sm)',
+                    backgroundColor: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.15)',
+                    display: 'flex', alignItems: 'flex-start', gap: '8px',
+                  }}
+                >
+                  <AlertCircle size={14} style={{ color: 'var(--destructive)', marginTop: 2, flexShrink: 0 }} />
+                  <span style={{ fontFamily: 'var(--font-body)', fontSize: '13px', color: 'var(--destructive)' }}>
+                    {importError}
+                  </span>
+                </motion.div>
+              )}
 
               {/* ── Import button ─────────────────────────────────────── */}
               {validation && validation.valid.length > 0 && (

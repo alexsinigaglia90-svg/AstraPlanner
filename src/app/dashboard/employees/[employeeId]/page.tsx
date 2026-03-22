@@ -12,6 +12,7 @@ import { SlideOver } from '@/components/domain/slide-over'
 import { AddSkillForm } from '@/components/domain/add-skill-form'
 import { AbsenceForm } from '@/components/domain/absence-form'
 import { AvailabilityCalendar } from '@/components/domain/availability-calendar'
+import { EditEmployeeForm } from '@/components/domain/edit-employee-form'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -295,7 +296,6 @@ export default function EmployeeDetailPage() {
           variants={scalePress}
           whileTap="press"
           onClick={() => setEditOpen(true)}
-          disabled
           style={{
             display: 'inline-flex',
             alignItems: 'center',
@@ -308,8 +308,7 @@ export default function EmployeeDetailPage() {
             fontFamily: 'var(--font-body)',
             fontSize: '13px',
             fontWeight: 600,
-            cursor: 'not-allowed',
-            opacity: 0.5,
+            cursor: 'pointer',
             flexShrink: 0,
           }}
         >
@@ -601,8 +600,18 @@ export default function EmployeeDetailPage() {
         </motion.button>
       </SectionCard>
 
-      {/* Suppress unused editOpen warning */}
-      {editOpen && null}
+      {/* Edit Employee slide-over */}
+      <SlideOver
+        open={editOpen}
+        onClose={() => setEditOpen(false)}
+        title="Edit Employee"
+      >
+        <EditEmployeeForm
+          employee={emp}
+          onClose={() => setEditOpen(false)}
+          onDeleted={() => router.push('/dashboard/employees')}
+        />
+      </SlideOver>
 
       {/* Add Skill slide-over */}
       <SlideOver

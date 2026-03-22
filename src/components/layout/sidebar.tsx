@@ -23,10 +23,10 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-  { label: 'Planning', href: '/planning', icon: Calendar },
+  { label: 'Planning', href: '/dashboard/planning', icon: Calendar },
   { label: 'Employees', href: '/dashboard/employees', icon: Users },
   { label: 'Processes', href: '/dashboard/processes', icon: GitBranch },
-  { label: 'Demand', href: '/demand', icon: TrendingUp },
+  { label: 'Demand', href: '/dashboard/demand', icon: TrendingUp },
   { label: 'Settings', href: '/dashboard/settings', icon: Settings },
 ]
 
