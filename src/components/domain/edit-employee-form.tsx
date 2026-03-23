@@ -5,6 +5,7 @@ import { motion } from 'framer-motion'
 import { Save, Trash2, AlertTriangle } from 'lucide-react'
 import { trpc } from '@/lib/trpc/client'
 import { scalePress, bouncy } from '@/lib/motion'
+import { GlassSelect } from '@/components/domain/glass-select'
 
 interface EditEmployeeFormProps {
   employee: {
@@ -20,9 +21,11 @@ interface EditEmployeeFormProps {
     department_id: string | null
     is_multi_site_eligible: boolean
     status: string
+    job_role_id?: string | null
   }
   onClose: () => void
   onDeleted?: () => void
+  isNew?: boolean
 }
 
 const CONTRACT_OPTIONS = [
@@ -82,20 +85,13 @@ const inputStyle: React.CSSProperties = {
   boxSizing: 'border-box',
 }
 
-const selectStyle: React.CSSProperties = {
-  ...inputStyle,
-  appearance: 'none' as const,
-  cursor: 'pointer',
-  backgroundImage: `url("data:image/svg+xml,%3Csvg width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")`,
-  backgroundRepeat: 'no-repeat',
-  backgroundPosition: 'right 10px center',
-  paddingRight: '32px',
-}
 
-export function EditEmployeeForm({ employee, onClose, onDeleted }: EditEmployeeFormProps) {
+export function EditEmployeeForm({ employee, onClose, onDeleted, isNew }: EditEmployeeFormProps) {
   const utils = trpc.useUtils()
   const upsert = trpc.workforce.upsertEmployee.useMutation()
   const deleteMut = trpc.workforce.deleteEmployee.useMutation()
+  const crewsQuery = trpc.org.listCrews.useQuery({ site_id: employee.home_site_id })
+  const rolesQuery = trpc.org.listRoles.useQuery({ site_id: employee.home_site_id })
 
   const [form, setForm] = useState({
     first_name: employee.first_name,
@@ -107,6 +103,8 @@ export function EditEmployeeForm({ employee, onClose, onDeleted }: EditEmployeeF
     hourly_rate: employee.hourly_rate,
     is_multi_site_eligible: employee.is_multi_site_eligible,
     status: employee.status,
+    crew_id: (employee as Record<string, unknown>).crew_id as string ?? '',
+    job_role_id: employee.job_role_id ?? '',
   })
 
   const [error, setError] = useState<string | null>(null)
@@ -120,7 +118,7 @@ export function EditEmployeeForm({ employee, onClose, onDeleted }: EditEmployeeF
     setError(null)
     try {
       await upsert.mutateAsync({
-        id: employee.id,
+        ...(isNew ? {} : { id: employee.id }),
         employee_number: form.employee_number,
         first_name: form.first_name,
         last_name: form.last_name,
@@ -130,6 +128,8 @@ export function EditEmployeeForm({ employee, onClose, onDeleted }: EditEmployeeF
         hourly_rate: form.hourly_rate,
         home_site_id: employee.home_site_id,
         department_id: employee.department_id,
+        crew_id: form.crew_id || null,
+        job_role_id: form.job_role_id || null,
         is_multi_site_eligible: form.is_multi_site_eligible,
         status: form.status as 'active' | 'on_leave' | 'suspended' | 'terminated',
       })
@@ -193,29 +193,45 @@ export function EditEmployeeForm({ employee, onClose, onDeleted }: EditEmployeeF
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-        <Field label="Contract Type" required>
-          <select
-            style={selectStyle}
-            value={form.contract_type}
-            onChange={(e) => update('contract_type', e.target.value)}
-          >
-            {CONTRACT_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>{o.label}</option>
-            ))}
-          </select>
-        </Field>
-        <Field label="Status" required>
-          <select
-            style={selectStyle}
-            value={form.status}
-            onChange={(e) => update('status', e.target.value)}
-          >
-            {STATUS_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>{o.label}</option>
-            ))}
-          </select>
-        </Field>
+        <GlassSelect
+          label="Contract Type"
+          required
+          value={form.contract_type}
+          onChange={(val) => update('contract_type', val)}
+          options={CONTRACT_OPTIONS}
+        />
+        <GlassSelect
+          label="Status"
+          required
+          value={form.status}
+          onChange={(val) => update('status', val)}
+          options={STATUS_OPTIONS}
+        />
       </div>
+
+      <GlassSelect
+        label="Crew"
+        value={form.crew_id}
+        onChange={(val) => update('crew_id', val)}
+        placeholder="\u2014 No crew \u2014"
+        options={[
+          { value: '', label: '\u2014 No crew \u2014' },
+          ...(crewsQuery.data ?? []).map((c) => ({ value: c.id, label: c.name })),
+        ]}
+      />
+
+      <GlassSelect
+        label="Role"
+        value={form.job_role_id}
+        onChange={(val) => update('job_role_id', val)}
+        placeholder="\u2014 No role \u2014"
+        options={[
+          { value: '', label: '\u2014 No role \u2014' },
+          ...(rolesQuery.data ?? [])
+            .filter((r) => !employee.department_id || r.department_id === employee.department_id)
+            .map((r) => ({ value: r.id, label: r.name })),
+        ]}
+      />
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
         <Field label="Weekly Hours" required>
@@ -335,12 +351,13 @@ export function EditEmployeeForm({ employee, onClose, onDeleted }: EditEmployeeF
         ) : (
           <>
             <Save size={15} />
-            Save Changes
+            {isNew ? 'Create Employee' : 'Save Changes'}
           </>
         )}
       </motion.button>
 
-      {/* Divider */}
+      {/* Divider + Delete (only in edit mode) */}
+      {!isNew && <>
       <div style={{ height: 1, backgroundColor: 'var(--border)' }} />
 
       {/* Delete section */}
@@ -446,6 +463,7 @@ export function EditEmployeeForm({ employee, onClose, onDeleted }: EditEmployeeF
           </div>
         </motion.div>
       )}
+      </>}
     </div>
   )
 }

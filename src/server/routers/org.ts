@@ -348,7 +348,7 @@ export const orgRouter = router({
       if (deptIds.length === 0) return []
       const { data, error } = await admin
         .from('process')
-        .select('id, name, code, unit_of_measure, norm_uph, department_id, process_type, support_type, parent_process_id, support_ratio_self, support_ratio_parent, fixed_headcount, priority, min_skill_level, certifications_required, conversion_input_uom, conversion_output_qty')
+        .select('id, name, code, unit_of_measure, norm_uph, department_id, process_type, support_type, parent_process_id, support_ratio_self, support_ratio_parent, fixed_headcount, priority, min_skill_level, certifications_required, conversion_input_uom, conversion_output_qty, restrict_to_trained, min_staffing, max_staffing, frequency_type, frequency_days, frequency_count, duration_type, duration_hours')
         .eq('organization_id', ctx.organizationId)
         .eq('is_active', true)
         .in('department_id', deptIds)
@@ -372,6 +372,14 @@ export const orgRouter = router({
         certifications_required: (p.certifications_required as string[]) ?? [],
         conversion_input_uom: (p.conversion_input_uom as string) ?? null,
         conversion_output_qty: (p.conversion_output_qty as number) ?? null,
+        restrict_to_trained: (p.restrict_to_trained as boolean) ?? false,
+        min_staffing: (p.min_staffing as number) ?? null,
+        max_staffing: (p.max_staffing as number) ?? null,
+        frequency_type: (p.frequency_type as string) ?? 'daily',
+        frequency_days: (p.frequency_days as number[]) ?? null,
+        frequency_count: (p.frequency_count as number) ?? null,
+        duration_type: (p.duration_type as string) ?? 'full_shift',
+        duration_hours: (p.duration_hours as number) ?? null,
       }))
     }),
 
@@ -399,6 +407,14 @@ export const orgRouter = router({
       priority: z.enum(['critical', 'important', 'flexible']).default('important'),
       min_skill_level: z.number().int().min(1).max(5).default(1),
       certifications_required: z.array(z.string()).default([]),
+      restrict_to_trained: z.boolean().default(false),
+      min_staffing: z.number().int().nonnegative().nullable().optional(),
+      max_staffing: z.number().int().nonnegative().nullable().optional(),
+      frequency_type: z.enum(['daily', 'weekly', 'monthly', 'quarterly', 'yearly']).default('daily'),
+      frequency_days: z.array(z.number()).nullable().optional(),
+      frequency_count: z.number().int().positive().nullable().optional(),
+      duration_type: z.enum(['full_shift', 'hours']).default('full_shift'),
+      duration_hours: z.number().positive().nullable().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const admin = createAdminClient()
@@ -424,6 +440,14 @@ export const orgRouter = router({
         priority: input.priority,
         min_skill_level: input.min_skill_level,
         certifications_required: input.certifications_required,
+        restrict_to_trained: input.restrict_to_trained,
+        min_staffing: input.min_staffing ?? null,
+        max_staffing: input.max_staffing ?? null,
+        frequency_type: input.frequency_type,
+        frequency_days: input.frequency_days ?? null,
+        frequency_count: input.frequency_count ?? null,
+        duration_type: input.duration_type,
+        duration_hours: input.duration_hours ?? null,
       }
       const { data, error } = await admin.from('process').upsert(row, { onConflict: 'id' })
         .select('id, name, code, unit_of_measure, norm_uph, department_id, process_type, priority')
@@ -449,5 +473,576 @@ export const orgRouter = router({
       const { error } = await admin.from('process').delete().eq('id', input.id).eq('organization_id', ctx.organizationId)
       assertNoError(error, 'deleteProcess')
       return { deleted: true }
+    }),
+
+  // -------------------------------------------------------------------------
+  // listShifts
+  // -------------------------------------------------------------------------
+  listShifts: viewerProcedure
+    .input(z.object({ site_id: z.string().uuid() }))
+    .query(async ({ ctx, input }) => {
+      const admin = createAdminClient()
+      const { data, error } = await admin
+        .from('shift_pattern')
+        .select('id, name, code, start_time, end_time, duration_hours, days_of_week, break_rules_json, is_overnight, shift_type, color_hex')
+        .eq('organization_id', ctx.organizationId)
+        .or(`site_id.eq.${input.site_id},site_id.is.null`)
+        .eq('is_active', true)
+        .order('start_time')
+      assertNoError(error, 'listShifts')
+      return (data ?? []).map((s: Record<string, unknown>) => ({
+        id: s.id as string,
+        name: s.name as string,
+        code: s.code as string,
+        start_time: s.start_time as string,
+        end_time: s.end_time as string,
+        duration_hours: s.duration_hours as number,
+        days_of_week: s.days_of_week as number[],
+        break_rules_json: (s.break_rules_json ?? {}) as Record<string, unknown>,
+        is_overnight: s.is_overnight as boolean,
+        shift_type: s.shift_type as string,
+        color_hex: (s.color_hex as string) ?? null,
+      }))
+    }),
+
+  // -------------------------------------------------------------------------
+  // upsertShift
+  // -------------------------------------------------------------------------
+  upsertShift: managerProcedure
+    .input(z.object({
+      id: z.string().uuid().optional(),
+      name: z.string().min(1),
+      site_id: z.string().uuid(),
+      start_time: z.string(),
+      end_time: z.string(),
+      days_of_week: z.array(z.number()),
+      break_rules_json: z.record(z.unknown()),
+      is_overnight: z.boolean().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const admin = createAdminClient()
+      const code = input.name.toUpperCase().replace(/[^A-Z0-9\s]/g, '').replace(/\s+/g, '_').substring(0, 20)
+
+      const [sh, sm] = input.start_time.split(':')
+      const [eh, em] = input.end_time.split(':')
+      const startHours = parseInt(sh ?? '0', 10) + parseInt(sm ?? '0', 10) / 60
+      const endHours = parseInt(eh ?? '0', 10) + parseInt(em ?? '0', 10) / 60
+      const isOvernight = input.is_overnight ?? endHours < startHours
+      const duration_hours = isOvernight
+        ? (24 - startHours) + endHours
+        : endHours - startHours
+
+      const row = {
+        ...(input.id ? { id: input.id } : {}),
+        name: input.name,
+        code,
+        site_id: input.site_id,
+        start_time: input.start_time,
+        end_time: input.end_time,
+        days_of_week: input.days_of_week,
+        break_rules_json: input.break_rules_json,
+        is_overnight: isOvernight,
+        duration_hours,
+        paid_hours: duration_hours,
+        shift_type: 'regular',
+        organization_id: ctx.organizationId,
+      }
+      const { data, error } = await admin.from('shift_pattern').upsert(row, { onConflict: 'id' }).select().single()
+      assertNoError(error, 'upsertShift')
+      if (!data) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Shift upsert returned no data' })
+      return data as Record<string, unknown>
+    }),
+
+  // -------------------------------------------------------------------------
+  // deleteShift
+  // -------------------------------------------------------------------------
+  deleteShift: managerProcedure
+    .input(z.object({ id: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      const admin = createAdminClient()
+      const { count, error: countErr } = await admin
+        .from('rotation_entry')
+        .select('id', { count: 'exact', head: true })
+        .eq('shift_pattern_id', input.id)
+      assertNoError(countErr, 'deleteShift:checkRotation')
+      if (count && count > 0) {
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: `Cannot delete: shift is referenced by ${count} rotation entry/entries. Remove them first.`,
+        })
+      }
+      const { error } = await admin.from('shift_pattern').delete().eq('id', input.id).eq('organization_id', ctx.organizationId)
+      assertNoError(error, 'deleteShift')
+      return { deleted: true }
+    }),
+
+  // -------------------------------------------------------------------------
+  // listCrews
+  // -------------------------------------------------------------------------
+  listCrews: viewerProcedure
+    .input(z.object({ site_id: z.string().uuid() }))
+    .query(async ({ ctx, input }) => {
+      const admin = createAdminClient()
+      const { data, error } = await admin
+        .from('crew')
+        .select('id, name, code, color')
+        .eq('site_id', input.site_id)
+        .eq('organization_id', ctx.organizationId)
+        .eq('is_active', true)
+        .order('name')
+      assertNoError(error, 'listCrews')
+      const crewIds = (data ?? []).map((c: Record<string, unknown>) => c.id as string)
+      let memberCounts: Record<string, number> = {}
+      if (crewIds.length > 0) {
+        const { data: empRows, error: empErr } = await admin
+          .from('employee')
+          .select('crew_id')
+          .in('crew_id', crewIds)
+        assertNoError(empErr, 'listCrews:memberCounts')
+        memberCounts = (empRows ?? []).reduce((acc, row) => {
+          const cid = (row as Record<string, unknown>).crew_id as string
+          acc[cid] = (acc[cid] ?? 0) + 1
+          return acc
+        }, {} as Record<string, number>)
+      }
+      return (data ?? []).map((c: Record<string, unknown>) => ({
+        id: c.id as string,
+        name: c.name as string,
+        code: c.code as string,
+        color: (c.color as string) ?? 'indigo',
+        member_count: memberCounts[c.id as string] ?? 0,
+      }))
+    }),
+
+  // -------------------------------------------------------------------------
+  // upsertCrew
+  // -------------------------------------------------------------------------
+  upsertCrew: managerProcedure
+    .input(z.object({
+      id: z.string().uuid().optional(),
+      name: z.string().min(1),
+      site_id: z.string().uuid(),
+      color: z.string().default('indigo'),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const admin = createAdminClient()
+      const baseCode = input.name.toUpperCase().replace(/[^A-Z0-9\s]/g, '').replace(/\s+/g, '_').substring(0, 16)
+      const code = input.id ? baseCode : `${baseCode}_${Date.now().toString(36).slice(-4)}`.substring(0, 20)
+      const row = {
+        ...(input.id ? { id: input.id } : {}),
+        name: input.name,
+        code,
+        site_id: input.site_id,
+        color: input.color,
+        organization_id: ctx.organizationId,
+      }
+      const { data, error } = await admin.from('crew').upsert(row, { onConflict: 'id' }).select('id, name, code, color, site_id').single()
+      assertNoError(error, 'upsertCrew')
+      if (!data) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Crew upsert returned no data' })
+      return data as { id: string; name: string; code: string; color: string; site_id: string }
+    }),
+
+  // -------------------------------------------------------------------------
+  // deleteCrew
+  // -------------------------------------------------------------------------
+  deleteCrew: managerProcedure
+    .input(z.object({ id: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      const admin = createAdminClient()
+      const [empCount, rotCount] = await Promise.all([
+        admin.from('employee').select('id', { count: 'exact', head: true }).eq('crew_id', input.id),
+        admin.from('rotation_entry').select('id', { count: 'exact', head: true }).eq('crew_id', input.id),
+      ])
+      assertNoError(empCount.error, 'deleteCrew:checkEmployees')
+      assertNoError(rotCount.error, 'deleteCrew:checkRotation')
+      const empN = empCount.count ?? 0
+      const rotN = rotCount.count ?? 0
+      if (empN > 0 || rotN > 0) {
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: `Cannot delete: crew is referenced by ${empN} employee(s) and ${rotN} rotation entry/entries. Remove them first.`,
+        })
+      }
+      const { error } = await admin.from('crew').delete().eq('id', input.id).eq('organization_id', ctx.organizationId)
+      assertNoError(error, 'deleteCrew')
+      return { deleted: true }
+    }),
+
+  // -------------------------------------------------------------------------
+  // getRotation
+  // -------------------------------------------------------------------------
+  getRotation: viewerProcedure
+    .input(z.object({ site_id: z.string().uuid() }))
+    .query(async ({ ctx, input }) => {
+      const admin = createAdminClient()
+      const { data: schedule, error: schedErr } = await admin
+        .from('rotation_schedule')
+        .select('id, cycle_weeks')
+        .eq('site_id', input.site_id)
+        .eq('organization_id', ctx.organizationId)
+        .maybeSingle()
+      assertNoError(schedErr, 'getRotation:schedule')
+      if (!schedule) {
+        return { cycle_weeks: 2, entries: [] as { crew_id: string; shift_pattern_id: string; week_number: number }[] }
+      }
+      const { data: entries, error: entErr } = await admin
+        .from('rotation_entry')
+        .select('crew_id, shift_pattern_id, week_number')
+        .eq('rotation_schedule_id', schedule.id as string)
+      assertNoError(entErr, 'getRotation:entries')
+      return {
+        id: schedule.id as string,
+        cycle_weeks: schedule.cycle_weeks as number,
+        entries: (entries ?? []).map((e: Record<string, unknown>) => ({
+          crew_id: e.crew_id as string,
+          shift_pattern_id: e.shift_pattern_id as string,
+          week_number: e.week_number as number,
+        })),
+      }
+    }),
+
+  // -------------------------------------------------------------------------
+  // saveRotation
+  // -------------------------------------------------------------------------
+  saveRotation: managerProcedure
+    .input(z.object({
+      site_id: z.string().uuid(),
+      cycle_weeks: z.number().int().min(1).max(12),
+      entries: z.array(z.object({
+        crew_id: z.string().uuid(),
+        shift_pattern_id: z.string().uuid(),
+        week_number: z.number().int(),
+      })),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const admin = createAdminClient()
+
+      // Try to find existing schedule for this site
+      const { data: existing, error: fetchErr } = await admin
+        .from('rotation_schedule')
+        .select('id')
+        .eq('site_id', input.site_id)
+        .eq('organization_id', ctx.organizationId)
+        .maybeSingle()
+      assertNoError(fetchErr, 'saveRotation:fetch')
+
+      let scheduleId: string
+
+      if (existing) {
+        // Update existing
+        const { data: updated, error: updErr } = await admin
+          .from('rotation_schedule')
+          .update({ cycle_weeks: input.cycle_weeks, updated_at: new Date().toISOString() })
+          .eq('id', existing.id as string)
+          .select('id')
+          .single()
+        assertNoError(updErr, 'saveRotation:update')
+        scheduleId = (updated as Record<string, unknown>).id as string
+      } else {
+        // Insert new
+        const { data: inserted, error: insErr } = await admin
+          .from('rotation_schedule')
+          .insert({
+            site_id: input.site_id,
+            organization_id: ctx.organizationId,
+            cycle_weeks: input.cycle_weeks,
+          })
+          .select('id')
+          .single()
+        assertNoError(insErr, 'saveRotation:insert')
+        if (!inserted) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Rotation schedule insert returned no data' })
+        scheduleId = (inserted as Record<string, unknown>).id as string
+      }
+
+      // Delete all existing entries for this schedule
+      const { error: delErr } = await admin
+        .from('rotation_entry')
+        .delete()
+        .eq('rotation_schedule_id', scheduleId)
+      assertNoError(delErr, 'saveRotation:deleteEntries')
+
+      // Insert new entries
+      if (input.entries.length > 0) {
+        const rows = input.entries.map((e) => ({
+          rotation_schedule_id: scheduleId,
+          crew_id: e.crew_id,
+          shift_pattern_id: e.shift_pattern_id,
+          week_number: e.week_number,
+        }))
+        const { error: insertErr } = await admin
+          .from('rotation_entry')
+          .insert(rows)
+        assertNoError(insertErr, 'saveRotation:insertEntries')
+      }
+
+      return { saved: true }
+    }),
+
+  // -------------------------------------------------------------------------
+  // listRoles
+  // -------------------------------------------------------------------------
+  listRoles: viewerProcedure
+    .input(z.object({ site_id: z.string().uuid() }))
+    .query(async ({ ctx, input }) => {
+      const admin = createAdminClient()
+      const { data, error } = await admin
+        .from('job_role')
+        .select('id, name, code, parent_role_id, role_type, productive_pct, follows_shifts, custom_start_time, custom_end_time, custom_days, min_per_shift, department_id')
+        .eq('site_id', input.site_id)
+        .eq('organization_id', ctx.organizationId)
+        .eq('is_active', true)
+        .order('name')
+      assertNoError(error, 'listRoles')
+      const roleIds = (data ?? []).map((r: Record<string, unknown>) => r.id as string)
+      let empCounts: Record<string, number> = {}
+      if (roleIds.length > 0) {
+        const { data: empRows, error: empErr } = await admin
+          .from('employee')
+          .select('job_role_id')
+          .in('job_role_id', roleIds)
+        assertNoError(empErr, 'listRoles:empCounts')
+        empCounts = (empRows ?? []).reduce((acc, row) => {
+          const rid = (row as Record<string, unknown>).job_role_id as string
+          acc[rid] = (acc[rid] ?? 0) + 1
+          return acc
+        }, {} as Record<string, number>)
+      }
+      return (data ?? []).map((r: Record<string, unknown>) => ({
+        id: r.id as string,
+        name: r.name as string,
+        code: r.code as string,
+        parent_role_id: (r.parent_role_id as string) ?? null,
+        role_type: r.role_type as string,
+        productive_pct: r.productive_pct as number,
+        follows_shifts: r.follows_shifts as boolean,
+        custom_start_time: (r.custom_start_time as string) ?? null,
+        custom_end_time: (r.custom_end_time as string) ?? null,
+        custom_days: (r.custom_days as number[]) ?? null,
+        min_per_shift: (r.min_per_shift as number) ?? null,
+        department_id: (r.department_id as string) ?? null,
+        employee_count: empCounts[r.id as string] ?? 0,
+      }))
+    }),
+
+  // -------------------------------------------------------------------------
+  // upsertRole
+  // -------------------------------------------------------------------------
+  upsertRole: managerProcedure
+    .input(z.object({
+      id: z.string().uuid().optional(),
+      name: z.string().min(1),
+      site_id: z.string().uuid(),
+      parent_role_id: z.string().uuid().nullable().optional(),
+      role_type: z.enum(['productive', 'leadership', 'overhead']),
+      productive_pct: z.number().min(0).max(100),
+      follows_shifts: z.boolean(),
+      custom_start_time: z.string().nullable().optional(),
+      custom_end_time: z.string().nullable().optional(),
+      custom_days: z.array(z.number()).nullable().optional(),
+      min_per_shift: z.number().nullable().optional(),
+      department_id: z.string().uuid().nullable().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const admin = createAdminClient()
+      const baseCode = input.name.toUpperCase().replace(/[^A-Z0-9\s]/g, '').replace(/\s+/g, '_').substring(0, 16)
+      const code = input.id ? baseCode : `${baseCode}_${Date.now().toString(36).slice(-4)}`.substring(0, 20)
+      const row = {
+        ...(input.id ? { id: input.id } : {}),
+        name: input.name,
+        code,
+        site_id: input.site_id,
+        organization_id: ctx.organizationId,
+        parent_role_id: input.parent_role_id ?? null,
+        role_type: input.role_type,
+        productive_pct: input.productive_pct,
+        follows_shifts: input.follows_shifts,
+        custom_start_time: input.custom_start_time ?? null,
+        custom_end_time: input.custom_end_time ?? null,
+        custom_days: input.custom_days ?? null,
+        min_per_shift: input.min_per_shift ?? null,
+        department_id: input.department_id ?? null,
+      }
+      const { data, error } = await admin.from('job_role').upsert(row, { onConflict: 'id' })
+        .select('id, name, code, role_type, productive_pct')
+        .single()
+      assertNoError(error, 'upsertRole')
+      if (!data) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Role upsert returned no data' })
+      return data as { id: string; name: string; code: string; role_type: string; productive_pct: number }
+    }),
+
+  // -------------------------------------------------------------------------
+  // deleteRole
+  // -------------------------------------------------------------------------
+  deleteRole: managerProcedure
+    .input(z.object({ id: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      const admin = createAdminClient()
+      const { count, error: countErr } = await admin
+        .from('employee')
+        .select('id', { count: 'exact', head: true })
+        .eq('job_role_id', input.id)
+      assertNoError(countErr, 'deleteRole:checkEmployees')
+      if (count && count > 0) {
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: `Cannot delete: ${count} employee(s) are assigned to this role. Reassign them first.`,
+        })
+      }
+      const { error } = await admin.from('job_role').delete().eq('id', input.id).eq('organization_id', ctx.organizationId)
+      assertNoError(error, 'deleteRole')
+      return { deleted: true }
+    }),
+
+  // -------------------------------------------------------------------------
+  // listEquipment
+  // -------------------------------------------------------------------------
+  listEquipment: viewerProcedure
+    .input(z.object({ site_id: z.string().uuid() }))
+    .query(async ({ ctx, input }) => {
+      const admin = createAdminClient()
+      const { data, error } = await admin
+        .from('equipment')
+        .select('id, name, code, category, quantity, description')
+        .eq('site_id', input.site_id)
+        .eq('organization_id', ctx.organizationId)
+        .eq('is_active', true)
+        .order('name')
+      assertNoError(error, 'listEquipment')
+      return (data ?? []).map((e: Record<string, unknown>) => ({
+        id: e.id as string,
+        name: e.name as string,
+        code: e.code as string,
+        category: (e.category as string) ?? 'mhe',
+        quantity: (e.quantity as number) ?? 0,
+        description: (e.description as string) ?? null,
+      }))
+    }),
+
+  // -------------------------------------------------------------------------
+  // upsertEquipment
+  // -------------------------------------------------------------------------
+  upsertEquipment: managerProcedure
+    .input(z.object({
+      id: z.string().uuid().optional(),
+      name: z.string().min(1),
+      site_id: z.string().uuid(),
+      category: z.string().default('mhe'),
+      quantity: z.number().int().nonnegative(),
+      description: z.string().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const admin = createAdminClient()
+      const baseCode = input.name.toUpperCase().replace(/[^A-Z0-9\s]/g, '').replace(/\s+/g, '_').substring(0, 16)
+      const code = input.id ? baseCode : `${baseCode}_${Date.now().toString(36).slice(-4)}`.substring(0, 20)
+      const row = {
+        ...(input.id ? { id: input.id } : {}),
+        name: input.name,
+        code,
+        site_id: input.site_id,
+        category: input.category,
+        quantity: input.quantity,
+        description: input.description ?? null,
+        organization_id: ctx.organizationId,
+      }
+      const { data, error } = await admin.from('equipment').upsert(row, { onConflict: 'id' })
+        .select('id, name, code, category, quantity, description')
+        .single()
+      assertNoError(error, 'upsertEquipment')
+      if (!data) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Equipment upsert returned no data' })
+      return data as { id: string; name: string; code: string; category: string; quantity: number; description: string | null }
+    }),
+
+  // -------------------------------------------------------------------------
+  // deleteEquipment
+  // -------------------------------------------------------------------------
+  deleteEquipment: managerProcedure
+    .input(z.object({ id: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      const admin = createAdminClient()
+      const { count, error: countErr } = await admin
+        .from('process_equipment')
+        .select('id', { count: 'exact', head: true })
+        .eq('equipment_id', input.id)
+      assertNoError(countErr, 'deleteEquipment:checkProcesses')
+      if (count && count > 0) {
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: `Cannot delete: equipment is referenced by ${count} process(es). Remove the equipment from those processes first.`,
+        })
+      }
+      const { error } = await admin.from('equipment').delete().eq('id', input.id).eq('organization_id', ctx.organizationId)
+      assertNoError(error, 'deleteEquipment')
+      return { deleted: true }
+    }),
+
+  // -------------------------------------------------------------------------
+  // listProcessEquipment
+  // -------------------------------------------------------------------------
+  listProcessEquipment: viewerProcedure
+    .input(z.object({ site_id: z.string().uuid() }))
+    .query(async ({ ctx, input }) => {
+      const admin = createAdminClient()
+      // Get all department IDs for this site
+      const { data: depts, error: deptErr } = await admin
+        .from('department')
+        .select('id')
+        .eq('site_id', input.site_id)
+        .eq('organization_id', ctx.organizationId)
+      assertNoError(deptErr, 'listProcessEquipment:depts')
+      const deptIds = (depts ?? []).map((d) => (d as Record<string, unknown>).id as string)
+      if (deptIds.length === 0) return []
+      // Get process IDs for this site
+      const { data: procs, error: procErr } = await admin
+        .from('process')
+        .select('id')
+        .eq('organization_id', ctx.organizationId)
+        .eq('is_active', true)
+        .in('department_id', deptIds)
+      assertNoError(procErr, 'listProcessEquipment:procs')
+      const procIds = (procs ?? []).map((p) => (p as Record<string, unknown>).id as string)
+      if (procIds.length === 0) return []
+      // Get process_equipment records
+      const { data, error } = await admin
+        .from('process_equipment')
+        .select('id, process_id, equipment_id, units_per_person')
+        .in('process_id', procIds)
+      assertNoError(error, 'listProcessEquipment')
+      return (data ?? []).map((pe: Record<string, unknown>) => ({
+        id: pe.id as string,
+        process_id: pe.process_id as string,
+        equipment_id: pe.equipment_id as string,
+        units_per_person: (pe.units_per_person as number) ?? 1,
+      }))
+    }),
+
+  // -------------------------------------------------------------------------
+  // setProcessEquipment
+  // -------------------------------------------------------------------------
+  setProcessEquipment: managerProcedure
+    .input(z.object({
+      process_id: z.string().uuid(),
+      equipment: z.array(z.object({
+        equipment_id: z.string().uuid(),
+      })),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const admin = createAdminClient()
+      const { error: delErr } = await admin
+        .from('process_equipment')
+        .delete()
+        .eq('process_id', input.process_id)
+      assertNoError(delErr, 'setProcessEquipment:delete')
+      if (input.equipment.length > 0) {
+        const rows = input.equipment.map((e) => ({
+          process_id: input.process_id,
+          equipment_id: e.equipment_id,
+          units_per_person: 1,
+        }))
+        const { error: insertErr } = await admin
+          .from('process_equipment')
+          .insert(rows)
+        assertNoError(insertErr, 'setProcessEquipment:insert')
+      }
+      return { saved: true }
     }),
 })

@@ -8,6 +8,9 @@ import { gentle } from '@/lib/motion'
 const tabs = [
   { label: 'Organization', href: '/dashboard/settings' },
   { label: 'Sites', href: '/dashboard/settings/sites' },
+  { label: 'Shifts', href: '/dashboard/settings/shifts' },
+  { label: 'Roles', href: '/dashboard/settings/roles' },
+  { label: 'Equipment', href: '/dashboard/settings/equipment' },
   { label: 'Audit Log', href: '/dashboard/settings/audit' },
 ]
 

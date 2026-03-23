@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useMemo } from 'react'
+import { useState, useCallback, useMemo, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   X,
@@ -16,7 +16,9 @@ import {
   Loader2,
   ChevronRight,
   ChevronLeft,
+  Package,
 } from 'lucide-react'
+import { trpc } from '@/lib/trpc/client'
 import { bouncy, snappy, wobbly, scalePress } from '@/lib/motion'
 import { SmartIcon } from '@/components/domain/smart-icon'
 import { getDeptColor } from '@/components/domain/process-card'
@@ -39,6 +41,15 @@ export interface ProcessFormData {
   priority: 'critical' | 'important' | 'flexible'
   min_skill_level: number
   certifications_required: string[]
+  restrict_to_trained: boolean
+  min_staffing?: number | null
+  max_staffing?: number | null
+  frequency_type: 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'yearly'
+  frequency_days?: number[] | null
+  frequency_count?: number | null
+  duration_type: 'full_shift' | 'hours'
+  duration_hours?: number | null
+  equipment?: { equipment_id: string }[]
 }
 
 interface ProcessWizardProps {
@@ -47,6 +58,7 @@ interface ProcessWizardProps {
   departmentId: string
   departmentName: string
   departmentColor: string
+  siteId: string
   existingProcesses: { id: string; name: string; unit_of_measure: string; norm_uph: number }[]
   initialValues?: ProcessFormData
   onSave: (data: ProcessFormData) => Promise<void>
@@ -80,6 +92,14 @@ function defaultFormData(): ProcessFormData {
     priority: 'important' as const,
     min_skill_level: 1,
     certifications_required: [],
+    restrict_to_trained: false,
+    min_staffing: null,
+    max_staffing: null,
+    frequency_type: 'daily' as const,
+    frequency_days: null,
+    frequency_count: null,
+    duration_type: 'full_shift' as const,
+    duration_hours: null,
   }
 }
 
@@ -108,6 +128,7 @@ export function ProcessWizard({
   departmentId,
   departmentName,
   departmentColor,
+  siteId,
   existingProcesses,
   initialValues,
   onSave,
@@ -122,6 +143,29 @@ export function ProcessWizard({
   const [showConversion, setShowConversion] = useState(false)
   const [customCert, setCustomCert] = useState('')
   const [showCustomCert, setShowCustomCert] = useState(false)
+  const [equipmentEnabled, setEquipmentEnabled] = useState(false)
+  const [selectedEquipment, setSelectedEquipment] = useState<Set<string>>(new Set())
+
+  // Equipment queries
+  const equipmentQuery = trpc.org.listEquipment.useQuery(
+    { site_id: siteId },
+    { enabled: !!siteId },
+  )
+  const processEquipmentQuery = trpc.org.listProcessEquipment.useQuery(
+    { site_id: siteId },
+    { enabled: !!siteId },
+  )
+
+  // Initialize equipment state from initialValues
+  useEffect(() => {
+    if (initialValues?.equipment && initialValues.equipment.length > 0) {
+      setEquipmentEnabled(true)
+      setSelectedEquipment(new Set(initialValues.equipment.map((eq) => eq.equipment_id)))
+    } else {
+      setEquipmentEnabled(false)
+      setSelectedEquipment(new Set())
+    }
+  }, [initialValues])
 
   const isEdit = !!initialValues?.id
 
@@ -142,7 +186,10 @@ export function ProcessWizard({
   const handleSave = async () => {
     setSaving(true)
     try {
-      await onSave({ ...form, id: initialValues?.id })
+      const equipmentData = equipmentEnabled && selectedEquipment.size > 0
+        ? Array.from(selectedEquipment).map((equipment_id) => ({ equipment_id }))
+        : undefined
+      await onSave({ ...form, id: initialValues?.id, equipment: equipmentData })
       onClose()
     } catch {
       // parent handles error
@@ -163,6 +210,8 @@ export function ProcessWizard({
     setShowConversion(false)
     setShowCustomCert(false)
     setCustomCert('')
+    setEquipmentEnabled(false)
+    setSelectedEquipment(new Set())
     onClose()
   }
 
@@ -178,7 +227,7 @@ export function ProcessWizard({
       return !!form.parent_process_id
     }
     if (form.support_type === 'standalone') {
-      return (form.fixed_headcount ?? 0) > 0
+      return true  // headcount is optional — min/max staffing in step 3 covers this
     }
     return !!form.support_type
   }, [form])
@@ -665,9 +714,280 @@ export function ProcessWizard({
             </div>
           </div>
         )}
+
+        {renderEquipmentSection()}
+
+        {renderScheduleSection()}
       </div>
     )
   }
+
+  // Shared equipment section used by both productive and supportive
+  const renderEquipmentSection = () => {
+    return (() => {
+          const allEquipment = equipmentQuery.data ?? []
+          const allProcessEquipment = processEquipmentQuery.data ?? []
+          // Calculate allocations per equipment (excluding current process)
+          const allocatedMap: Record<string, number> = {}
+          for (const pe of allProcessEquipment) {
+            if (pe.process_id !== initialValues?.id) {
+              allocatedMap[pe.equipment_id] = (allocatedMap[pe.equipment_id] ?? 0) + pe.units_per_person
+            }
+          }
+          if (allEquipment.length === 0) return null
+          return (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <button
+                type="button"
+                onClick={() => {
+                  setEquipmentEnabled(!equipmentEnabled)
+                  if (equipmentEnabled) setSelectedEquipment(new Set())
+                }}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  padding: '10px 14px', borderRadius: 'var(--radius-md)',
+                  border: `1.5px solid ${equipmentEnabled ? `${c.main}40` : 'var(--border)'}`,
+                  backgroundColor: equipmentEnabled ? `${c.main}08` : 'transparent',
+                  cursor: 'pointer', textAlign: 'left', transition: 'all 0.15s',
+                }}
+              >
+                <div style={{
+                  width: 30, height: 16, borderRadius: 8,
+                  backgroundColor: equipmentEnabled ? c.main : 'var(--border)',
+                  position: 'relative', transition: 'background-color 0.15s', flexShrink: 0,
+                }}>
+                  <div style={{
+                    width: 12, height: 12, borderRadius: '50%', backgroundColor: '#fff',
+                    position: 'absolute', top: 2,
+                    left: equipmentEnabled ? 16 : 2,
+                    transition: 'left 0.15s', boxShadow: '0 1px 2px rgba(0,0,0,0.15)',
+                  }} />
+                </div>
+                <div>
+                  <div style={{ fontFamily: 'var(--font-body)', fontSize: 12, fontWeight: 600, color: 'var(--foreground)' }}>
+                    This process requires equipment
+                  </div>
+                  <div style={{ fontFamily: 'var(--font-body)', fontSize: 10, color: 'var(--muted-foreground)', marginTop: 1 }}>
+                    Assign MHE, tools, or stations needed for this process
+                  </div>
+                </div>
+              </button>
+              {equipmentEnabled && (
+                <div style={{
+                  display: 'flex', flexDirection: 'column', gap: 6,
+                  padding: '10px 12px',
+                  borderRadius: 'var(--radius-sm)',
+                  border: '1px solid var(--border)',
+                  backgroundColor: 'var(--background)',
+                }}>
+                  {allEquipment.map((eq) => {
+                    const isSelected = selectedEquipment.has(eq.id)
+                    return (
+                      <div key={eq.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedEquipment((prev) => {
+                              const next = new Set(prev)
+                              if (isSelected) next.delete(eq.id)
+                              else next.add(eq.id)
+                              return next
+                            })
+                          }}
+                          style={{
+                            width: 18, height: 18, borderRadius: 4, flexShrink: 0,
+                            border: `1.5px solid ${isSelected ? c.main : 'var(--border)'}`,
+                            backgroundColor: isSelected ? c.main : 'transparent',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            cursor: 'pointer', padding: 0,
+                          }}
+                        >
+                          {isSelected && (
+                            <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                              <path d="M2 5L4 7L8 3" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
+                          )}
+                        </button>
+                        <Package size={14} style={{ color: 'var(--muted-foreground)', flexShrink: 0 }} />
+                        <span style={{
+                          flex: 1, fontFamily: 'var(--font-body)', fontSize: 12, fontWeight: 600,
+                          color: isSelected ? 'var(--foreground)' : 'var(--muted-foreground)',
+                        }}>
+                          {eq.name}
+                        </span>
+                        <span style={{
+                          fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 600,
+                          color: 'var(--muted-foreground)', whiteSpace: 'nowrap',
+                          padding: '1px 6px', borderRadius: 999,
+                          backgroundColor: 'var(--muted)',
+                        }}>
+                          {eq.quantity} available
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          )
+        })()
+  }
+
+  // Shared schedule section (frequency + duration) used by both productive and supportive step 2
+  const renderScheduleSection = () => (
+    <>
+      {/* Frequency */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <label style={{
+          fontFamily: 'var(--font-body)', fontSize: 11, fontWeight: 600,
+          textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--muted-foreground)',
+        }}>
+          Frequency
+        </label>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          {(['daily', 'weekly', 'monthly', 'quarterly', 'yearly'] as const).map((freq) => {
+            const labels: Record<string, string> = { daily: 'Daily', weekly: 'Weekly', monthly: 'Monthly', quarterly: 'Quarterly', yearly: 'Yearly' }
+            const sel = form.frequency_type === freq
+            return (
+              <button
+                key={freq}
+                type="button"
+                onClick={() => update('frequency_type', freq)}
+                style={{
+                  padding: '6px 12px', borderRadius: 'var(--radius-full)',
+                  border: `1.5px solid ${sel ? c.main : 'var(--border)'}`,
+                  backgroundColor: sel ? `${c.main}10` : 'transparent',
+                  color: sel ? c.main : 'var(--muted-foreground)',
+                  fontFamily: 'var(--font-body)', fontSize: 11, fontWeight: 600,
+                  cursor: 'pointer', transition: 'all 0.15s',
+                }}
+              >
+                {labels[freq]}
+              </button>
+            )
+          })}
+        </div>
+        {form.frequency_type === 'weekly' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 4 }}>
+            <div style={{ display: 'flex', gap: 6 }}>
+              {['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo'].map((label, idx) => {
+                const day = idx + 1
+                const active = (form.frequency_days ?? []).includes(day)
+                return (
+                  <button
+                    key={day}
+                    type="button"
+                    onClick={() => {
+                      const days = form.frequency_days ?? []
+                      const next = active ? days.filter((d) => d !== day) : [...days, day].sort()
+                      update('frequency_days', next)
+                    }}
+                    style={{
+                      width: 32, height: 32, borderRadius: '50%',
+                      border: `2px solid ${active ? c.main : 'var(--border)'}`,
+                      backgroundColor: active ? c.main : 'transparent',
+                      color: active ? '#fff' : 'var(--muted-foreground)',
+                      fontFamily: 'var(--font-body)', fontSize: 10, fontWeight: 700,
+                      cursor: 'pointer', transition: 'all 0.15s',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}
+                  >
+                    {label}
+                  </button>
+                )
+              })}
+            </div>
+            {(form.frequency_days ?? []).length === 0 && (
+              <p style={{ fontFamily: 'var(--font-body)', fontSize: 10, color: c.main, margin: 0, fontStyle: 'italic' }}>
+                No days selected — the solver will choose the optimal day(s) each week
+              </p>
+            )}
+          </div>
+        )}
+        {(form.frequency_type === 'monthly' || form.frequency_type === 'quarterly' || form.frequency_type === 'yearly') && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+            <input
+              type="number"
+              min={1}
+              value={form.frequency_count ?? 1}
+              onChange={(e) => update('frequency_count', Number(e.target.value) || 1)}
+              style={{
+                width: 60, padding: '6px 8px', borderRadius: 'var(--radius-sm)',
+                border: '1px solid var(--border)', backgroundColor: 'var(--card)',
+                color: c.main, fontFamily: 'var(--font-mono)', fontSize: 16, fontWeight: 700,
+                textAlign: 'center', outline: 'none', boxSizing: 'border-box',
+              }}
+            />
+            <span style={{ fontFamily: 'var(--font-body)', fontSize: 12, color: 'var(--muted-foreground)' }}>
+              times per {form.frequency_type === 'monthly' ? 'month' : form.frequency_type === 'quarterly' ? 'quarter' : 'year'}
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* Duration */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <label style={{
+          fontFamily: 'var(--font-body)', fontSize: 11, fontWeight: 600,
+          textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--muted-foreground)',
+        }}>
+          Duration
+        </label>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            type="button"
+            onClick={() => update('duration_type', 'full_shift')}
+            style={{
+              flex: 1, padding: '10px 14px', borderRadius: 'var(--radius-md)',
+              border: `1.5px solid ${form.duration_type === 'full_shift' ? c.main : 'var(--border)'}`,
+              backgroundColor: form.duration_type === 'full_shift' ? `${c.main}08` : 'transparent',
+              color: form.duration_type === 'full_shift' ? c.main : 'var(--muted-foreground)',
+              fontFamily: 'var(--font-body)', fontSize: 12, fontWeight: 600,
+              cursor: 'pointer', textAlign: 'left', transition: 'all 0.15s',
+            }}
+          >
+            <div style={{ fontWeight: 700, marginBottom: 2 }}>Full shift</div>
+            <div style={{ fontSize: 10, opacity: 0.7 }}>Takes the entire shift duration</div>
+          </button>
+          <button
+            type="button"
+            onClick={() => update('duration_type', 'hours')}
+            style={{
+              flex: 1, padding: '10px 14px', borderRadius: 'var(--radius-md)',
+              border: `1.5px solid ${form.duration_type === 'hours' ? c.main : 'var(--border)'}`,
+              backgroundColor: form.duration_type === 'hours' ? `${c.main}08` : 'transparent',
+              color: form.duration_type === 'hours' ? c.main : 'var(--muted-foreground)',
+              fontFamily: 'var(--font-body)', fontSize: 12, fontWeight: 600,
+              cursor: 'pointer', textAlign: 'left', transition: 'all 0.15s',
+            }}
+          >
+            <div style={{ fontWeight: 700, marginBottom: 2 }}>Specific hours</div>
+            <div style={{ fontSize: 10, opacity: 0.7 }}>Partial shift — set hours needed</div>
+          </button>
+        </div>
+        {form.duration_type === 'hours' && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <input
+              type="number"
+              min={0.5}
+              step={0.5}
+              value={form.duration_hours ?? 2}
+              onChange={(e) => update('duration_hours', Number(e.target.value) || null)}
+              style={{
+                width: 70, padding: '6px 8px', borderRadius: 'var(--radius-sm)',
+                border: '1px solid var(--border)', backgroundColor: 'var(--card)',
+                color: c.main, fontFamily: 'var(--font-mono)', fontSize: 18, fontWeight: 700,
+                textAlign: 'center', outline: 'none', boxSizing: 'border-box',
+              }}
+            />
+            <span style={{ fontFamily: 'var(--font-body)', fontSize: 12, color: 'var(--muted-foreground)' }}>
+              hours per occurrence
+            </span>
+          </div>
+        )}
+      </div>
+    </>
+  )
 
   const renderStep2Supportive = () => {
     const parentProc = productiveProcesses.find((p) => p.id === form.parent_process_id)
@@ -943,6 +1263,8 @@ export function ProcessWizard({
             </div>
           </div>
         )}
+        {renderEquipmentSection()}
+        {renderScheduleSection()}
       </div>
     )
   }
@@ -1025,54 +1347,6 @@ export function ProcessWizard({
                 >
                   {cfg.desc}
                 </div>
-              </motion.button>
-            )
-          })}
-        </div>
-      </div>
-
-      {/* Min skill level */}
-      <div>
-        <label
-          style={{
-            fontFamily: 'var(--font-body)',
-            fontSize: '11px',
-            fontWeight: 600,
-            color: 'var(--muted-foreground)',
-            textTransform: 'uppercase',
-            letterSpacing: '0.06em',
-            marginBottom: '10px',
-            display: 'block',
-          }}
-        >
-          Minimum Skill Level
-        </label>
-        <div style={{ display: 'flex', gap: '6px' }}>
-          {[1, 2, 3, 4, 5].map((level) => {
-            const selected = form.min_skill_level === level
-            return (
-              <motion.button
-                key={level}
-                variants={scalePress}
-                whileTap="press"
-                onClick={() => update('min_skill_level', level)}
-                style={{
-                  flex: 1,
-                  padding: '8px 4px',
-                  borderRadius: 'var(--radius-sm)',
-                  border: `1.5px solid ${selected ? c.main : 'var(--border)'}`,
-                  backgroundColor: selected ? `${c.main}14` : 'var(--card)',
-                  color: selected ? c.main : 'var(--muted-foreground)',
-                  cursor: 'pointer',
-                  textAlign: 'center',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  gap: '2px',
-                }}
-              >
-                <span style={{ fontFamily: 'var(--font-mono)', fontSize: '16px', fontWeight: 800 }}>{level}</span>
-                <span style={{ fontFamily: 'var(--font-body)', fontSize: '9px', fontWeight: 600 }}>{SKILL_LABELS[level - 1]}</span>
               </motion.button>
             )
           })}
@@ -1181,6 +1455,93 @@ export function ProcessWizard({
           )}
         </div>
       </div>
+
+      {/* Restrict to trained employees */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <button
+          type="button"
+          onClick={() => update('restrict_to_trained', !form.restrict_to_trained)}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 8,
+            padding: '10px 14px', borderRadius: 'var(--radius-md)',
+            border: `1.5px solid ${form.restrict_to_trained ? `${c.main}40` : 'var(--border)'}`,
+            backgroundColor: form.restrict_to_trained ? `${c.main}08` : 'transparent',
+            cursor: 'pointer', textAlign: 'left', transition: 'all 0.15s',
+          }}
+        >
+          <div style={{
+            width: 30, height: 16, borderRadius: 8,
+            backgroundColor: form.restrict_to_trained ? c.main : 'var(--border)',
+            position: 'relative', transition: 'background-color 0.15s', flexShrink: 0,
+          }}>
+            <div style={{
+              width: 12, height: 12, borderRadius: '50%', backgroundColor: '#fff',
+              position: 'absolute', top: 2,
+              left: form.restrict_to_trained ? 16 : 2,
+              transition: 'left 0.15s', boxShadow: '0 1px 2px rgba(0,0,0,0.15)',
+            }} />
+          </div>
+          <div>
+            <div style={{ fontFamily: 'var(--font-body)', fontSize: 12, fontWeight: 600, color: 'var(--foreground)' }}>
+              Restrict to trained employees only
+            </div>
+            <div style={{ fontFamily: 'var(--font-body)', fontSize: 10, color: 'var(--muted-foreground)', marginTop: 1 }}>
+              Only employees with a skill record for this process can be assigned
+            </div>
+          </div>
+        </button>
+      </div>
+
+      {/* Min / Max staffing — hidden when fixed headcount is set (to avoid conflicting params) */}
+      {!((form.fixed_headcount ?? 0) > 0) && (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <label style={{
+          fontFamily: 'var(--font-body)', fontSize: 11, fontWeight: 600,
+          textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--muted-foreground)',
+        }}>
+          Staffing Constraints
+        </label>
+        <div style={{ display: 'flex', gap: 12 }}>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 3 }}>
+            <span style={{ fontFamily: 'var(--font-body)', fontSize: 10, color: 'var(--muted-foreground)' }}>Min people</span>
+            <input
+              type="number"
+              min="0"
+              placeholder="No min"
+              value={form.min_staffing ?? ''}
+              onChange={(e) => update('min_staffing', e.target.value ? Number(e.target.value) : null)}
+              style={{
+                width: '100%', padding: '8px 10px', borderRadius: 'var(--radius-sm)',
+                border: '1px solid var(--border)', backgroundColor: 'var(--card)',
+                color: 'var(--foreground)', fontFamily: 'var(--font-mono)', fontSize: 13,
+                textAlign: 'center', outline: 'none', boxSizing: 'border-box',
+              }}
+            />
+          </div>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 3 }}>
+            <span style={{ fontFamily: 'var(--font-body)', fontSize: 10, color: 'var(--muted-foreground)' }}>Max people</span>
+            <input
+              type="number"
+              min="0"
+              placeholder="No max"
+              value={form.max_staffing ?? ''}
+              onChange={(e) => update('max_staffing', e.target.value ? Number(e.target.value) : null)}
+              style={{
+                width: '100%', padding: '8px 10px', borderRadius: 'var(--radius-sm)',
+                border: '1px solid var(--border)', backgroundColor: 'var(--card)',
+                color: 'var(--foreground)', fontFamily: 'var(--font-mono)', fontSize: 13,
+                textAlign: 'center', outline: 'none', boxSizing: 'border-box',
+              }}
+            />
+          </div>
+        </div>
+        {form.max_staffing != null && form.max_staffing > 0 && (
+          <span style={{ fontFamily: 'var(--font-body)', fontSize: 10, color: c.main }}>
+            Hard cap: solver will not assign more than {form.max_staffing} people
+          </span>
+        )}
+      </div>
+      )}
     </div>
   )
 

@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
-import { motion } from 'framer-motion'
-import { Search, X, Upload } from 'lucide-react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { Search, X, Upload, Plus } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { trpc } from '@/lib/trpc/client'
@@ -10,6 +10,9 @@ import { useSiteStore } from '@/stores/site-store'
 import { fadeInUp, containerStagger, bouncy, scalePress } from '@/lib/motion'
 import { AnimatedCounter } from '@/components/domain/animated-counter'
 import { Avatar } from '@/components/domain/avatar'
+import { AddEmployeeWizard } from '@/components/domain/add-employee-wizard'
+import { SlideOver } from '@/components/domain/slide-over'
+import { EditEmployeeForm } from '@/components/domain/edit-employee-form'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -27,6 +30,9 @@ interface Employee {
   status: string
   is_multi_site_eligible: boolean
   skill_count: number
+  department_id: string | null
+  crew_id: string | null
+  job_role_id: string | null
 }
 
 // ── Badge configs ─────────────────────────────────────────────────────────────
@@ -94,28 +100,61 @@ function FilterChip({
 
 // ── Employee card ─────────────────────────────────────────────────────────────
 
-function EmployeeCard({ employee, onClick }: { employee: Employee; onClick: () => void }) {
+function EmployeeCard({
+  employee, onClick, onHoldEdit, deptName, roleName, skillNames,
+}: {
+  employee: Employee
+  onClick: () => void
+  onHoldEdit: () => void
+  deptName?: string | null
+  roleName?: string | null
+  skillNames?: string[]
+}) {
   const contractType = employee.contract_type as ContractType
   const status = employee.status as EmployeeStatus
-  const contractColor = CONTRACT_COLOR[contractType] ?? { bg: 'var(--muted)', text: 'var(--muted-foreground)' }
   const statusColor = STATUS_DOT[status] ?? '#94A3B8'
+  const holdRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const didHold = useRef(false)
+
+  const isTemp = contractType === 'temporary' || contractType === 'seasonal' || contractType === 'contractor'
+
+  const startHold = () => {
+    didHold.current = false
+    holdRef.current = setTimeout(() => {
+      didHold.current = true
+      onHoldEdit()
+    }, 400)
+  }
+  const cancelHold = () => {
+    if (holdRef.current) { clearTimeout(holdRef.current); holdRef.current = null }
+  }
+  const handleClick = () => {
+    if (didHold.current) { didHold.current = false; return }
+    onClick()
+  }
+
+  // Status label + micro badge config
+  const statusLabel = status === 'on_leave' ? 'Leave' : status === 'suspended' ? 'Absent' : status === 'active' ? 'Available' : 'Inactive'
 
   return (
     <motion.div
       variants={fadeInUp}
-      whileHover={{ y: -2, boxShadow: 'var(--elevation-2)' }}
       transition={bouncy}
-      onClick={onClick}
+      onMouseDown={startHold}
+      onMouseUp={cancelHold}
+      onMouseLeave={cancelHold}
+      onClick={handleClick}
       style={{
         backgroundColor: 'var(--card)',
         border: '1px solid var(--border)',
         borderRadius: 'var(--radius-md)',
         boxShadow: 'var(--elevation-1)',
-        padding: '16px 20px',
+        padding: '14px 18px',
         display: 'flex',
         alignItems: 'center',
-        gap: '16px',
+        gap: '14px',
         cursor: 'pointer',
+        userSelect: 'none',
       }}
     >
       {/* Avatar */}
@@ -123,111 +162,195 @@ function EmployeeCard({ employee, onClick }: { employee: Employee; onClick: () =
 
       {/* Main info */}
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-          <span
-            style={{
-              fontFamily: 'var(--font-display)',
-              fontWeight: 700,
-              fontSize: '15px',
-              color: 'var(--foreground)',
-            }}
-          >
+        {/* Row 1: Name + Temp/Internal badge */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{
+            fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '14px',
+            color: 'var(--foreground)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          }}>
             {employee.first_name} {employee.last_name}
           </span>
-          <span
-            style={{
-              fontFamily: 'var(--font-mono)',
-              fontSize: '11px',
-              color: 'var(--muted-foreground)',
-              backgroundColor: 'var(--muted)',
-              padding: '2px 7px',
-              borderRadius: 'var(--radius-sm)',
-            }}
-          >
-            {employee.employee_number}
-          </span>
-          {/* Status dot */}
-          <span
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '5px',
-              fontFamily: 'var(--font-body)',
-              fontSize: '12px',
-              color: statusColor,
-            }}
-          >
-            <span
-              style={{
-                width: '7px',
-                height: '7px',
-                borderRadius: '50%',
-                backgroundColor: statusColor,
-                display: 'inline-block',
-              }}
-            />
-            {status === 'on_leave' ? 'On Leave' : status.charAt(0).toUpperCase() + status.slice(1)}
+          {/* Temp vs Internal badge */}
+          <span style={{
+            fontFamily: 'var(--font-body)', fontSize: '9px', fontWeight: 700,
+            padding: '1px 6px', borderRadius: 999, textTransform: 'uppercase', letterSpacing: '0.04em',
+            color: isTemp ? '#D97706' : '#059669',
+            backgroundColor: isTemp ? 'rgba(245,158,11,0.1)' : 'rgba(16,185,129,0.1)',
+          }}>
+            {isTemp ? 'Temp' : 'Internal'}
           </span>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '6px', flexWrap: 'wrap' }}>
-          {/* Contract type badge */}
-          <span
-            style={{
-              fontFamily: 'var(--font-body)',
-              fontSize: '11px',
-              fontWeight: 600,
-              color: contractColor.text,
-              backgroundColor: contractColor.bg,
-              padding: '2px 8px',
-              borderRadius: 'var(--radius-full)',
-            }}
-          >
-            {CONTRACT_LABEL[contractType] ?? contractType}
-          </span>
-
-          {/* Skill count */}
-          {employee.skill_count > 0 && (
-            <span
-              style={{
-                fontFamily: 'var(--font-body)',
-                fontSize: '11px',
-                color: 'var(--muted-foreground)',
-                backgroundColor: 'var(--muted)',
-                padding: '2px 8px',
-                borderRadius: 'var(--radius-full)',
-              }}
-            >
-              {employee.skill_count} {employee.skill_count === 1 ? 'skill' : 'skills'}
+        {/* Row 2: Department + Role */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '3px' }}>
+          {deptName && (
+            <span style={{
+              fontFamily: 'var(--font-body)', fontSize: '11px', fontWeight: 500,
+              color: 'var(--muted-foreground)',
+            }}>
+              {deptName}
             </span>
           )}
+          {deptName && roleName && (
+            <span style={{ color: 'var(--border)', fontSize: '10px' }}>&middot;</span>
+          )}
+          {roleName && (
+            <span style={{
+              fontFamily: 'var(--font-body)', fontSize: '11px', fontWeight: 500,
+              color: 'var(--primary)',
+            }}>
+              {roleName}
+            </span>
+          )}
+        </div>
+
+        {/* Row 3: Micro badges */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginTop: '6px', flexWrap: 'wrap' }}>
+          {/* Status micro badge */}
+          <span style={{
+            display: 'inline-flex', alignItems: 'center', gap: '4px',
+            fontFamily: 'var(--font-body)', fontSize: '10px', fontWeight: 600,
+            padding: '1px 7px', borderRadius: 999,
+            color: statusColor,
+            backgroundColor: `${statusColor}18`,
+          }}>
+            <span style={{ width: 5, height: 5, borderRadius: '50%', backgroundColor: statusColor }} />
+            {statusLabel}
+          </span>
+
+          {/* Skill name badges */}
+          {(skillNames ?? []).map((name) => (
+            <span key={name} style={{
+              fontFamily: 'var(--font-body)', fontSize: '9px', fontWeight: 600,
+              padding: '1px 6px', borderRadius: 999,
+              color: 'var(--primary)', backgroundColor: 'rgba(99,102,241,0.08)',
+            }}>
+              {name}
+            </span>
+          ))}
         </div>
       </div>
 
       {/* Hours */}
       <div style={{ textAlign: 'right', flexShrink: 0 }}>
-        <div
-          style={{
-            fontFamily: 'var(--font-mono)',
-            fontSize: '14px',
-            fontWeight: 600,
-            color: 'var(--foreground)',
-            fontVariantNumeric: 'tabular-nums',
-          }}
-        >
+        <div style={{
+          fontFamily: 'var(--font-mono)', fontSize: '14px', fontWeight: 600,
+          color: 'var(--foreground)', fontVariantNumeric: 'tabular-nums',
+        }}>
           {employee.weekly_hours_contracted}h
         </div>
-        <div
-          style={{
-            fontFamily: 'var(--font-body)',
-            fontSize: '11px',
-            color: 'var(--muted-foreground)',
-          }}
-        >
+        <div style={{
+          fontFamily: 'var(--font-body)', fontSize: '11px', color: 'var(--muted-foreground)',
+        }}>
           /week
         </div>
       </div>
     </motion.div>
+  )
+}
+
+// ── Main page ─────────────────────────────────────────────────────────────────
+
+// ── Floating interaction hint ─────────────────────────────────────────────────
+
+function InteractionHint() {
+  const [visible, setVisible] = useState(true)
+  const [dismissed, setDismissed] = useState(false)
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    timerRef.current = setTimeout(() => setVisible(false), 8000)
+    return () => { if (timerRef.current) clearTimeout(timerRef.current) }
+  }, [])
+
+  useEffect(() => {
+    if (dismissed) return
+    let scrollTimeout: ReturnType<typeof setTimeout>
+    const handleScroll = () => {
+      setVisible(true)
+      clearTimeout(scrollTimeout)
+      scrollTimeout = setTimeout(() => setVisible(false), 4000)
+    }
+    window.addEventListener('scroll', handleScroll, { passive: true })
+    return () => { window.removeEventListener('scroll', handleScroll); clearTimeout(scrollTimeout) }
+  }, [dismissed])
+
+  if (dismissed) return null
+
+  return (
+    <AnimatePresence>
+      {visible && (
+        <motion.div
+          initial={{ opacity: 0, y: 10, scale: 0.9 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: 5, scale: 0.95 }}
+          transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+          onClick={() => setDismissed(true)}
+          style={{
+            position: 'absolute',
+            left: '100%',
+            top: '50%',
+            transform: 'translateY(-50%)',
+            marginLeft: 16,
+            pointerEvents: 'auto',
+            zIndex: 10,
+          }}
+        >
+          {/* Shine border wrapper */}
+          <div style={{
+            position: 'relative',
+            borderRadius: 12,
+            padding: 1.5,
+            cursor: 'pointer',
+            overflow: 'hidden',
+          }}>
+            {/* Animated gradient border */}
+            <div style={{
+              position: 'absolute',
+              inset: 0,
+              borderRadius: 12,
+              background: 'conic-gradient(from var(--shine-angle, 0deg), transparent 40%, #6366f1 50%, #ec4899 55%, #f59e0b 60%, transparent 70%)',
+              animation: 'shine-rotate 4s linear infinite',
+            }} />
+            {/* Inner content */}
+            <div style={{
+              position: 'relative',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 4,
+              padding: '8px 12px',
+              borderRadius: 11,
+              backgroundColor: 'var(--card)',
+              whiteSpace: 'nowrap',
+            }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                <span style={{ fontSize: 9 }}>👆</span>
+                <span style={{ fontFamily: 'var(--font-body)', fontSize: 10, color: 'var(--muted-foreground)', fontWeight: 500 }}>
+                  tap to view
+                </span>
+              </span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                <span style={{ fontSize: 9 }}>✏️</span>
+                <span style={{ fontFamily: 'var(--font-body)', fontSize: 10, color: 'var(--muted-foreground)', fontWeight: 500 }}>
+                  hold to edit
+                </span>
+              </span>
+            </div>
+          </div>
+          {/* CSS animation for the shine rotation */}
+          <style>{`
+            @property --shine-angle {
+              syntax: '<angle>';
+              initial-value: 0deg;
+              inherits: false;
+            }
+            @keyframes shine-rotate {
+              to { --shine-angle: 360deg; }
+            }
+          `}</style>
+        </motion.div>
+      )}
+    </AnimatePresence>
   )
 }
 
@@ -241,8 +364,58 @@ export default function EmployeesPage() {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<EmployeeStatus | undefined>()
   const [contractFilter, setContractFilter] = useState<ContractType | undefined>()
+  const [deptFilter, setDeptFilter] = useState<string | undefined>()
   const [cursor, setCursor] = useState<string | undefined>()
   const [allEmployees, setAllEmployees] = useState<Employee[]>([])
+  const [addOpen, setAddOpen] = useState(false)
+  const [quickEditEmployee, setQuickEditEmployee] = useState<Employee | null>(null)
+
+  const deptsQuery = trpc.org.listDepartments.useQuery(
+    { site_id: activeSiteId! },
+    { enabled: !!activeSiteId },
+  )
+  const rolesQuery = trpc.org.listRoles.useQuery(
+    { site_id: activeSiteId! },
+    { enabled: !!activeSiteId },
+  )
+
+  const processesQuery = trpc.org.listProcesses.useQuery(
+    { site_id: activeSiteId! },
+    { enabled: !!activeSiteId },
+  )
+  const skillsQuery = trpc.workforce.listSkillMatrix.useQuery(
+    { site_id: activeSiteId! },
+    { enabled: !!activeSiteId },
+  )
+
+  // Lookup maps for card display
+  const deptMap = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const d of deptsQuery.data ?? []) m.set(d.id, d.name)
+    return m
+  }, [deptsQuery.data])
+  const roleMap = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const r of rolesQuery.data ?? []) m.set(r.id, r.name)
+    return m
+  }, [rolesQuery.data])
+  const procNameMap = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const p of processesQuery.data ?? []) m.set(p.id, p.name)
+    return m
+  }, [processesQuery.data])
+  // Map employee_id → list of process names
+  const employeeSkillNames = useMemo(() => {
+    const m = new Map<string, string[]>()
+    for (const s of skillsQuery.data ?? []) {
+      const name = procNameMap.get(s.process_id)
+      if (!name) continue
+      const arr = m.get(s.employee_id) ?? []
+      arr.push(name)
+      m.set(s.employee_id, arr)
+    }
+    return m
+  }, [skillsQuery.data, procNameMap])
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -257,7 +430,7 @@ export default function EmployeesPage() {
   useEffect(() => {
     setCursor(undefined)
     setAllEmployees([])
-  }, [search, statusFilter, contractFilter, activeSiteId])
+  }, [search, statusFilter, contractFilter, deptFilter, activeSiteId])
 
   const { data, isLoading, error } = trpc.workforce.listEmployees.useQuery(
     {
@@ -265,6 +438,7 @@ export default function EmployeesPage() {
       search: search || undefined,
       status: statusFilter,
       contract_type: contractFilter,
+      department_id: deptFilter,
       limit: 50,
       cursor,
     },
@@ -383,7 +557,32 @@ export default function EmployeesPage() {
           )}
         </div>
 
-          {/* Import CSV button */}
+          {/* Add Employee button */}
+          <motion.button
+            variants={scalePress}
+            whileTap="press"
+            onClick={() => setAddOpen(true)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '9px 16px',
+              borderRadius: 'var(--radius-sm)',
+              border: 'none',
+              background: 'linear-gradient(135deg, var(--primary), #8B5CF6)',
+              color: '#FFFFFF',
+              fontFamily: 'var(--font-body)',
+              fontSize: '13px',
+              fontWeight: 600,
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            <Plus size={14} />
+            Add
+          </motion.button>
+
+          {/* Import button */}
           <Link href="/dashboard/employees/import" style={{ textDecoration: 'none' }}>
             <motion.button
               variants={scalePress}
@@ -437,8 +636,25 @@ export default function EmployeesPage() {
           ))}
         </div>
 
+        {/* Department filter */}
+        {(deptsQuery.data ?? []).length > 0 && (
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+            <span style={{ fontFamily: 'var(--font-body)', fontSize: '12px', color: 'var(--muted-foreground)', fontWeight: 600 }}>
+              Department:
+            </span>
+            {(deptsQuery.data ?? []).map((dept) => (
+              <FilterChip
+                key={dept.id}
+                label={dept.name}
+                active={deptFilter === dept.id}
+                onClick={() => setDeptFilter(deptFilter === dept.id ? undefined : dept.id)}
+              />
+            ))}
+          </div>
+        )}
+
         {/* Active filter pills */}
-        {(statusFilter || contractFilter || search) && (
+        {(statusFilter || contractFilter || deptFilter || search) && (
           <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
             {search && (
               <span
@@ -503,6 +719,27 @@ export default function EmployeesPage() {
                 </button>
               </span>
             )}
+            {deptFilter && (
+              <span
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '3px 10px',
+                  borderRadius: 'var(--radius-full)',
+                  backgroundColor: 'rgba(99,102,241,0.1)',
+                  color: 'var(--primary)',
+                  fontFamily: 'var(--font-body)',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                }}
+              >
+                {(deptsQuery.data ?? []).find((d) => d.id === deptFilter)?.name ?? 'Department'}
+                <button onClick={() => setDeptFilter(undefined)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', padding: 0, display: 'flex' }}>
+                  <X size={12} />
+                </button>
+              </span>
+            )}
           </div>
         )}
       </motion.div>
@@ -545,20 +782,29 @@ export default function EmployeesPage() {
 
       {/* Employee list */}
       {allEmployees.length > 0 && (
+        <>
         <motion.div
           variants={containerStagger}
           initial="hidden"
           animate="show"
           style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}
         >
-          {allEmployees.map((emp) => (
-            <EmployeeCard
-              key={emp.id}
-              employee={emp}
-              onClick={() => router.push(`/dashboard/employees/${emp.id}`)}
-            />
+          {allEmployees.map((emp, idx) => (
+            <div key={emp.id} style={{ position: 'relative' }}>
+              <EmployeeCard
+                employee={emp}
+                onClick={() => router.push(`/dashboard/employees/${emp.id}`)}
+                onHoldEdit={() => setQuickEditEmployee(emp)}
+                deptName={emp.department_id ? deptMap.get(emp.department_id) : null}
+                roleName={emp.job_role_id ? roleMap.get(emp.job_role_id) : null}
+                skillNames={employeeSkillNames.get(emp.id) ?? []}
+              />
+              {idx === 0 && <InteractionHint />}
+            </div>
           ))}
         </motion.div>
+
+        </>
       )}
 
       {/* Empty state */}
@@ -594,6 +840,46 @@ export default function EmployeesPage() {
             {isLoading ? 'Loading...' : 'Load more'}
           </motion.button>
         </motion.div>
+      )}
+
+      {/* Quick Edit SlideOver */}
+      <SlideOver
+        open={!!quickEditEmployee}
+        onClose={() => setQuickEditEmployee(null)}
+        title="Quick Edit"
+      >
+        {quickEditEmployee && (
+          <EditEmployeeForm
+            employee={{
+              id: quickEditEmployee.id,
+              employee_number: quickEditEmployee.employee_number,
+              first_name: quickEditEmployee.first_name,
+              last_name: quickEditEmployee.last_name,
+              email: null,
+              contract_type: quickEditEmployee.contract_type,
+              weekly_hours_contracted: quickEditEmployee.weekly_hours_contracted,
+              hourly_rate: 0,
+              home_site_id: quickEditEmployee.home_site_id,
+              department_id: null,
+              is_multi_site_eligible: quickEditEmployee.is_multi_site_eligible,
+              status: quickEditEmployee.status,
+            }}
+            onClose={() => setQuickEditEmployee(null)}
+            onDeleted={() => { setQuickEditEmployee(null); setAllEmployees([]); setCursor(undefined) }}
+          />
+        )}
+      </SlideOver>
+
+      {/* Add Employee Wizard */}
+      {activeSiteId && (
+        <AddEmployeeWizard
+          open={addOpen}
+          onClose={() => setAddOpen(false)}
+          siteId={activeSiteId}
+          onSaved={() => {
+            setCursor(undefined)
+          }}
+        />
       )}
     </motion.div>
   )

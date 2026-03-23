@@ -17,9 +17,9 @@ export const PaginationInput = z.object({
     .number()
     .int()
     .min(1)
-    .max(200)
+    .max(1000)
     .default(50)
-    .describe('Number of items to return (default 50, max 200)'),
+    .describe('Number of items to return (default 50, max 1000)'),
 })
 
 export type PaginationInputType = z.infer<typeof PaginationInput>

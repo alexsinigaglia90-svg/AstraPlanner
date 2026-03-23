@@ -10,6 +10,7 @@ import {
   ChevronLeft,
   ChevronRight,
   GitBranch,
+  Zap,
 } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
@@ -26,6 +27,7 @@ const navItems: NavItem[] = [
   { label: 'Planning', href: '/dashboard/planning', icon: Calendar },
   { label: 'Employees', href: '/dashboard/employees', icon: Users },
   { label: 'Processes', href: '/dashboard/processes', icon: GitBranch },
+  { label: 'Skills', href: '/dashboard/skills', icon: Zap },
   { label: 'Demand', href: '/dashboard/demand', icon: TrendingUp },
   { label: 'Settings', href: '/dashboard/settings', icon: Settings },
 ]

@@ -11,6 +11,7 @@ import { DepartmentCreateForm } from '@/components/domain/department-create-form
 import { ProcessWizard, type ProcessFormData } from '@/components/domain/process-wizard'
 import { getDeptColor } from '@/components/domain/process-card'
 import { sortByFlow } from '@/lib/warehouse-icons'
+import { useToast } from '@/components/domain/toast'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -175,8 +176,11 @@ export default function ProcessesPage() {
   // Mutations
   const upsertProcess = trpc.org.upsertProcess.useMutation()
   const deleteProcess = trpc.org.deleteProcess.useMutation()
+  const setProcessEquipment = trpc.org.setProcessEquipment.useMutation()
   const upsertDepartment = trpc.org.upsertDepartment.useMutation()
   const deleteDepartment = trpc.org.deleteDepartment.useMutation()
+
+  const toast = useToast()
 
   const invalidateAll = () => {
     utils.org.listDepartments.invalidate()
@@ -205,8 +209,12 @@ export default function ProcessesPage() {
   }
 
   const handleDeleteProcess = async (id: string) => {
-    await deleteProcess.mutateAsync({ id })
-    invalidateAll()
+    try {
+      await deleteProcess.mutateAsync({ id })
+      invalidateAll()
+    } catch (err) {
+      toast.showError(err instanceof Error ? err.message : 'Failed to delete process')
+    }
   }
 
   const handleAddDepartment = async (data: { name: string; color: string }) => {
@@ -226,8 +234,12 @@ export default function ProcessesPage() {
   }
 
   const handleDeleteDepartment = async (id: string) => {
-    await deleteDepartment.mutateAsync({ id })
-    invalidateAll()
+    try {
+      await deleteDepartment.mutateAsync({ id })
+      invalidateAll()
+    } catch (err) {
+      toast.showError(err instanceof Error ? err.message : 'Failed to delete department')
+    }
   }
 
   const handleOpenWizard = useCallback((deptId: string, editProcessId?: string) => {
@@ -251,6 +263,14 @@ export default function ProcessesPage() {
           fixed_headcount: ((proc as Record<string, unknown>).fixed_headcount as number | null) ?? null,
           conversion_input_uom: ((proc as Record<string, unknown>).conversion_input_uom as string | null) ?? null,
           conversion_output_qty: ((proc as Record<string, unknown>).conversion_output_qty as number | null) ?? null,
+          restrict_to_trained: ((proc as Record<string, unknown>).restrict_to_trained as boolean) ?? false,
+          min_staffing: ((proc as Record<string, unknown>).min_staffing as number | null) ?? null,
+          max_staffing: ((proc as Record<string, unknown>).max_staffing as number | null) ?? null,
+          frequency_type: ((proc as Record<string, unknown>).frequency_type as 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'yearly') ?? 'daily',
+          frequency_days: ((proc as Record<string, unknown>).frequency_days as number[] | null) ?? null,
+          frequency_count: ((proc as Record<string, unknown>).frequency_count as number | null) ?? null,
+          duration_type: ((proc as Record<string, unknown>).duration_type as 'full_shift' | 'hours') ?? 'full_shift',
+          duration_hours: ((proc as Record<string, unknown>).duration_hours as number | null) ?? null,
         })
       } else {
         setWizardEditData(null)
@@ -263,7 +283,7 @@ export default function ProcessesPage() {
 
   const handleWizardSave = useCallback(async (data: ProcessFormData) => {
     if (!wizardDeptId) return
-    await upsertProcess.mutateAsync({
+    const result = await upsertProcess.mutateAsync({
       ...(data.id ? { id: data.id } : {}),
       name: data.name,
       department_id: wizardDeptId,
@@ -280,12 +300,27 @@ export default function ProcessesPage() {
       priority: data.priority,
       min_skill_level: data.min_skill_level,
       certifications_required: data.certifications_required,
+      restrict_to_trained: data.restrict_to_trained,
+      min_staffing: data.min_staffing || null,
+      max_staffing: data.max_staffing || null,
+      frequency_type: data.frequency_type,
+      frequency_days: data.frequency_days,
+      frequency_count: data.frequency_count,
+      duration_type: data.duration_type,
+      duration_hours: data.duration_hours,
     })
+    // Save equipment assignments if provided
+    if (data.equipment) {
+      await setProcessEquipment.mutateAsync({
+        process_id: result.id,
+        equipment: data.equipment,
+      })
+    }
     setWizardOpen(false)
     setWizardDeptId(null)
     setWizardEditData(null)
     invalidateAll()
-  }, [wizardDeptId, upsertProcess, invalidateAll])
+  }, [wizardDeptId, upsertProcess, setProcessEquipment, invalidateAll])
 
   const isLoading = deptsLoading || procsLoading
   const error = deptsError || procsError
@@ -513,6 +548,7 @@ export default function ProcessesPage() {
             departmentId={dept.id}
             departmentName={dept.name}
             departmentColor={dept.color}
+            siteId={activeSiteId!}
             existingProcesses={deptProcesses}
             initialValues={wizardEditData ?? undefined}
             onSave={handleWizardSave}

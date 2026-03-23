@@ -1,12 +1,13 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
-import { MoreVertical, Plus } from 'lucide-react'
+import { motion } from 'framer-motion'
+import { Plus, Pencil, Palette, Trash2 } from 'lucide-react'
 import { containerStagger, fadeInUp, bouncy } from '@/lib/motion'
 import { ProcessCard, getDeptColor, DEPT_COLORS } from '@/components/domain/process-card'
 import { ProcessCardForm } from '@/components/domain/process-card-form'
 import { SmartIcon } from '@/components/domain/smart-icon'
+import { GlassDropdown, type GlassDropdownOption } from '@/components/domain/glass-dropdown'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -48,28 +49,10 @@ export function DepartmentColumn({
 
   const [addingMode, setAddingMode] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [menuOpen, setMenuOpen] = useState(false)
-  const [menuPos, setMenuPos] = useState<{ top: number; right: number }>({ top: 0, right: 0 })
   const [renaming, setRenaming] = useState(false)
   const [renameValue, setRenameValue] = useState(department.name)
-  const [holdProgress, setHoldProgress] = useState(0)
-  const holdTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const HOLD_DURATION = 1200 // ms
 
-  const menuRef = useRef<HTMLDivElement>(null)
   const renameRef = useRef<HTMLInputElement>(null)
-
-  // Close menu on outside click
-  useEffect(() => {
-    if (!menuOpen) return
-    const handler = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setMenuOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [menuOpen])
 
   // Focus rename input
   useEffect(() => {
@@ -179,178 +162,19 @@ export function DepartmentColumn({
         </span>
 
         {/* Menu button */}
-        <div ref={menuRef} style={{ position: 'relative' }}>
-          <button
-            onClick={(e) => {
-              if (!menuOpen) {
-                const rect = e.currentTarget.getBoundingClientRect()
-                setMenuPos({ top: rect.bottom + 4, right: window.innerWidth - rect.right })
-              }
-              setMenuOpen(!menuOpen)
-            }}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              width: '24px',
-              height: '24px',
-              borderRadius: 'var(--radius-sm)',
-              border: 'none',
-              backgroundColor: 'transparent',
-              color: 'var(--muted-foreground)',
-              cursor: 'pointer',
-              padding: 0,
-              flexShrink: 0,
-            }}
-          >
-            <MoreVertical size={14} />
-          </button>
-
-          {/* Dropdown — fixed position to escape column overflow */}
-          <AnimatePresence>
-            {menuOpen && (
-              <motion.div
-                initial={{ opacity: 0, y: -4, scale: 0.95 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: -4, scale: 0.95 }}
-                transition={{ duration: 0.12 }}
-                style={{
-                  position: 'fixed',
-                  top: menuPos.top,
-                  right: menuPos.right,
-                  backgroundColor: 'var(--card)',
-                  border: '1px solid var(--border)',
-                  borderRadius: 'var(--radius-sm)',
-                  boxShadow: 'var(--elevation-4, 0 8px 30px rgba(0,0,0,0.12))',
-                  minWidth: '160px',
-                  zIndex: 9999,
-                }}
-              >
-                {/* Rename */}
-                <button
-                  onClick={() => { setMenuOpen(false); setRenaming(true); setRenameValue(department.name) }}
-                  style={{
-                    display: 'block',
-                    width: '100%',
-                    padding: '8px 12px',
-                    border: 'none',
-                    backgroundColor: 'transparent',
-                    color: 'var(--foreground)',
-                    fontFamily: 'var(--font-body)',
-                    fontSize: '12px',
-                    fontWeight: 500,
-                    cursor: 'pointer',
-                    textAlign: 'left',
-                  }}
-                >
-                  Rename
-                </button>
-
-                {/* Change Color */}
-                <div style={{ padding: '6px 12px', borderTop: '1px solid var(--border)' }}>
-                  <span
-                    style={{
-                      fontFamily: 'var(--font-body)',
-                      fontSize: '11px',
-                      fontWeight: 600,
-                      color: 'var(--muted-foreground)',
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.06em',
-                    }}
-                  >
-                    Color
-                  </span>
-                  <div style={{ display: 'flex', gap: '6px', marginTop: '6px' }}>
-                    {Object.keys(DEPT_COLORS)
-                      .filter((key) => key === department.color || !usedColors.includes(key))
-                      .map((key) => {
-                        const val = DEPT_COLORS[key]!
-                        return (
-                          <button
-                            key={key}
-                            onClick={() => { setMenuOpen(false); onChangeColor(department.id, department.name, key) }}
-                            style={{
-                              width: '18px',
-                              height: '18px',
-                              borderRadius: '50%',
-                              backgroundColor: val.main,
-                              border: department.color === key ? '2px solid var(--foreground)' : '2px solid transparent',
-                              cursor: 'pointer',
-                              padding: 0,
-                              transition: 'border-color 0.15s',
-                            }}
-                          />
-                        )
-                      })}
-                  </div>
-                </div>
-
-                {/* Hold to Delete */}
-                <button
-                  onMouseDown={() => {
-                    setHoldProgress(0)
-                    const start = Date.now()
-                    holdTimerRef.current = setInterval(() => {
-                      const elapsed = Date.now() - start
-                      const pct = Math.min(elapsed / HOLD_DURATION, 1)
-                      setHoldProgress(pct)
-                      if (pct >= 1) {
-                        if (holdTimerRef.current) clearInterval(holdTimerRef.current)
-                        holdTimerRef.current = null
-                        setMenuOpen(false)
-                        setHoldProgress(0)
-                        onDeleteDepartment(department.id)
-                      }
-                    }, 16)
-                  }}
-                  onMouseUp={() => {
-                    if (holdTimerRef.current) { clearInterval(holdTimerRef.current); holdTimerRef.current = null }
-                    setHoldProgress(0)
-                  }}
-                  onMouseLeave={() => {
-                    if (holdTimerRef.current) { clearInterval(holdTimerRef.current); holdTimerRef.current = null }
-                    setHoldProgress(0)
-                  }}
-                  style={{
-                    display: 'block',
-                    width: '100%',
-                    padding: '8px 12px',
-                    border: 'none',
-                    borderTop: '1px solid var(--border)',
-                    backgroundColor: 'transparent',
-                    color: 'var(--destructive)',
-                    fontFamily: 'var(--font-body)',
-                    fontSize: '12px',
-                    fontWeight: 500,
-                    cursor: 'pointer',
-                    textAlign: 'left',
-                    position: 'relative',
-                    overflow: 'hidden',
-                    userSelect: 'none',
-                  }}
-                >
-                  {/* Progress fill */}
-                  {holdProgress > 0 && (
-                    <div
-                      style={{
-                        position: 'absolute',
-                        left: 0,
-                        top: 0,
-                        bottom: 0,
-                        width: `${holdProgress * 100}%`,
-                        backgroundColor: 'rgba(239,68,68,0.12)',
-                        transition: 'none',
-                      }}
-                    />
-                  )}
-                  <span style={{ position: 'relative', zIndex: 1 }}>
-                    {holdProgress > 0 ? 'Hold to delete...' : 'Delete'}
-                  </span>
-                </button>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
+        <GlassDropdown
+          options={[
+            { label: 'Rename', icon: <Pencil size={13} />, onClick: () => { setRenaming(true); setRenameValue(department.name) } },
+            ...Object.keys(DEPT_COLORS)
+              .filter((key) => key === department.color || !usedColors.includes(key))
+              .map((key): GlassDropdownOption => ({
+                label: key.charAt(0).toUpperCase() + key.slice(1),
+                icon: <div style={{ width: 13, height: 13, borderRadius: '50%', backgroundColor: DEPT_COLORS[key]!.main, border: department.color === key ? '2px solid var(--foreground)' : '2px solid transparent' }} />,
+                onClick: () => onChangeColor(department.id, department.name, key),
+              })),
+            { label: 'Delete', icon: <Trash2 size={13} />, onClick: () => onDeleteDepartment(department.id), variant: 'destructive', holdToConfirm: true },
+          ]}
+        />
       </div>
 
       {/* Process cards */}

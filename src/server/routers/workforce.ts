@@ -71,7 +71,7 @@ export const workforceRouter = router({
         .from('employee')
         .select(
           `id, employee_number, first_name, last_name, contract_type,
-           weekly_hours_contracted, home_site_id, department_id, hourly_rate, status,
+           weekly_hours_contracted, home_site_id, department_id, crew_id, job_role_id, hourly_rate, status,
            is_multi_site_eligible,
            employee_skill!employee_skill_employee_id_fkey(id)`,
           { count: 'exact' },
@@ -111,6 +111,8 @@ export const workforceRouter = router({
         status: e.status as string,
         is_multi_site_eligible: e.is_multi_site_eligible as boolean,
         department_id: (e.department_id as string) ?? null,
+        crew_id: (e.crew_id as string) ?? null,
+        job_role_id: (e.job_role_id as string) ?? null,
         hourly_rate: e.hourly_rate as number,
         skill_count: Array.isArray(e.employee_skill)
           ? (e.employee_skill as Array<{ id: string | null }>).filter(
@@ -136,7 +138,7 @@ export const workforceRouter = router({
           .from('employee')
           .select(
             `id, employee_number, first_name, last_name, email, contract_type,
-             weekly_hours_contracted, hourly_rate, home_site_id, department_id,
+             weekly_hours_contracted, hourly_rate, home_site_id, department_id, crew_id, job_role_id,
              is_multi_site_eligible, status, preferences_json`,
           )
           .eq('id', input.id)
@@ -192,6 +194,8 @@ export const workforceRouter = router({
         hourly_rate: employee.hourly_rate as number,
         home_site_id: employee.home_site_id as string,
         department_id: (employee.department_id as string) ?? null,
+        crew_id: (employee.crew_id as string) ?? null,
+        job_role_id: (employee.job_role_id as string) ?? null,
         is_multi_site_eligible: employee.is_multi_site_eligible as boolean,
         status: employee.status as string,
         preferences_json: (employee.preferences_json as Record<string, unknown>) ?? {},
@@ -216,15 +220,45 @@ export const workforceRouter = router({
         hourly_rate: z.number().nonnegative(),
         home_site_id: z.string().uuid(),
         department_id: z.string().uuid().nullable().optional(),
+        crew_id: z.string().uuid().nullable().optional(),
+        job_role_id: z.string().uuid().nullable().optional(),
         is_multi_site_eligible: z.boolean().default(false),
         status: EmployeeStatusSchema.default('active'),
         preferences_json: z.record(z.unknown()).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const { data, error } = await ctx.supabase
+      const admin = createAdminClient()
+
+      // Check for duplicate employee_number on create
+      if (!input.id) {
+        const { count, error: dupErr } = await admin
+          .from('employee')
+          .select('id', { count: 'exact', head: true })
+          .eq('organization_id', ctx.organizationId)
+          .eq('employee_number', input.employee_number)
+
+        assertNoError(dupErr, 'upsertEmployee:dupCheck')
+
+        if (count && count > 0) {
+          throw new TRPCError({
+            code: 'CONFLICT',
+            message: `Employee number "${input.employee_number}" already exists`,
+          })
+        }
+      }
+
+      const row = {
+        ...input,
+        organization_id: ctx.organizationId,
+        hire_date: input.id ? undefined : new Date().toISOString().split('T')[0],
+      }
+      // Remove undefined keys
+      const cleanRow = Object.fromEntries(Object.entries(row).filter(([, v]) => v !== undefined))
+
+      const { data, error } = await admin
         .from('employee')
-        .upsert(input)
+        .upsert(cleanRow)
         .select('id, employee_number, first_name, last_name, status, created_at, updated_at')
         .single()
 
@@ -265,7 +299,8 @@ export const workforceRouter = router({
               contract_type: ContractTypeSchema,
               weekly_hours_contracted: z.number().positive(),
               hourly_rate: z.number().nonnegative(),
-              shift_pattern: z.string().optional(),
+              shift_id: z.string().uuid().optional(),
+              crew_id: z.string().uuid().optional(),
             }),
           )
           .min(1)
@@ -350,6 +385,7 @@ export const workforceRouter = router({
         department_id: e.department
           ? deptMap.get(e.department.trim().toLowerCase()) ?? null
           : null,
+        crew_id: e.crew_id ?? null,
         status: 'active' as const,
       }))
 
@@ -369,6 +405,59 @@ export const workforceRouter = router({
   // -------------------------------------------------------------------------
   // updateSkill  (manager+, supervisor)
   // -------------------------------------------------------------------------
+  // -------------------------------------------------------------------------
+  // listSkillMatrix  (planner+) — all skills for a site
+  // -------------------------------------------------------------------------
+  listSkillMatrix: plannerProcedure
+    .input(z.object({ site_id: z.string().uuid() }))
+    .query(async ({ ctx, input }) => {
+      const admin = createAdminClient()
+
+      // Get all department IDs for this site
+      const { data: depts } = await admin
+        .from('department')
+        .select('id')
+        .eq('site_id', input.site_id)
+        .eq('organization_id', ctx.organizationId)
+
+      const deptIds = (depts ?? []).map((d) => (d as Record<string, unknown>).id as string)
+      if (deptIds.length === 0) return []
+
+      // Get all employee_skill records for employees at this site
+      const { data, error } = await admin
+        .from('employee_skill')
+        .select('id, employee_id, process_id, proficiency_level')
+        .eq('organization_id', ctx.organizationId)
+
+      assertNoError(error, 'listSkillMatrix')
+
+      return (data ?? []).map((s: Record<string, unknown>) => ({
+        id: s.id as string,
+        employee_id: s.employee_id as string,
+        process_id: s.process_id as string,
+        proficiency_level: s.proficiency_level as number,
+      }))
+    }),
+
+  // -------------------------------------------------------------------------
+  // deleteSkill  (manager+)
+  // -------------------------------------------------------------------------
+  deleteSkill: managerProcedure
+    .input(z.object({ employee_id: z.string().uuid(), process_id: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      const admin = createAdminClient()
+      const { error } = await admin
+        .from('employee_skill')
+        .delete()
+        .eq('employee_id', input.employee_id)
+        .eq('process_id', input.process_id)
+      assertNoError(error, 'deleteSkill')
+      return { deleted: true }
+    }),
+
+  // -------------------------------------------------------------------------
+  // updateSkill  (manager+, supervisor)
+  // -------------------------------------------------------------------------
   updateSkill: managerProcedure
     .input(
       z.object({
@@ -378,21 +467,22 @@ export const workforceRouter = router({
           .number()
           .int()
           .min(1)
-          .max(5)
-          .describe('Skill proficiency level 1-5 per D-03'),
+          .max(5),
         certification_date: z.string().nullable().optional(),
         expiry_date: z.string().nullable().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const { data, error } = await ctx.supabase
+      const admin = createAdminClient()
+      const { data, error } = await admin
         .from('employee_skill')
         .upsert(
           {
             ...input,
+            organization_id: ctx.organizationId,
             updated_at: new Date().toISOString(),
           },
-          { onConflict: 'employee_id,process_id' },
+          { onConflict: 'organization_id,employee_id,process_id' },
         )
         .select(
           'id, employee_id, process_id, proficiency_level, certification_date, expiry_date, updated_at',
@@ -417,6 +507,45 @@ export const workforceRouter = router({
         expiry_date: string | null
         updated_at: string
       }
+    }),
+
+  // -------------------------------------------------------------------------
+  // bulkImportSkills  (manager+)
+  // -------------------------------------------------------------------------
+  bulkImportSkills: managerProcedure
+    .input(
+      z.object({
+        skills: z
+          .array(
+            z.object({
+              employee_id: z.string().uuid(),
+              process_id: z.string().uuid(),
+              proficiency_level: z.number().int().min(1).max(5),
+            }),
+          )
+          .min(1)
+          .max(5000),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const admin = createAdminClient()
+      const orgId = ctx.organizationId
+
+      const rows = input.skills.map((s) => ({
+        organization_id: orgId,
+        employee_id: s.employee_id,
+        process_id: s.process_id,
+        proficiency_level: s.proficiency_level,
+        updated_at: new Date().toISOString(),
+      }))
+
+      const { error } = await admin
+        .from('employee_skill')
+        .upsert(rows, { onConflict: 'organization_id,employee_id,process_id' })
+
+      assertNoError(error, 'bulkImportSkills')
+
+      return { imported: rows.length }
     }),
 
   // -------------------------------------------------------------------------

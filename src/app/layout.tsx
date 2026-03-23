@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Nunito, DM_Sans, JetBrains_Mono } from "next/font/google";
 import { NextIntlClientProvider } from "next-intl";
 import { TRPCReactProvider } from "@/lib/trpc/provider";
+import { ToastProvider } from "@/components/domain/toast";
 import "./globals.css";
 
 const nunito = Nunito({
@@ -43,7 +44,7 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col">
         <TRPCReactProvider>
-          <NextIntlClientProvider>{children}</NextIntlClientProvider>
+          <NextIntlClientProvider><ToastProvider>{children}</ToastProvider></NextIntlClientProvider>
         </TRPCReactProvider>
       </body>
     </html>

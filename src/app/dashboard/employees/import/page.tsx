@@ -3,10 +3,11 @@
 import { useState, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Download, Upload, FileSpreadsheet, Check, AlertCircle, ArrowLeft, X } from 'lucide-react'
-import { bouncy, snappy, wobbly, scalePress } from '@/lib/motion'
+import { Download, Upload, FileSpreadsheet, Check, AlertCircle, X } from 'lucide-react'
+import { bouncy, snappy, wobbly, gentle, scalePress } from '@/lib/motion'
 import { trpc } from '@/lib/trpc/client'
 import { useSiteStore } from '@/stores/site-store'
+import { matchShift, matchCrew } from '@/lib/shift-matcher'
 import * as XLSX from 'xlsx'
 
 // ── Dataloader column definitions ───────────────────────────────────────────
@@ -19,8 +20,9 @@ const TEMPLATE_COLUMNS = [
   { key: 'department', label: 'Department', example: 'Operations', required: true },
   { key: 'contract_type', label: 'Contract Type', example: 'full_time', required: true },
   { key: 'weekly_hours', label: 'Weekly Hours', example: '40', required: true },
-  { key: 'hourly_rate', label: 'Hourly Rate (€)', example: '22.50', required: true },
-  { key: 'shift_pattern', label: 'Shift Pattern', example: 'day', required: true },
+  { key: 'hourly_rate', label: 'Hourly Rate (\u20AC)', example: '22.50', required: true },
+  { key: 'shift', label: 'Shift', example: 'Day Shift', required: false },
+  { key: 'crew', label: 'Crew', example: 'Team A', required: false },
 ]
 
 type ImportState = 'ready' | 'validating' | 'importing' | 'done' | 'error'
@@ -30,21 +32,79 @@ interface ValidationResult {
   errors: { row: number; field: string; message: string }[]
 }
 
-// ── Template download ───────────────────────────────────────────────────────
-
-function downloadTemplate() {
-  const headers = TEMPLATE_COLUMNS.map((c) => c.label)
-  const exampleRow = TEMPLATE_COLUMNS.map((c) => c.example)
-
-  const ws = XLSX.utils.aoa_to_sheet([headers, exampleRow])
-  ws['!cols'] = TEMPLATE_COLUMNS.map(() => ({ wch: 22 }))
-
-  const wb = XLSX.utils.book_new()
-  XLSX.utils.book_append_sheet(wb, ws, 'Employees')
-  XLSX.writeFile(wb, 'AstraPlanner_Employee_Import_Template.xlsx')
+interface SkillsValidationResult {
+  matched: { employee_id: string; process_id: string; proficiency_level: number }[]
+  employeesMatched: number
+  processesMatched: number
+  errors: { row: number; message: string }[]
 }
 
-// ── Validate parsed data ────────────────────────────────────────────────────
+// ── Combined template download ──────────────────────────────────────────────
+
+function downloadTemplate(
+  shifts: { name: string }[],
+  crews: { name: string }[],
+  processes: { name: string }[],
+  employees: { employee_number: string; first_name: string; last_name: string }[],
+) {
+  const columns = TEMPLATE_COLUMNS.map((c) => {
+    if (c.key === 'shift' && shifts.length > 0) {
+      return { ...c, example: shifts[0]!.name }
+    }
+    if (c.key === 'crew' && crews.length > 0) {
+      return { ...c, example: crews[0]!.name }
+    }
+    return c
+  })
+
+  const wb = XLSX.utils.book_new()
+
+  // Sheet 1: Employees
+  const empHeaders = columns.map((c) => c.label)
+  const empExample = columns.map((c) => c.example)
+  const wsEmp = XLSX.utils.aoa_to_sheet([empHeaders, empExample])
+  wsEmp['!cols'] = columns.map(() => ({ wch: 22 }))
+  XLSX.utils.book_append_sheet(wb, wsEmp, 'Employees')
+
+  // Sheet 2: Skills
+  if (processes.length > 0) {
+    const skillHeaders = ['Employee Number', ...processes.map((p) => p.name)]
+    const skillExamples = employees.length > 0
+      ? employees.slice(0, 3).map((emp) => [
+          emp.employee_number,
+          ...processes.map(() => ''),
+        ])
+      : [['EMP-001', ...processes.map(() => '')]]
+    const wsSkills = XLSX.utils.aoa_to_sheet([skillHeaders, ...skillExamples])
+    wsSkills['!cols'] = skillHeaders.map((h) => ({ wch: Math.max(h.length + 2, 16) }))
+    XLSX.utils.book_append_sheet(wb, wsSkills, 'Skills')
+  }
+
+  // Sheet 3: Reference
+  const refRows: string[][] = [
+    ['Available Shifts', 'Available Crews', 'Instructions'],
+    ['', '', 'Fill Sheet 1 (Employees) with employee data.'],
+    ['', '', 'Fill Sheet 2 (Skills) with skill levels 1-5.'],
+    ['', '', '1=Beginner, 2=Basic, 3=Intermediate, 4=Advanced, 5=Expert'],
+    ['', '', 'Leave skill cells empty or 0 to skip.'],
+  ]
+  const maxRows = Math.max(shifts.length, crews.length, 1)
+  for (let i = 0; i < maxRows; i++) {
+    if (i < refRows.length - 1) {
+      refRows[i + 1]![0] = shifts[i]?.name ?? ''
+      refRows[i + 1]![1] = crews[i]?.name ?? ''
+    } else {
+      refRows.push([shifts[i]?.name ?? '', crews[i]?.name ?? '', ''])
+    }
+  }
+  const wsRef = XLSX.utils.aoa_to_sheet(refRows)
+  wsRef['!cols'] = [{ wch: 25 }, { wch: 25 }, { wch: 55 }]
+  XLSX.utils.book_append_sheet(wb, wsRef, 'Reference')
+
+  XLSX.writeFile(wb, 'AstraPlanner_Import_Template.xlsx')
+}
+
+// ── Validate parsed data (employees) ────────────────────────────────────────
 
 function validateData(rows: Record<string, string>[]): ValidationResult {
   const valid: ValidationResult['valid'] = []
@@ -69,9 +129,9 @@ function validateData(rows: Record<string, string>[]): ValidationResult {
       errors.push({ row: rowNum, field: 'Weekly Hours', message: 'Must be a number' })
       hasError = true
     }
-    const rate = row['Hourly Rate (€)']
+    const rate = row['Hourly Rate (\u20AC)']
     if (rate && isNaN(Number(rate))) {
-      errors.push({ row: rowNum, field: 'Hourly Rate (€)', message: 'Must be a number' })
+      errors.push({ row: rowNum, field: 'Hourly Rate (\u20AC)', message: 'Must be a number' })
       hasError = true
     }
 
@@ -79,13 +139,6 @@ function validateData(rows: Record<string, string>[]): ValidationResult {
     const ct = row['Contract Type'] != null ? String(row['Contract Type']).trim().toLowerCase() : ''
     if (ct && !validContractTypes.includes(ct)) {
       errors.push({ row: rowNum, field: 'Contract Type', message: `Must be one of: ${validContractTypes.join(', ')}` })
-      hasError = true
-    }
-
-    const validShifts = ['day', 'afternoon', 'night']
-    const sp = row['Shift Pattern'] != null ? String(row['Shift Pattern']).trim().toLowerCase() : ''
-    if (sp && !validShifts.includes(sp)) {
-      errors.push({ row: rowNum, field: 'Shift Pattern', message: `Must be one of: ${validShifts.join(', ')}` })
       hasError = true
     }
 
@@ -97,26 +150,131 @@ function validateData(rows: Record<string, string>[]): ValidationResult {
   return { valid, errors }
 }
 
+// ── Validate skills data ────────────────────────────────────────────────────
+
+function validateSkillsData(
+  rows: Record<string, string>[],
+  headers: string[],
+  employees: { id: string; employee_number: string }[],
+  processes: { id: string; name: string }[],
+  pendingEmployeeNumbers?: string[],
+): SkillsValidationResult {
+  const empMap = new Map(employees.map((e) => [e.employee_number.toLowerCase(), e.id]))
+  // Also include employee numbers from the Employees sheet that will be created
+  const pendingSet = new Set((pendingEmployeeNumbers ?? []).map((n) => n.toLowerCase()))
+  const procMap = new Map(processes.map((p) => [p.name.toLowerCase(), p.id]))
+
+  const matched: SkillsValidationResult['matched'] = []
+  const errors: SkillsValidationResult['errors'] = []
+  const matchedEmployeeIds = new Set<string>()
+  const matchedProcessIds = new Set<string>()
+
+  // Process headers are all columns after the first (Employee Number)
+  const processHeaders = headers.slice(1)
+
+  rows.forEach((row, i) => {
+    const rowNum = i + 2
+    const empNumRaw = row[headers[0]!]
+    const empNum = empNumRaw != null ? String(empNumRaw).trim() : ''
+
+    if (!empNum) {
+      errors.push({ row: rowNum, message: 'Employee Number is empty' })
+      return
+    }
+
+    const employeeId = empMap.get(empNum.toLowerCase())
+    const isPending = !employeeId && pendingSet.has(empNum.toLowerCase())
+    if (!employeeId && !isPending) {
+      errors.push({ row: rowNum, message: `Employee "${empNum}" not found` })
+      return
+    }
+
+    if (employeeId) matchedEmployeeIds.add(employeeId)
+
+    for (const procHeader of processHeaders) {
+      const rawVal = row[procHeader]
+      const strVal = rawVal != null ? String(rawVal).trim() : ''
+      if (!strVal || strVal === '0') continue
+
+      const level = Number(strVal)
+      if (isNaN(level) || !Number.isInteger(level) || level < 1 || level > 5) {
+        errors.push({ row: rowNum, message: `Invalid skill level "${strVal}" for ${procHeader} (must be 1-5)` })
+        continue
+      }
+
+      const processId = procMap.get(procHeader.toLowerCase())
+      if (!processId) {
+        errors.push({ row: rowNum, message: `Process "${procHeader}" not found` })
+        continue
+      }
+
+      matchedProcessIds.add(processId)
+      // Use employee_id if known, or store employee_number for pending resolution
+      matched.push({
+        employee_id: employeeId ?? `pending:${empNum}`,
+        process_id: processId,
+        proficiency_level: level,
+      })
+    }
+  })
+
+  return {
+    matched,
+    employeesMatched: matchedEmployeeIds.size,
+    processesMatched: matchedProcessIds.size,
+    errors,
+  }
+}
+
 // ── Main page ───────────────────────────────────────────────────────────────
 
 export default function EmployeeImportPage() {
   const router = useRouter()
   const { activeSiteId } = useSiteStore()
+  const utils = trpc.useUtils()
   const bulkImport = trpc.workforce.bulkImportEmployees.useMutation()
+  const bulkImportSkills = trpc.workforce.bulkImportSkills.useMutation()
+  const shiftsQuery = trpc.org.listShifts.useQuery(
+    { site_id: activeSiteId! },
+    { enabled: !!activeSiteId },
+  )
+  const crewsQuery = trpc.org.listCrews.useQuery(
+    { site_id: activeSiteId! },
+    { enabled: !!activeSiteId },
+  )
+  const processesQuery = trpc.org.listProcesses.useQuery(
+    { site_id: activeSiteId! },
+    { enabled: !!activeSiteId },
+  )
+  const employeesQuery = trpc.workforce.listEmployees.useQuery(
+    { site_id: activeSiteId!, limit: 1000 },
+    { enabled: !!activeSiteId },
+  )
+
+  // ── Combined import state ──────────────────────────────────────────────────
   const fileRef = useRef<HTMLInputElement>(null)
   const [state, setState] = useState<ImportState>('ready')
   const [dragOver, setDragOver] = useState(false)
   const [fileName, setFileName] = useState('')
   const [validation, setValidation] = useState<ValidationResult | null>(null)
+  const [skillsValidation, setSkillsValidation] = useState<SkillsValidationResult | null>(null)
   const [showErrors, setShowErrors] = useState(false)
+  const [showSkillsErrors, setShowSkillsErrors] = useState(false)
   const [importError, setImportError] = useState<string | null>(null)
+  const [importResult, setImportResult] = useState<{ employees: number; skills: number } | null>(null)
 
+  // ── Combined file processing ───────────────────────────────────────────────
   const processFile = useCallback(async (file: File) => {
     setFileName(file.name)
     setState('validating')
+    setValidation(null)
+    setSkillsValidation(null)
+    setImportError(null)
+    setImportResult(null)
+    setShowErrors(false)
+    setShowSkillsErrors(false)
 
     try {
-      // Read file as ArrayBuffer using FileReader (broader browser support)
       const buffer = await new Promise<ArrayBuffer>((resolve, reject) => {
         const reader = new FileReader()
         reader.onload = () => resolve(reader.result as ArrayBuffer)
@@ -125,37 +283,69 @@ export default function EmployeeImportPage() {
       })
 
       const wb = XLSX.read(new Uint8Array(buffer), { type: 'array' })
-      const sheetName = wb.SheetNames[0]
-      if (!sheetName) throw new Error('No sheets found')
-      const ws = wb.Sheets[sheetName]
-      if (!ws) throw new Error('Empty sheet')
 
-      const rows = XLSX.utils.sheet_to_json<Record<string, string>>(ws, { defval: '' })
+      // ── Process Sheet 1: Employees ──────────────────────────────────────
+      const empSheet = wb.Sheets['Employees'] ?? wb.Sheets[wb.SheetNames[0]!]
+      if (!empSheet) throw new Error('No Employees sheet found')
 
-      // Filter out any instruction/example rows
-      const dataRows = rows.filter((r) => {
+      const empRows = XLSX.utils.sheet_to_json<Record<string, string>>(empSheet, { defval: '' })
+      const dataRows = empRows.filter((r) => {
         const vals = Object.values(r)
         const first = vals[0]?.toString().toLowerCase() ?? ''
-        // Skip rows that look like instructions or the example row
         return first !== 'required' && first !== 'optional'
       })
 
       if (dataRows.length === 0) {
-        setValidation({ valid: [], errors: [{ row: 0, field: 'File', message: 'No data rows found. Fill in the template and try again.' }] })
+        setValidation({ valid: [], errors: [{ row: 0, field: 'File', message: 'No data rows found in Employees sheet. Fill in the template and try again.' }] })
         setState('error')
         return
       }
 
-      const result = validateData(dataRows)
-      setValidation(result)
-      setState(result.valid.length > 0 ? 'ready' : 'error')
+      const empResult = validateData(dataRows)
+      setValidation(empResult)
+
+      // ── Process Sheet 2: Skills (if present) ───────────────────────────
+      const skillSheet = wb.Sheets['Skills']
+      if (skillSheet) {
+        const employees = (employeesQuery.data?.items ?? []) as { id: string; employee_number: string }[]
+        const processes = (processesQuery.data ?? []) as { id: string; name: string }[]
+
+        if (employees.length === 0 && processes.length === 0) {
+          // No employees/processes yet — skills will be imported after employees
+          setSkillsValidation({
+            matched: [],
+            employeesMatched: 0,
+            processesMatched: 0,
+            errors: [{ row: 0, message: 'Skills sheet found but no employees/processes exist yet. Skills will be skipped — import employees first, then re-upload to import skills.' }],
+          })
+        } else if (processes.length === 0) {
+          setSkillsValidation({
+            matched: [],
+            employeesMatched: 0,
+            processesMatched: 0,
+            errors: [{ row: 0, message: 'No processes found for this site. Add processes first to import skills.' }],
+          })
+        } else {
+          const rawData = XLSX.utils.sheet_to_json<Record<string, string>>(skillSheet, { defval: '' })
+          if (rawData.length > 0) {
+            const headers = Object.keys(rawData[0]!)
+            // Pass employee numbers from the Employees sheet so pending imports are not flagged as errors
+            const pendingEmpNums = empResult.valid.map((v) => String(v.data['Employee Number'] ?? '').trim()).filter(Boolean)
+            const skillResult = validateSkillsData(rawData, headers, employees, processes, pendingEmpNums)
+            setSkillsValidation(skillResult)
+          }
+        }
+      }
+
+      setState(empResult.valid.length > 0 ? 'ready' : 'error')
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Could not read file'
       setValidation({ valid: [], errors: [{ row: 0, field: 'File', message: msg }] })
       setState('error')
     }
-  }, [])
+  }, [employeesQuery.data, processesQuery.data])
 
+  // ── Drag/drop handlers ─────────────────────────────────────────────────────
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault()
     setDragOver(false)
@@ -168,14 +358,22 @@ export default function EmployeeImportPage() {
     if (file) processFile(file)
   }, [processFile])
 
+  // ── Combined import ────────────────────────────────────────────────────────
   const handleImport = async () => {
     if (!validation || !activeSiteId) return
     setState('importing')
     setImportError(null)
 
     try {
+      const shifts = shiftsQuery.data ?? []
+      const crews = crewsQuery.data ?? []
+
+      // Step 1: Import employees
       const employees = validation.valid.map((v) => {
         const d = v.data
+        const shiftValue = String(d['Shift'] ?? '').trim()
+        const crewValue = String(d['Crew'] ?? '').trim()
+
         return {
           employee_number: String(d['Employee Number'] ?? '').trim(),
           first_name: String(d['First Name'] ?? '').trim(),
@@ -184,12 +382,43 @@ export default function EmployeeImportPage() {
           contract_type: String(d['Contract Type'] ?? '').trim().toLowerCase() as
             'full_time' | 'part_time' | 'temporary' | 'seasonal' | 'contractor',
           weekly_hours_contracted: Number(d['Weekly Hours']),
-          hourly_rate: Number(d['Hourly Rate (€)']),
-          shift_pattern: String(d['Shift Pattern'] ?? '').trim().toLowerCase() || undefined,
+          hourly_rate: Number(d['Hourly Rate (\u20AC)']),
+          shift_id: shiftValue ? matchShift(shiftValue, shifts) ?? undefined : undefined,
+          crew_id: crewValue ? matchCrew(crewValue, crews) ?? undefined : undefined,
         }
       })
 
       await bulkImport.mutateAsync({ site_id: activeSiteId, employees })
+      let skillCount = 0
+
+      // Step 2: Import skills (if any) — resolve pending employee IDs first
+      if (skillsValidation && skillsValidation.matched.length > 0) {
+        // Fetch fresh employee list to get IDs for newly created employees
+        const freshEmployees = await utils.workforce.listEmployees.fetch({ site_id: activeSiteId, limit: 1000 })
+        const freshEmpMap = new Map(
+          ((freshEmployees?.items ?? []) as { id: string; employee_number: string }[])
+            .map((e) => [e.employee_number.toLowerCase(), e.id])
+        )
+
+        // Resolve pending:EMP-XXX to actual IDs
+        const resolvedSkills = skillsValidation.matched
+          .map((s) => {
+            let empId = s.employee_id
+            if (empId.startsWith('pending:')) {
+              const empNum = empId.replace('pending:', '').toLowerCase()
+              empId = freshEmpMap.get(empNum) ?? ''
+            }
+            return empId ? { employee_id: empId, process_id: s.process_id, proficiency_level: s.proficiency_level } : null
+          })
+          .filter((s): s is NonNullable<typeof s> => s !== null)
+
+        if (resolvedSkills.length > 0) {
+          await bulkImportSkills.mutateAsync({ skills: resolvedSkills })
+          skillCount = resolvedSkills.length
+        }
+      }
+
+      setImportResult({ employees: validation.valid.length, skills: skillCount })
       setState('done')
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Import failed'
@@ -240,9 +469,9 @@ export default function EmployeeImportPage() {
           </button>
         </div>
 
+        {/* Content */}
         <div className="px-6 py-5" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           {state === 'done' ? (
-            /* ── Success state ──────────────────────────────────────── */
             <motion.div
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -266,7 +495,8 @@ export default function EmployeeImportPage() {
                 Import Complete
               </h3>
               <p style={{ fontFamily: 'var(--font-body)', fontSize: '14px', color: 'var(--muted-foreground)', marginTop: 8 }}>
-                {validation?.valid.length} employees imported successfully
+                {importResult?.employees} employees imported
+                {importResult && importResult.skills > 0 && `, ${importResult.skills} skills updated`}
               </p>
               <motion.button
                 variants={scalePress} whileTap="press"
@@ -283,7 +513,7 @@ export default function EmployeeImportPage() {
             </motion.div>
           ) : (
             <>
-              {/* ── Step 1: Download template ────────────────────────── */}
+              {/* Step 1: Download template */}
               <div>
                 <div className="flex items-center gap-2 mb-3">
                   <div style={{
@@ -301,7 +531,11 @@ export default function EmployeeImportPage() {
                   variants={scalePress} whileTap="press"
                   whileHover={{ y: -1 }}
                   transition={snappy}
-                  onClick={downloadTemplate}
+                  onClick={() => {
+                    const emps = (employeesQuery.data?.items ?? []) as { employee_number: string; first_name: string; last_name: string }[]
+                    const procs = (processesQuery.data ?? []) as { name: string }[]
+                    downloadTemplate(shiftsQuery.data ?? [], crewsQuery.data ?? [], procs, emps)
+                  }}
                   className="flex items-center gap-3 w-full group"
                   style={{
                     padding: '14px 18px', borderRadius: 'var(--radius-md)',
@@ -324,7 +558,7 @@ export default function EmployeeImportPage() {
                       Download Excel Template
                     </div>
                     <div style={{ fontFamily: 'var(--font-body)', fontSize: '11px', color: 'var(--muted-foreground)', marginTop: 2 }}>
-                      Pre-configured with all required columns
+                      Employees + Skills sheets in one file
                     </div>
                   </div>
                   <div style={{ color: 'var(--muted-foreground)', transition: 'transform 0.15s' }} className="group-hover:translate-y-0.5">
@@ -335,7 +569,7 @@ export default function EmployeeImportPage() {
                 </motion.button>
               </div>
 
-              {/* ── Step 2: Upload filled template ────────────────────── */}
+              {/* Step 2: Upload filled template */}
               <div>
                 <div className="flex items-center gap-2 mb-3">
                   <div style={{
@@ -406,7 +640,7 @@ export default function EmployeeImportPage() {
                 </motion.div>
               </div>
 
-              {/* ── Validation results ────────────────────────────────── */}
+              {/* Validation results — employees */}
               <AnimatePresence>
                 {validation && (
                   <motion.div
@@ -415,12 +649,13 @@ export default function EmployeeImportPage() {
                     exit={{ opacity: 0, height: 0 }}
                     transition={bouncy}
                   >
-                    <div className="flex items-center gap-4 mb-3">
+                    {/* Employee validation summary */}
+                    <div className="flex items-center gap-4 mb-2">
                       {validation.valid.length > 0 && (
                         <div className="flex items-center gap-1.5">
                           <Check size={14} style={{ color: 'var(--success)' }} />
                           <span style={{ fontFamily: 'var(--font-mono)', fontSize: '13px', fontWeight: 600, color: 'var(--success)' }}>
-                            {validation.valid.length} valid
+                            {validation.valid.length} employees valid
                           </span>
                         </div>
                       )}
@@ -437,9 +672,37 @@ export default function EmployeeImportPage() {
                       )}
                     </div>
 
+                    {/* Skills validation summary */}
+                    {skillsValidation && (
+                      <div className="flex items-center gap-4 mb-3 flex-wrap">
+                        {skillsValidation.matched.length > 0 && (
+                          <>
+                            <div className="flex items-center gap-1.5">
+                              <Check size={14} style={{ color: 'var(--success)' }} />
+                              <span style={{ fontFamily: 'var(--font-mono)', fontSize: '13px', fontWeight: 600, color: 'var(--success)' }}>
+                                {skillsValidation.matched.length} skills across {skillsValidation.employeesMatched} employees
+                              </span>
+                            </div>
+                          </>
+                        )}
+                        {skillsValidation.errors.length > 0 && (
+                          <button onClick={() => setShowSkillsErrors(!showSkillsErrors)}
+                            className="flex items-center gap-1.5"
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                          >
+                            <AlertCircle size={14} style={{ color: 'var(--destructive)' }} />
+                            <span style={{ fontFamily: 'var(--font-mono)', fontSize: '13px', fontWeight: 600, color: 'var(--destructive)' }}>
+                              {skillsValidation.errors.length} skill errors
+                            </span>
+                          </button>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Employee error details */}
                     {showErrors && validation.errors.length > 0 && (
                       <div style={{
-                        maxHeight: 150, overflowY: 'auto',
+                        maxHeight: 120, overflowY: 'auto', marginBottom: 8,
                         backgroundColor: 'rgba(239,68,68,0.04)', border: '1px solid rgba(239,68,68,0.1)',
                         borderRadius: 'var(--radius-sm)', padding: '8px 12px',
                       }}>
@@ -455,11 +718,31 @@ export default function EmployeeImportPage() {
                         )}
                       </div>
                     )}
+
+                    {/* Skills error details */}
+                    {showSkillsErrors && skillsValidation && skillsValidation.errors.length > 0 && (
+                      <div style={{
+                        maxHeight: 120, overflowY: 'auto',
+                        backgroundColor: 'rgba(239,68,68,0.04)', border: '1px solid rgba(239,68,68,0.1)',
+                        borderRadius: 'var(--radius-sm)', padding: '8px 12px',
+                      }}>
+                        {skillsValidation.errors.slice(0, 20).map((err, i) => (
+                          <div key={i} style={{ fontFamily: 'var(--font-body)', fontSize: '11px', color: 'var(--destructive)', padding: '2px 0' }}>
+                            Row {err.row}: {err.message}
+                          </div>
+                        ))}
+                        {skillsValidation.errors.length > 20 && (
+                          <div style={{ fontFamily: 'var(--font-body)', fontSize: '11px', color: 'var(--muted-foreground)', padding: '4px 0' }}>
+                            +{skillsValidation.errors.length - 20} more errors
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </motion.div>
                 )}
               </AnimatePresence>
 
-              {/* ── Import error ──────────────────────────────────────── */}
+              {/* Import error */}
               {importError && (
                 <motion.div
                   initial={{ opacity: 0, y: -4 }}
@@ -478,7 +761,7 @@ export default function EmployeeImportPage() {
                 </motion.div>
               )}
 
-              {/* ── Import button ─────────────────────────────────────── */}
+              {/* Import button */}
               {validation && validation.valid.length > 0 && (
                 <motion.button
                   variants={scalePress} whileTap="press"
@@ -502,7 +785,10 @@ export default function EmployeeImportPage() {
                       Importing...
                     </>
                   ) : (
-                    <>Import {validation.valid.length} employees</>
+                    <>
+                      Import {validation.valid.length} employees
+                      {skillsValidation && skillsValidation.matched.length > 0 && ` + ${skillsValidation.matched.length} skills`}
+                    </>
                   )}
                 </motion.button>
               )}

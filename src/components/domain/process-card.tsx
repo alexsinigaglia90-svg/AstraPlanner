@@ -1,10 +1,10 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
-import { MoreVertical, Pencil, Trash2 } from 'lucide-react'
-import { fadeInUp, bouncy, scalePress } from '@/lib/motion'
+import { motion } from 'framer-motion'
+import { Pencil, Trash2 } from 'lucide-react'
+import { fadeInUp, bouncy } from '@/lib/motion'
 import { SmartIcon } from '@/components/domain/smart-icon'
+import { GlassDropdown } from '@/components/domain/glass-dropdown'
 
 // ── Department color config ──────────────────────────────────────────────────
 
@@ -34,22 +34,6 @@ interface ProcessCardProps {
 
 export function ProcessCard({ process, color, onEdit, onDelete }: ProcessCardProps) {
   const c = getDeptColor(color)
-  const [menuOpen, setMenuOpen] = useState(false)
-  const [confirmDelete, setConfirmDelete] = useState(false)
-  const menuRef = useRef<HTMLDivElement>(null)
-
-  // Close menu on outside click
-  useEffect(() => {
-    if (!menuOpen) return
-    const handler = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setMenuOpen(false)
-        setConfirmDelete(false)
-      }
-    }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [menuOpen])
 
   return (
     <motion.div
@@ -100,146 +84,12 @@ export function ProcessCard({ process, color, onEdit, onDelete }: ProcessCardPro
         </span>
 
         {/* Menu button */}
-        <div ref={menuRef} style={{ position: 'relative' }}>
-          <button
-            onClick={(e) => { e.stopPropagation(); setMenuOpen(!menuOpen); setConfirmDelete(false) }}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              width: '24px',
-              height: '24px',
-              borderRadius: 'var(--radius-sm)',
-              border: 'none',
-              backgroundColor: 'transparent',
-              color: 'var(--muted-foreground)',
-              cursor: 'pointer',
-              padding: 0,
-              flexShrink: 0,
-            }}
-          >
-            <MoreVertical size={14} />
-          </button>
-
-          {/* Dropdown menu */}
-          <AnimatePresence>
-            {menuOpen && (
-              <motion.div
-                initial={{ opacity: 0, y: -4, scale: 0.95 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: -4, scale: 0.95 }}
-                transition={{ duration: 0.12 }}
-                style={{
-                  position: 'absolute',
-                  top: '100%',
-                  right: 0,
-                  marginTop: '4px',
-                  backgroundColor: 'var(--card)',
-                  border: '1px solid var(--border)',
-                  borderRadius: 'var(--radius-sm)',
-                  boxShadow: 'var(--elevation-2)',
-                  minWidth: '120px',
-                  zIndex: 50,
-                  overflow: 'hidden',
-                }}
-              >
-                {!confirmDelete ? (
-                  <>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); setMenuOpen(false); onEdit() }}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                        width: '100%',
-                        padding: '8px 12px',
-                        border: 'none',
-                        backgroundColor: 'transparent',
-                        color: 'var(--foreground)',
-                        fontFamily: 'var(--font-body)',
-                        fontSize: '12px',
-                        fontWeight: 500,
-                        cursor: 'pointer',
-                        textAlign: 'left',
-                      }}
-                    >
-                      <Pencil size={12} />
-                      Edit
-                    </button>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); setConfirmDelete(true) }}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                        width: '100%',
-                        padding: '8px 12px',
-                        border: 'none',
-                        backgroundColor: 'transparent',
-                        color: 'var(--destructive)',
-                        fontFamily: 'var(--font-body)',
-                        fontSize: '12px',
-                        fontWeight: 500,
-                        cursor: 'pointer',
-                        textAlign: 'left',
-                      }}
-                    >
-                      <Trash2 size={12} />
-                      Delete
-                    </button>
-                  </>
-                ) : (
-                  <div style={{ padding: '8px 12px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                    <span
-                      style={{
-                        fontFamily: 'var(--font-body)',
-                        fontSize: '11px',
-                        color: 'var(--destructive)',
-                        fontWeight: 600,
-                      }}
-                    >
-                      Delete this process?
-                    </span>
-                    <div style={{ display: 'flex', gap: '6px' }}>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); setConfirmDelete(false); setMenuOpen(false) }}
-                        style={{
-                          padding: '4px 10px',
-                          borderRadius: 'var(--radius-sm)',
-                          border: '1px solid var(--border)',
-                          backgroundColor: 'var(--card)',
-                          color: 'var(--foreground)',
-                          fontFamily: 'var(--font-body)',
-                          fontSize: '11px',
-                          fontWeight: 500,
-                          cursor: 'pointer',
-                        }}
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); setMenuOpen(false); setConfirmDelete(false); onDelete() }}
-                        style={{
-                          padding: '4px 10px',
-                          borderRadius: 'var(--radius-sm)',
-                          border: 'none',
-                          backgroundColor: 'var(--destructive)',
-                          color: '#fff',
-                          fontFamily: 'var(--font-body)',
-                          fontSize: '11px',
-                          fontWeight: 600,
-                          cursor: 'pointer',
-                        }}
-                      >
-                        Yes, Delete
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
+        <GlassDropdown
+          options={[
+            { label: 'Edit', icon: <Pencil size={13} />, onClick: onEdit },
+            { label: 'Delete', icon: <Trash2 size={13} />, onClick: onDelete, variant: 'destructive', holdToConfirm: true },
+          ]}
+        />
       </div>
 
       {/* Supportive badge */}
