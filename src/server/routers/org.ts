@@ -425,7 +425,7 @@ export const orgRouter = router({
         code,
         department_id: input.department_id,
         organization_id: ctx.organizationId,
-        category: 'support',
+        category: input.process_type === 'supportive' ? 'support' : 'inbound',
         applicable_site_types: ['warehouse'],
         process_type: input.process_type,
         unit_of_measure: input.unit_of_measure ?? 'units',
@@ -516,7 +516,17 @@ export const orgRouter = router({
       start_time: z.string(),
       end_time: z.string(),
       days_of_week: z.array(z.number()),
-      break_rules_json: z.record(z.unknown()),
+      break_rules_json: z.object({
+        rules: z.array(z.object({
+          start_time: z.string(),
+          end_time: z.string(),
+          include_ramp: z.boolean().optional(),
+          ramp_down_minutes: z.number().optional(),
+          ramp_up_minutes: z.number().optional(),
+          staggered: z.boolean().optional(),
+          stagger_groups: z.number().optional(),
+        })),
+      }),
       is_overnight: z.boolean().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
@@ -677,13 +687,13 @@ export const orgRouter = router({
       const admin = createAdminClient()
       const { data: schedule, error: schedErr } = await admin
         .from('rotation_schedule')
-        .select('id, cycle_weeks')
+        .select('id, cycle_weeks, rotation_start_date')
         .eq('site_id', input.site_id)
         .eq('organization_id', ctx.organizationId)
         .maybeSingle()
       assertNoError(schedErr, 'getRotation:schedule')
       if (!schedule) {
-        return { cycle_weeks: 2, entries: [] as { crew_id: string; shift_pattern_id: string; week_number: number }[] }
+        return { cycle_weeks: 2, rotation_start_date: null as string | null, entries: [] as { crew_id: string; shift_pattern_id: string; week_number: number }[] }
       }
       const { data: entries, error: entErr } = await admin
         .from('rotation_entry')
@@ -693,6 +703,7 @@ export const orgRouter = router({
       return {
         id: schedule.id as string,
         cycle_weeks: schedule.cycle_weeks as number,
+        rotation_start_date: (schedule.rotation_start_date as string) ?? null,
         entries: (entries ?? []).map((e: Record<string, unknown>) => ({
           crew_id: e.crew_id as string,
           shift_pattern_id: e.shift_pattern_id as string,
@@ -708,6 +719,7 @@ export const orgRouter = router({
     .input(z.object({
       site_id: z.string().uuid(),
       cycle_weeks: z.number().int().min(1).max(12),
+      rotation_start_date: z.string().nullable().optional(),
       entries: z.array(z.object({
         crew_id: z.string().uuid(),
         shift_pattern_id: z.string().uuid(),
@@ -732,7 +744,7 @@ export const orgRouter = router({
         // Update existing
         const { data: updated, error: updErr } = await admin
           .from('rotation_schedule')
-          .update({ cycle_weeks: input.cycle_weeks, updated_at: new Date().toISOString() })
+          .update({ cycle_weeks: input.cycle_weeks, rotation_start_date: input.rotation_start_date ?? null, updated_at: new Date().toISOString() })
           .eq('id', existing.id as string)
           .select('id')
           .single()
@@ -746,6 +758,7 @@ export const orgRouter = router({
             site_id: input.site_id,
             organization_id: ctx.organizationId,
             cycle_weeks: input.cycle_weeks,
+            rotation_start_date: input.rotation_start_date ?? null,
           })
           .select('id')
           .single()

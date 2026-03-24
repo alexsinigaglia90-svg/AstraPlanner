@@ -28,11 +28,12 @@ export function buildPaginatedResult<T>(
   items: T[],
   limit: number,
   getCursor: (item: T) => string,
+  totalCount?: number,
 ): { items: T[]; next_cursor: string | null; total_count: number } {
   const hasMore = items.length > limit
   const page = hasMore ? items.slice(0, limit) : items
   const next_cursor = hasMore ? getCursor(page[page.length - 1]!) : null
-  return { items: page, next_cursor, total_count: page.length }
+  return { items: page, next_cursor, total_count: totalCount ?? page.length }
 }
 
 // ---------------------------------------------------------------------------

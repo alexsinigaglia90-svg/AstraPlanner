@@ -99,7 +99,7 @@ function parseBreakRules(json: Record<string, unknown>): BreakRule[] {
   return [{ start_time: '08:30', end_time: '08:45', include_ramp: false, ramp_down_minutes: 3, ramp_up_minutes: 3, staggered: false, stagger_groups: 2 }]
 }
 
-function breakRulesToJson(breaks: BreakRule[]): Record<string, unknown> {
+function breakRulesToJson(breaks: BreakRule[]) {
   return { rules: breaks }
 }
 

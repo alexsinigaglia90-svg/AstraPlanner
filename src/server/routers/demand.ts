@@ -84,6 +84,7 @@ export const demandRouter = router({
               demand_type_id: data.id,
               process_id: pm.process_id,
               conversion_ratio: pm.conversion_ratio,
+              organization_id: ctx.organizationId,
             }))
           )
 
@@ -117,7 +118,7 @@ export const demandRouter = router({
           volume,
           unit_of_measure,
           source,
-          confidence,
+          confidence_interval,
           created_at,
           updated_at,
           demand_type:demand_type_id(name)
@@ -145,7 +146,7 @@ export const demandRouter = router({
         volume: f.volume,
         unit_of_measure: f.unit_of_measure,
         source: f.source,
-        confidence: f.confidence ?? null,
+        confidence_interval: f.confidence_interval ?? null,
         created_at: f.created_at,
         updated_at: f.updated_at,
       }))
@@ -161,7 +162,7 @@ export const demandRouter = router({
         period_end: z.string(),
         volume: z.number().min(0),
         source: sourceEnum,
-        confidence: z.number().min(0).max(1).optional(),
+        confidence_interval: z.number().min(0).max(1).optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -175,7 +176,7 @@ export const demandRouter = router({
           period_end: input.period_end,
           volume: input.volume,
           source: input.source,
-          ...(input.confidence !== undefined ? { confidence: input.confidence } : {}),
+          ...(input.confidence_interval !== undefined ? { confidence_interval: input.confidence_interval } : {}),
         })
         .select('id, site_id, demand_type_id, period_start, period_end, volume, source, updated_at')
         .single()

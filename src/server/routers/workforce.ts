@@ -480,6 +480,7 @@ export const workforceRouter = router({
           {
             ...input,
             organization_id: ctx.organizationId,
+            status: 'active',
             updated_at: new Date().toISOString(),
           },
           { onConflict: 'organization_id,employee_id,process_id' },
@@ -536,6 +537,7 @@ export const workforceRouter = router({
         employee_id: s.employee_id,
         process_id: s.process_id,
         proficiency_level: s.proficiency_level,
+        status: 'active',
         updated_at: new Date().toISOString(),
       }))
 
