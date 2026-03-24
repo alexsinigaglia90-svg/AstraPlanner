@@ -38,6 +38,14 @@ export interface ProcessFormData {
   support_ratio_self?: number
   support_ratio_parent?: number
   fixed_headcount?: number | null
+  support_method?: 'fixed_headcount' | 'linked_ratio' | 'frequency_based' | null
+  support_config_json?: {
+    fixed_count?: number
+    linked_process_ids?: string[]
+    ratio?: number
+    duration_hours?: number
+    frequency_per_week?: number
+  }
   priority: 'critical' | 'important' | 'flexible'
   min_skill_level: number
   certifications_required: string[]
@@ -89,6 +97,8 @@ function defaultFormData(): ProcessFormData {
     support_ratio_self: 1,
     support_ratio_parent: 1,
     fixed_headcount: null,
+    support_method: null,
+    support_config_json: {},
     priority: 'important' as const,
     min_skill_level: 1,
     certifications_required: [],
@@ -173,9 +183,12 @@ export function ProcessWizard({
     setForm((prev) => ({ ...prev, [key]: value }))
   }, [])
 
+  const isSupportive = form.process_type === 'supportive'
+  const totalSteps = isSupportive ? 4 : 3
+
   const goNext = () => {
     setDirection(1)
-    setStep((s) => Math.min(s + 1, 3))
+    setStep((s) => Math.min(s + 1, totalSteps))
   }
 
   const goBack = () => {
@@ -232,8 +245,18 @@ export function ProcessWizard({
     return !!form.support_type
   }, [form])
 
-  const totalSteps = 3
   const isLastStep = step === totalSteps
+
+  // Can advance from support config step (step 3 for supportive)?
+  const supportConfigValid = useMemo(() => {
+    if (!isSupportive) return true
+    if (!form.support_method) return false
+    const cfg = form.support_config_json ?? {}
+    if (form.support_method === 'fixed_headcount') return (cfg.fixed_count ?? 0) > 0
+    if (form.support_method === 'linked_ratio') return (cfg.linked_process_ids ?? []).length > 0 && (cfg.ratio ?? 0) > 0
+    if (form.support_method === 'frequency_based') return (cfg.duration_hours ?? 0) > 0 && (cfg.frequency_per_week ?? 0) > 0
+    return false
+  }, [isSupportive, form.support_method, form.support_config_json])
 
   // Productive processes for linking
   const productiveProcesses = existingProcesses.filter((p) => {
@@ -1269,6 +1292,494 @@ export function ProcessWizard({
     )
   }
 
+  // ── Support Configuration Step (only for supportive processes) ──────────
+  const renderSupportConfig = () => {
+    const method = form.support_method ?? null
+    const config = form.support_config_json ?? {}
+
+    const updateConfig = <K extends keyof NonNullable<ProcessFormData['support_config_json']>>(
+      key: K,
+      value: NonNullable<ProcessFormData['support_config_json']>[K],
+    ) => {
+      update('support_config_json', { ...config, [key]: value })
+    }
+
+    const methodOptions: Array<{
+      value: NonNullable<ProcessFormData['support_method']>
+      icon: string
+      title: string
+      desc: string
+    }> = [
+      { value: 'fixed_headcount', icon: '\u{1F465}', title: 'Vast aantal', desc: 'Vaste bezetting per shift, ongeacht volume.' },
+      { value: 'linked_ratio', icon: '\u{1F517}', title: 'Gekoppelde ratio', desc: 'Schaalt mee met productieve processen.' },
+      { value: 'frequency_based', icon: '\u23F1\uFE0F', title: 'Frequentie', desc: 'Vaste duur en herhaling per week.' },
+    ]
+
+    // Gather productive processes from the existing list
+    const prodProcesses = existingProcesses.filter(() => true) // all existing are shown
+    const linkedIds = config.linked_process_ids ?? []
+
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <label
+          style={{
+            fontFamily: 'var(--font-body)',
+            fontSize: '11px',
+            fontWeight: 600,
+            color: 'var(--muted-foreground)',
+            textTransform: 'uppercase',
+            letterSpacing: '0.06em',
+            display: 'block',
+          }}
+        >
+          FTE Berekeningsmethode
+        </label>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          {methodOptions.map((opt) => {
+            const selected = method === opt.value
+            return (
+              <motion.button
+                key={opt.value}
+                layout
+                transition={bouncy}
+                onClick={() => update('support_method', opt.value)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '14px',
+                  padding: '16px',
+                  borderRadius: '12px',
+                  border: `2px solid ${selected ? 'var(--primary)' : 'var(--border)'}`,
+                  backgroundColor: selected ? 'rgba(99,102,241,0.06)' : 'transparent',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  position: 'relative',
+                  overflow: 'hidden',
+                  transition: 'border-color 0.2s, background-color 0.2s',
+                }}
+              >
+                <div
+                  style={{
+                    width: '32px',
+                    height: '32px',
+                    borderRadius: '8px',
+                    backgroundColor: selected ? 'rgba(99,102,241,0.12)' : 'var(--muted)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '16px',
+                    flexShrink: 0,
+                    transition: 'background-color 0.2s',
+                  }}
+                >
+                  {opt.icon}
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div
+                    style={{
+                      fontFamily: 'var(--font-display)',
+                      fontSize: '13px',
+                      fontWeight: 700,
+                      color: selected ? 'var(--primary)' : 'var(--foreground)',
+                    }}
+                  >
+                    {opt.title}
+                  </div>
+                  <div
+                    style={{
+                      fontFamily: 'var(--font-body)',
+                      fontSize: '11px',
+                      color: 'var(--muted-foreground)',
+                      lineHeight: 1.4,
+                      marginTop: '2px',
+                    }}
+                  >
+                    {opt.desc}
+                  </div>
+                </div>
+                {selected && (
+                  <motion.div
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    transition={bouncy}
+                    style={{
+                      width: '18px',
+                      height: '18px',
+                      borderRadius: '50%',
+                      backgroundColor: 'var(--primary)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                    }}
+                  >
+                    <Check size={11} style={{ color: '#fff' }} />
+                  </motion.div>
+                )}
+              </motion.button>
+            )
+          })}
+        </div>
+
+        {/* Fixed Headcount sub-form */}
+        <AnimatePresence mode="wait">
+          {method === 'fixed_headcount' && (
+            <motion.div
+              key="fixed"
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={bouncy}
+              style={{ overflow: 'hidden' }}
+            >
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', paddingTop: '4px' }}>
+                <label
+                  style={{
+                    fontFamily: 'var(--font-body)',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    color: 'var(--muted-foreground)',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.06em',
+                  }}
+                >
+                  Aantal FTE per shift
+                </label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <input
+                    type="number"
+                    min={1}
+                    step={1}
+                    value={config.fixed_count ?? ''}
+                    onChange={(e) => updateConfig('fixed_count', e.target.value ? Number(e.target.value) : undefined)}
+                    placeholder="0"
+                    style={{
+                      width: '90px',
+                      padding: '8px 12px',
+                      borderRadius: 'var(--radius-md)',
+                      border: '1px solid var(--border)',
+                      backgroundColor: 'var(--card)',
+                      color: 'var(--primary)',
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: '28px',
+                      fontWeight: 800,
+                      outline: 'none',
+                      textAlign: 'center',
+                      boxSizing: 'border-box',
+                    }}
+                  />
+                  <span
+                    style={{
+                      fontFamily: 'var(--font-body)',
+                      fontSize: '14px',
+                      color: 'var(--muted-foreground)',
+                      fontWeight: 500,
+                    }}
+                  >
+                    FTE per shift
+                  </span>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {/* Linked Ratio sub-form */}
+          {method === 'linked_ratio' && (
+            <motion.div
+              key="linked"
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={bouncy}
+              style={{ overflow: 'hidden' }}
+            >
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', paddingTop: '4px' }}>
+                <label
+                  style={{
+                    fontFamily: 'var(--font-body)',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    color: 'var(--muted-foreground)',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.06em',
+                  }}
+                >
+                  Gekoppelde productieve processen
+                </label>
+                <div
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '4px',
+                    maxHeight: '140px',
+                    overflowY: 'auto',
+                  }}
+                >
+                  {prodProcesses.length === 0 ? (
+                    <div
+                      style={{
+                        fontFamily: 'var(--font-body)',
+                        fontSize: '12px',
+                        color: 'var(--muted-foreground)',
+                        padding: '12px',
+                        textAlign: 'center',
+                      }}
+                    >
+                      Geen productieve processen beschikbaar.
+                    </div>
+                  ) : (
+                    prodProcesses.map((proc) => {
+                      const isLinked = linkedIds.includes(proc.id)
+                      return (
+                        <button
+                          key={proc.id}
+                          type="button"
+                          onClick={() => {
+                            const next = isLinked
+                              ? linkedIds.filter((id) => id !== proc.id)
+                              : [...linkedIds, proc.id]
+                            updateConfig('linked_process_ids', next)
+                          }}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            padding: '10px 12px',
+                            borderRadius: 'var(--radius-sm)',
+                            border: `1.5px solid ${isLinked ? 'var(--primary)' : 'var(--border)'}`,
+                            backgroundColor: isLinked ? 'rgba(99,102,241,0.06)' : 'var(--card)',
+                            cursor: 'pointer',
+                            textAlign: 'left',
+                          }}
+                        >
+                          <div
+                            style={{
+                              width: 18,
+                              height: 18,
+                              borderRadius: 4,
+                              flexShrink: 0,
+                              border: `1.5px solid ${isLinked ? 'var(--primary)' : 'var(--border)'}`,
+                              backgroundColor: isLinked ? 'var(--primary)' : 'transparent',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                            }}
+                          >
+                            {isLinked && (
+                              <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                                <path d="M2 5L4 7L8 3" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                              </svg>
+                            )}
+                          </div>
+                          <span
+                            style={{
+                              flex: 1,
+                              fontFamily: 'var(--font-body)',
+                              fontSize: '13px',
+                              fontWeight: 600,
+                              color: isLinked ? 'var(--foreground)' : 'var(--muted-foreground)',
+                            }}
+                          >
+                            {proc.name}
+                          </span>
+                          <span
+                            style={{
+                              fontFamily: 'var(--font-mono)',
+                              fontSize: '11px',
+                              fontWeight: 600,
+                              color: 'var(--primary)',
+                              backgroundColor: 'rgba(99,102,241,0.10)',
+                              padding: '2px 8px',
+                              borderRadius: 'var(--radius-full)',
+                            }}
+                          >
+                            {proc.norm_uph}/hr
+                          </span>
+                        </button>
+                      )
+                    })
+                  )}
+                </div>
+
+                <label
+                  style={{
+                    fontFamily: 'var(--font-body)',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    color: 'var(--muted-foreground)',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.06em',
+                    marginTop: '4px',
+                  }}
+                >
+                  1 per X productieve FTE
+                </label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <span
+                    style={{
+                      fontFamily: 'var(--font-body)',
+                      fontSize: '13px',
+                      fontWeight: 600,
+                      color: 'var(--foreground)',
+                    }}
+                  >
+                    1 :
+                  </span>
+                  <input
+                    type="number"
+                    min={1}
+                    step={1}
+                    value={config.ratio ?? ''}
+                    onChange={(e) => updateConfig('ratio', e.target.value ? Number(e.target.value) : undefined)}
+                    placeholder="0"
+                    style={{
+                      width: '80px',
+                      padding: '8px 12px',
+                      borderRadius: 'var(--radius-md)',
+                      border: '1px solid var(--border)',
+                      backgroundColor: 'var(--card)',
+                      color: 'var(--primary)',
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: '20px',
+                      fontWeight: 700,
+                      outline: 'none',
+                      textAlign: 'center',
+                      boxSizing: 'border-box',
+                    }}
+                  />
+                  <span
+                    style={{
+                      fontFamily: 'var(--font-body)',
+                      fontSize: '12px',
+                      color: 'var(--muted-foreground)',
+                    }}
+                  >
+                    productieve FTE
+                  </span>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {/* Frequency-Based sub-form */}
+          {method === 'frequency_based' && (
+            <motion.div
+              key="freq"
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={bouncy}
+              style={{ overflow: 'hidden' }}
+            >
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', paddingTop: '4px' }}>
+                <div>
+                  <label
+                    style={{
+                      fontFamily: 'var(--font-body)',
+                      fontSize: '11px',
+                      fontWeight: 600,
+                      color: 'var(--muted-foreground)',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.06em',
+                      marginBottom: '8px',
+                      display: 'block',
+                    }}
+                  >
+                    Uur per keer
+                  </label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <input
+                      type="number"
+                      min={0.5}
+                      step={0.5}
+                      value={config.duration_hours ?? ''}
+                      onChange={(e) => updateConfig('duration_hours', e.target.value ? Number(e.target.value) : undefined)}
+                      placeholder="0"
+                      style={{
+                        width: '80px',
+                        padding: '8px 12px',
+                        borderRadius: 'var(--radius-md)',
+                        border: '1px solid var(--border)',
+                        backgroundColor: 'var(--card)',
+                        color: 'var(--primary)',
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: '20px',
+                        fontWeight: 700,
+                        outline: 'none',
+                        textAlign: 'center',
+                        boxSizing: 'border-box',
+                      }}
+                    />
+                    <span
+                      style={{
+                        fontFamily: 'var(--font-body)',
+                        fontSize: '13px',
+                        color: 'var(--muted-foreground)',
+                      }}
+                    >
+                      uur
+                    </span>
+                  </div>
+                </div>
+
+                <div>
+                  <label
+                    style={{
+                      fontFamily: 'var(--font-body)',
+                      fontSize: '11px',
+                      fontWeight: 600,
+                      color: 'var(--muted-foreground)',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.06em',
+                      marginBottom: '8px',
+                      display: 'block',
+                    }}
+                  >
+                    Keer per week
+                  </label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <input
+                      type="number"
+                      min={1}
+                      step={1}
+                      value={config.frequency_per_week ?? ''}
+                      onChange={(e) => updateConfig('frequency_per_week', e.target.value ? Number(e.target.value) : undefined)}
+                      placeholder="0"
+                      style={{
+                        width: '80px',
+                        padding: '8px 12px',
+                        borderRadius: 'var(--radius-md)',
+                        border: '1px solid var(--border)',
+                        backgroundColor: 'var(--card)',
+                        color: 'var(--primary)',
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: '20px',
+                        fontWeight: 700,
+                        outline: 'none',
+                        textAlign: 'center',
+                        boxSizing: 'border-box',
+                      }}
+                    />
+                    <span
+                      style={{
+                        fontFamily: 'var(--font-body)',
+                        fontSize: '13px',
+                        color: 'var(--muted-foreground)',
+                      }}
+                    >
+                      keer per week
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    )
+  }
+
   const renderStep3 = () => (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       {/* Priority */}
@@ -1634,7 +2145,7 @@ export function ProcessWizard({
 
               {/* Step indicator */}
               <div style={{ display: 'flex', gap: '4px' }}>
-                {[1, 2, 3].map((s) => (
+                {Array.from({ length: totalSteps }, (_, i) => i + 1).map((s) => (
                   <div
                     key={s}
                     style={{
@@ -1664,7 +2175,8 @@ export function ProcessWizard({
                   {step === 1 && renderStep1()}
                   {step === 2 && form.process_type === 'productive' && renderStep2Productive()}
                   {step === 2 && form.process_type === 'supportive' && renderStep2Supportive()}
-                  {step === 3 && renderStep3()}
+                  {step === 3 && isSupportive && renderSupportConfig()}
+                  {step === (isSupportive ? 4 : 3) && renderStep3()}
                 </motion.div>
               </AnimatePresence>
             </div>
@@ -1712,7 +2224,8 @@ export function ProcessWizard({
                 disabled={
                   saving ||
                   (step === 1 && !step1Valid) ||
-                  (step === 2 && !step2Valid)
+                  (step === 2 && !step2Valid) ||
+                  (step === 3 && isSupportive && !supportConfigValid)
                 }
                 onClick={isLastStep ? handleSave : goNext}
                 style={{

@@ -348,7 +348,7 @@ export const orgRouter = router({
       if (deptIds.length === 0) return []
       const { data, error } = await admin
         .from('process')
-        .select('id, name, code, unit_of_measure, norm_uph, department_id, process_type, support_type, parent_process_id, support_ratio_self, support_ratio_parent, fixed_headcount, priority, min_skill_level, certifications_required, conversion_input_uom, conversion_output_qty, restrict_to_trained, min_staffing, max_staffing, frequency_type, frequency_days, frequency_count, duration_type, duration_hours')
+        .select('id, name, code, unit_of_measure, norm_uph, department_id, process_type, support_type, parent_process_id, support_ratio_self, support_ratio_parent, fixed_headcount, support_method, support_config_json, priority, min_skill_level, certifications_required, conversion_input_uom, conversion_output_qty, restrict_to_trained, min_staffing, max_staffing, frequency_type, frequency_days, frequency_count, duration_type, duration_hours')
         .eq('organization_id', ctx.organizationId)
         .eq('is_active', true)
         .in('department_id', deptIds)
@@ -367,6 +367,8 @@ export const orgRouter = router({
         support_ratio_self: (p.support_ratio_self as number) ?? 1,
         support_ratio_parent: (p.support_ratio_parent as number) ?? 1,
         fixed_headcount: (p.fixed_headcount as number) ?? null,
+        support_method: (p.support_method as string) ?? null,
+        support_config_json: (p.support_config_json as Record<string, unknown>) ?? {},
         priority: (p.priority as string) ?? 'important',
         min_skill_level: (p.min_skill_level as number) ?? 1,
         certifications_required: (p.certifications_required as string[]) ?? [],
@@ -403,6 +405,8 @@ export const orgRouter = router({
       support_ratio_self: z.number().int().positive().optional(),
       support_ratio_parent: z.number().int().positive().optional(),
       fixed_headcount: z.number().int().positive().nullable().optional(),
+      support_method: z.enum(['fixed_headcount', 'linked_ratio', 'frequency_based']).nullable().optional(),
+      support_config_json: z.record(z.unknown()).nullable().optional(),
       // Common fields
       priority: z.enum(['critical', 'important', 'flexible']).default('important'),
       min_skill_level: z.number().int().min(1).max(5).default(1),
@@ -437,6 +441,8 @@ export const orgRouter = router({
         support_ratio_self: input.support_ratio_self ?? 1,
         support_ratio_parent: input.support_ratio_parent ?? 1,
         fixed_headcount: input.fixed_headcount ?? null,
+        support_method: input.support_method ?? null,
+        support_config_json: input.support_config_json ?? {},
         priority: input.priority,
         min_skill_level: input.min_skill_level,
         certifications_required: input.certifications_required,
