@@ -52,6 +52,23 @@ export default function DemandPage() {
   )
   const [activeTab, setActiveTab] = useState<Tab>('invoer')
 
+  // Wait for site to be selected
+  if (!siteId) {
+    return (
+      <div style={{
+        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+        padding: '64px 24px', gap: 16,
+      }}>
+        <p style={{
+          fontFamily: 'var(--font-body)', fontSize: 14,
+          color: 'var(--muted-foreground)',
+        }}>
+          Selecteer een site om demand te beheren.
+        </p>
+      </div>
+    )
+  }
+
   return (
     <motion.div
       variants={containerStagger}

@@ -53,7 +53,7 @@ const TOTAL_STEPS = 3
 export function DemandTypeWizard({ open, onClose, siteId, onSaved, editId }: DemandTypeWizardProps) {
   const utils = trpc.useUtils()
   const upsert = trpc.demand.upsertDemandType.useMutation()
-  const processes = trpc.org.listProcesses.useQuery({ site_id: siteId }, { enabled: open })
+  const processes = trpc.org.listProcesses.useQuery({ site_id: siteId }, { enabled: open && siteId.length > 0 })
   const existingTypes = trpc.demand.listDemandTypes.useQuery({}, { enabled: open && !!editId })
 
   const [step, setStep] = useState(1)
@@ -93,9 +93,7 @@ export function DemandTypeWizard({ open, onClose, siteId, onSaved, editId }: Dem
 
   // -- Derived ---------------------------------------------------------------
 
-  const productiveProcesses = (processes.data ?? []).filter(
-    (p) => p.process_type === 'productive',
-  )
+  const allProcesses = processes.data ?? []
 
   const canStep1 = naam.trim().length > 0 && eenheid.trim().length > 0
   const canStep2 = selectedProcesses.size > 0
@@ -330,16 +328,16 @@ export function DemandTypeWizard({ open, onClose, siteId, onSaved, editId }: Dem
                           </div>
                         )}
 
-                        {productiveProcesses.length === 0 && !processes.isLoading && (
+                        {allProcesses.length === 0 && !processes.isLoading && (
                           <div style={{
                             fontFamily: 'var(--font-body)', fontSize: 13,
                             color: 'var(--muted-foreground)', padding: 16, textAlign: 'center',
                           }}>
-                            Geen productieve processen gevonden voor deze site.
+                            Geen processen gevonden voor deze site. Maak eerst processen aan via het Processen scherm.
                           </div>
                         )}
 
-                        {productiveProcesses.map((proc) => {
+                        {allProcesses.map((proc) => {
                           const isSelected = selectedProcesses.has(proc.id)
                           const ratio = selectedProcesses.get(proc.id) ?? 1.0
 
@@ -421,7 +419,7 @@ export function DemandTypeWizard({ open, onClose, siteId, onSaved, editId }: Dem
                         })}
                       </div>
 
-                      {!canStep2 && productiveProcesses.length > 0 && (
+                      {!canStep2 && allProcesses.length > 0 && (
                         <div style={{
                           fontFamily: 'var(--font-body)', fontSize: 12,
                           color: 'var(--muted-foreground)', fontStyle: 'italic',
@@ -485,7 +483,7 @@ export function DemandTypeWizard({ open, onClose, siteId, onSaved, editId }: Dem
                             Gekoppelde Processen ({selectedProcesses.size})
                           </span>
                           {Array.from(selectedProcesses.entries()).map(([pid, ratio]) => {
-                            const proc = productiveProcesses.find((p) => p.id === pid)
+                            const proc = allProcesses.find((p) => p.id === pid)
                             if (!proc) return null
                             return (
                               <div
