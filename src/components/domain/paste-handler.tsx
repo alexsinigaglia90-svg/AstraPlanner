@@ -118,7 +118,7 @@ export function PasteHandler({
             col: weekIdx,
             value,
             demandTypeName: matched.name,
-            weekLabel: formatWeekLabel(weeks[weekIdx]),
+            weekLabel: formatWeekLabel(weeks[weekIdx] ?? ''),
             isNew,
             isChanged,
           })
@@ -174,11 +174,11 @@ export function PasteHandler({
         const matched = demandTypes.find((dt) => dt.name === c.demandTypeName)
         return {
           demand_type_id: matched?.id ?? '',
-          period_start: weeks[c.col],
+          period_start: weeks[c.col] ?? '',
           volume: c.value,
         }
       })
-      .filter((c) => c.demand_type_id !== '')
+      .filter((c) => c.demand_type_id !== '' && c.period_start !== '')
 
     onConfirm(payload)
     setShowPreview(false)
@@ -195,8 +195,9 @@ export function PasteHandler({
   // Group cells by demand type for preview grid
   const groupedByType = previewCells.reduce<Record<string, PastePreviewCell[]>>(
     (acc, cell) => {
-      if (!acc[cell.demandTypeName]) acc[cell.demandTypeName] = []
-      acc[cell.demandTypeName].push(cell)
+      const key = cell.demandTypeName
+      if (!acc[key]) acc[key] = []
+      acc[key]!.push(cell)
       return acc
     },
     {},
