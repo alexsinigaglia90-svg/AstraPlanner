@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { TRPCError } from '@trpc/server'
 import { router, plannerProcedure, managerProcedure, viewerProcedure } from '../trpc'
 
-const sourceEnum = z.enum(['wms_import', 'csv_upload', 'manual_entry', 'ai_forecast'])
+const sourceEnum = z.enum(['wms_import', 'oms_import', 'csv_upload', 'manual_entry', 'ai_forecast'])
 
 export const demandRouter = router({
   listDemandTypes: viewerProcedure
@@ -185,6 +185,82 @@ export const demandRouter = router({
         throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: error.message })
       }
 
+      return data
+    }),
+
+  bulkUpsert: plannerProcedure
+    .input(
+      z.object({
+        forecasts: z.array(
+          z.object({
+            id: z.string().uuid().optional(),
+            site_id: z.string().uuid(),
+            demand_type_id: z.string().uuid(),
+            period_start: z.string(),
+            period_end: z.string(),
+            volume: z.number().min(0).max(999999),
+            source: sourceEnum,
+          })
+        ).min(1).max(500),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const { data, error } = await ctx.supabase
+        .from('demand_forecast')
+        .upsert(
+          input.forecasts.map((f) => ({
+            ...(f.id ? { id: f.id } : {}),
+            site_id: f.site_id,
+            demand_type_id: f.demand_type_id,
+            period_start: f.period_start,
+            period_end: f.period_end,
+            volume: f.volume,
+            source: f.source,
+            organization_id: ctx.organizationId,
+          })),
+          { onConflict: 'organization_id,site_id,demand_type_id,period_start,period_end,plan_version_id' }
+        )
+        .select('id, demand_type_id, period_start, volume')
+
+      if (error) {
+        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: error.message })
+      }
+
+      return { upserted: data?.length ?? 0 }
+    }),
+
+  upsertOverride: plannerProcedure
+    .input(
+      z.object({
+        demand_forecast_id: z.string().uuid(),
+        process_id: z.string().uuid(),
+        override_volume: z.number().min(0).max(999999).nullable(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      if (input.override_volume === null) {
+        const { error } = await ctx.supabase
+          .from('demand_process_override')
+          .delete()
+          .eq('demand_forecast_id', input.demand_forecast_id)
+          .eq('process_id', input.process_id)
+
+        if (error) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: error.message })
+        return { deleted: true }
+      }
+
+      const { data, error } = await ctx.supabase
+        .from('demand_process_override')
+        .upsert({
+          demand_forecast_id: input.demand_forecast_id,
+          process_id: input.process_id,
+          override_volume: input.override_volume,
+          organization_id: ctx.organizationId,
+        }, { onConflict: 'demand_forecast_id,process_id' })
+        .select('id')
+        .single()
+
+      if (error) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: error.message })
       return data
     }),
 
