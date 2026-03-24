@@ -2,7 +2,8 @@
 
 import { useState, useMemo, useCallback } from 'react'
 import { motion } from 'framer-motion'
-import { containerStagger, fadeInUp, bouncy } from '@/lib/motion'
+import { TrendingUp, Plus } from 'lucide-react'
+import { containerStagger, fadeInUp, bouncy, scalePress } from '@/lib/motion'
 import { trpc } from '@/lib/trpc/client'
 import { WeekRangePicker } from './week-range-picker'
 import { SiteSelector } from './site-selector'
@@ -11,6 +12,7 @@ import { CascadePreview } from './cascade-preview'
 import { PasteHandler } from './paste-handler'
 import { ExcelDropZone } from './excel-drop-zone'
 import { SmartIcon } from './smart-icon'
+import { DemandTypeWizard } from './demand-type-wizard'
 import type { ImportRow } from './excel-drop-zone'
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -126,6 +128,7 @@ function SaveIndicator({ isSaving, lastSaved }: { isSaving: boolean; lastSaved: 
 export function DemandGrid({ siteId, weekRange, onWeekRangeChange }: DemandGridProps) {
   const [expandedTypeId, setExpandedTypeId] = useState<string | null>(null)
   const [lastSaved, setLastSaved] = useState(false)
+  const [wizardOpen, setWizardOpen] = useState(false)
 
   const utils = trpc.useUtils()
 
@@ -326,6 +329,24 @@ export function DemandGrid({ siteId, weekRange, onWeekRangeChange }: DemandGridP
       <div style={toolbarStyle}>
         <SiteSelector />
         <WeekRangePicker value={weekRange} onChange={onWeekRangeChange} />
+        {demandTypes.length > 0 && (
+          <motion.button
+            variants={scalePress}
+            whileTap="press"
+            onClick={() => setWizardOpen(true)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 4,
+              padding: '6px 12px', borderRadius: 8,
+              border: 'none',
+              background: 'linear-gradient(135deg, var(--primary), #8B5CF6)',
+              color: '#fff', fontFamily: 'var(--font-body)',
+              fontSize: 12, fontWeight: 600,
+              cursor: 'pointer', whiteSpace: 'nowrap',
+            }}
+          >
+            <Plus size={14} /> Demand Type
+          </motion.button>
+        )}
         <SaveIndicator isSaving={isSaving} lastSaved={lastSaved} />
       </div>
 
@@ -468,19 +489,61 @@ export function DemandGrid({ siteId, weekRange, onWeekRangeChange }: DemandGridP
                 animate={{ opacity: 1, y: 0 }}
                 transition={bouncy}
                 style={{
+                  display: 'flex', flexDirection: 'column', alignItems: 'center',
                   textAlign: 'center',
-                  padding: '48px 24px',
-                  fontFamily: 'var(--font-body)',
-                  fontSize: 14,
-                  color: 'var(--muted-foreground)',
+                  padding: '56px 24px',
+                  gap: 12,
                 }}
               >
-                Geen vraagtypen gevonden. Maak eerst een vraagtype aan.
+                <div style={{
+                  width: 48, height: 48, borderRadius: 14,
+                  background: 'linear-gradient(135deg, rgba(99,102,241,0.12), rgba(139,92,246,0.08))',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  <TrendingUp size={22} style={{ color: 'var(--primary)' }} />
+                </div>
+                <div style={{
+                  fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 700,
+                  color: 'var(--foreground)',
+                }}>
+                  Geen demand types geconfigureerd
+                </div>
+                <div style={{
+                  fontFamily: 'var(--font-body)', fontSize: 13,
+                  color: 'var(--muted-foreground)', maxWidth: 300,
+                }}>
+                  Maak een demand type aan om volumes in te voeren
+                </div>
+                <motion.button
+                  variants={scalePress}
+                  whileTap="press"
+                  onClick={() => setWizardOpen(true)}
+                  style={{
+                    marginTop: 8,
+                    display: 'flex', alignItems: 'center', gap: 6,
+                    padding: '10px 20px', borderRadius: 8,
+                    border: 'none',
+                    background: 'linear-gradient(135deg, var(--primary), #8B5CF6)',
+                    color: '#fff', fontFamily: 'var(--font-body)',
+                    fontSize: 13, fontWeight: 600,
+                    cursor: 'pointer',
+                    boxShadow: '0 4px 14px rgba(99,102,241,0.3)',
+                  }}
+                >
+                  <Plus size={16} /> Demand Type
+                </motion.button>
               </motion.div>
             )}
           </div>
         </PasteHandler>
       </ExcelDropZone>
+
+      <DemandTypeWizard
+        open={wizardOpen}
+        onClose={() => setWizardOpen(false)}
+        siteId={siteId}
+        onSaved={() => setWizardOpen(false)}
+      />
     </div>
   )
 }
