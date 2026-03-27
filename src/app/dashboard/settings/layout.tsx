@@ -12,6 +12,7 @@ const tabs = [
   { label: 'Roles', href: '/dashboard/settings/roles' },
   { label: 'Equipment', href: '/dashboard/settings/equipment' },
   { label: 'Audit Log', href: '/dashboard/settings/audit' },
+  { label: 'Team', href: '/dashboard/settings/team' },
 ]
 
 export default function SettingsLayout({ children }: { children: React.ReactNode }) {
