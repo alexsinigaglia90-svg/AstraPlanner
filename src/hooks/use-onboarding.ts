@@ -115,9 +115,9 @@ export function useOnboarding() {
     { id: 'sites',       label: 'Maak een site aan',      completed: sitesQuery.data ?? false,       href: '/dashboard/settings/sites' },
     { id: 'shifts',      label: 'Stel shifts in',         completed: shiftsQuery.data ?? false,      href: '/dashboard/settings/shifts' },
     { id: 'departments', label: 'Maak departments aan',   completed: departmentsQuery.data ?? false, href: '/dashboard/processes' },
+    { id: 'processes',   label: 'Definieer processen',    completed: processesQuery.data ?? false,   href: '/dashboard/processes' },
     { id: 'roles',       label: 'Voeg rollen toe',        completed: rolesQuery.data ?? false,       href: '/dashboard/settings/roles' },
     { id: 'employees', label: 'Voeg medewerkers toe', completed: employeesQuery.data ?? false, href: '/dashboard/employees' },
-    { id: 'processes', label: 'Definieer processen',  completed: processesQuery.data ?? false,  href: '/dashboard/processes' },
   ]
 
   const completedCount = steps.filter((s) => s.completed).length
