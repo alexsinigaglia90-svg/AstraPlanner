@@ -74,7 +74,7 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, delay: 0.1, ease: [0.22, 1, 0.36, 1] }}
         className="w-full"
-        style={{ maxWidth: 400, zIndex: 1 }}
+        style={{ maxWidth: 480, zIndex: 1 }}
       >
         {children}
       </motion.div>
