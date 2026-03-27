@@ -290,8 +290,10 @@ export default function ProcessesPage() {
           frequency_type: ((proc as Record<string, unknown>).frequency_type as 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'yearly') ?? 'daily',
           frequency_days: ((proc as Record<string, unknown>).frequency_days as number[] | null) ?? null,
           frequency_count: ((proc as Record<string, unknown>).frequency_count as number | null) ?? null,
-          duration_type: ((proc as Record<string, unknown>).duration_type as 'full_shift' | 'hours') ?? 'full_shift',
+          duration_type: ((proc as Record<string, unknown>).duration_type as 'full_shift' | 'hours' | 'time_range') ?? 'full_shift',
           duration_hours: ((proc as Record<string, unknown>).duration_hours as number | null) ?? null,
+          duration_start_time: ((proc as Record<string, unknown>).duration_start_time as string | null) ?? null,
+          duration_end_time: ((proc as Record<string, unknown>).duration_end_time as string | null) ?? null,
         })
       } else {
         setWizardEditData(null)
@@ -327,8 +329,10 @@ export default function ProcessesPage() {
       frequency_type: data.frequency_type,
       frequency_days: data.frequency_days,
       frequency_count: data.frequency_count,
-      duration_type: data.duration_type,
+      duration_type: data.duration_type === 'time_range' ? 'time_range' : data.duration_type,
       duration_hours: data.duration_hours,
+      duration_start_time: data.duration_start_time ?? null,
+      duration_end_time: data.duration_end_time ?? null,
     })
     // Save equipment assignments if provided
     if (data.equipment) {

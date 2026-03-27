@@ -55,8 +55,10 @@ export interface ProcessFormData {
   frequency_type: 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'yearly'
   frequency_days?: number[] | null
   frequency_count?: number | null
-  duration_type: 'full_shift' | 'hours'
+  duration_type: 'full_shift' | 'hours' | 'time_range'
   duration_hours?: number | null
+  duration_start_time?: string | null
+  duration_end_time?: string | null
   equipment?: { equipment_id: string }[]
 }
 
@@ -110,6 +112,8 @@ function defaultFormData(): ProcessFormData {
     frequency_count: null,
     duration_type: 'full_shift' as const,
     duration_hours: null,
+    duration_start_time: null,
+    duration_end_time: null,
   }
 }
 
@@ -987,6 +991,21 @@ export function ProcessWizard({
             <div style={{ fontWeight: 700, marginBottom: 2 }}>Specific hours</div>
             <div style={{ fontSize: 10, opacity: 0.7 }}>Partial shift — set hours needed</div>
           </button>
+          <button
+            type="button"
+            onClick={() => update('duration_type', 'time_range')}
+            style={{
+              flex: 1, padding: '10px 14px', borderRadius: 'var(--radius-md)',
+              border: `1.5px solid ${form.duration_type === 'time_range' ? c.main : 'var(--border)'}`,
+              backgroundColor: form.duration_type === 'time_range' ? `${c.main}08` : 'transparent',
+              color: form.duration_type === 'time_range' ? c.main : 'var(--muted-foreground)',
+              fontFamily: 'var(--font-body)', fontSize: 12, fontWeight: 600,
+              cursor: 'pointer', textAlign: 'left', transition: 'all 0.15s',
+            }}
+          >
+            <div style={{ fontWeight: 700, marginBottom: 2 }}>Van — tot</div>
+            <div style={{ fontSize: 10, opacity: 0.7 }}>Vaste tijden op de dag</div>
+          </button>
         </div>
         {form.duration_type === 'hours' && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -1006,6 +1025,33 @@ export function ProcessWizard({
             <span style={{ fontFamily: 'var(--font-body)', fontSize: 12, color: 'var(--muted-foreground)' }}>
               hours per occurrence
             </span>
+          </div>
+        )}
+        {form.duration_type === 'time_range' && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <input
+              type="time"
+              value={form.duration_start_time ?? '08:00'}
+              onChange={(e) => update('duration_start_time', e.target.value)}
+              style={{
+                padding: '6px 10px', borderRadius: 'var(--radius-sm)',
+                border: '1px solid var(--border)', backgroundColor: 'var(--card)',
+                color: c.main, fontFamily: 'var(--font-mono)', fontSize: 14, fontWeight: 600,
+                outline: 'none', boxSizing: 'border-box',
+              }}
+            />
+            <span style={{ fontFamily: 'var(--font-body)', fontSize: 13, color: 'var(--muted-foreground)' }}>—</span>
+            <input
+              type="time"
+              value={form.duration_end_time ?? '10:00'}
+              onChange={(e) => update('duration_end_time', e.target.value)}
+              style={{
+                padding: '6px 10px', borderRadius: 'var(--radius-sm)',
+                border: '1px solid var(--border)', backgroundColor: 'var(--card)',
+                color: c.main, fontFamily: 'var(--font-mono)', fontSize: 14, fontWeight: 600,
+                outline: 'none', boxSizing: 'border-box',
+              }}
+            />
           </div>
         )}
       </div>

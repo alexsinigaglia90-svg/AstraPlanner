@@ -465,8 +465,10 @@ export const orgRouter = router({
       frequency_type: z.enum(['daily', 'weekly', 'monthly', 'quarterly', 'yearly']).default('daily'),
       frequency_days: z.array(z.number()).nullable().optional(),
       frequency_count: z.number().int().positive().nullable().optional(),
-      duration_type: z.enum(['full_shift', 'hours']).default('full_shift'),
+      duration_type: z.enum(['full_shift', 'hours', 'time_range']).default('full_shift'),
       duration_hours: z.number().positive().nullable().optional(),
+      duration_start_time: z.string().nullable().optional(),
+      duration_end_time: z.string().nullable().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const admin = createAdminClient()
