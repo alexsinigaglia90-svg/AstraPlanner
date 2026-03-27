@@ -67,6 +67,14 @@ export function useOnboarding() {
     },
   )
 
+  const departmentsQuery = trpc.org.listDepartments.useQuery(
+    { site_id: activeSiteId! },
+    {
+      enabled: enabled && !!activeSiteId,
+      select: (data) => data.length > 0,
+    },
+  )
+
   const rolesQuery = trpc.org.listRoles.useQuery(
     { site_id: activeSiteId! },
     {
@@ -97,15 +105,17 @@ export function useOnboarding() {
   const isLoading = enabled && (
     sitesQuery.isLoading ||
     shiftsQuery.isLoading ||
+    departmentsQuery.isLoading ||
     rolesQuery.isLoading ||
     employeesQuery.isLoading ||
     processesQuery.isLoading
   )
 
   const steps: OnboardingStep[] = [
-    { id: 'sites',     label: 'Maak een site aan',    completed: sitesQuery.data ?? false,     href: '/dashboard/settings/sites' },
-    { id: 'shifts',    label: 'Stel shifts in',       completed: shiftsQuery.data ?? false,    href: '/dashboard/settings/shifts' },
-    { id: 'roles',     label: 'Voeg rollen toe',      completed: rolesQuery.data ?? false,     href: '/dashboard/settings/roles' },
+    { id: 'sites',       label: 'Maak een site aan',      completed: sitesQuery.data ?? false,       href: '/dashboard/settings/sites' },
+    { id: 'shifts',      label: 'Stel shifts in',         completed: shiftsQuery.data ?? false,      href: '/dashboard/settings/shifts' },
+    { id: 'departments', label: 'Maak departments aan',   completed: departmentsQuery.data ?? false, href: '/dashboard/processes' },
+    { id: 'roles',       label: 'Voeg rollen toe',        completed: rolesQuery.data ?? false,       href: '/dashboard/settings/roles' },
     { id: 'employees', label: 'Voeg medewerkers toe', completed: employeesQuery.data ?? false, href: '/dashboard/employees' },
     { id: 'processes', label: 'Definieer processen',  completed: processesQuery.data ?? false,  href: '/dashboard/processes' },
   ]

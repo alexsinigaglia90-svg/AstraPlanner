@@ -15,6 +15,16 @@ export const DEPT_COLORS: Record<string, { main: string; bg: string; border: str
   pink:    { main: '#ec4899', bg: 'rgba(236,72,153,0.06)', border: 'rgba(236,72,153,0.12)' },
   cyan:    { main: '#06b6d4', bg: 'rgba(6,182,212,0.06)',  border: 'rgba(6,182,212,0.12)' },
   red:     { main: '#ef4444', bg: 'rgba(239,68,68,0.06)',  border: 'rgba(239,68,68,0.12)' },
+  violet:  { main: '#8b5cf6', bg: 'rgba(139,92,246,0.06)', border: 'rgba(139,92,246,0.12)' },
+  orange:  { main: '#f97316', bg: 'rgba(249,115,22,0.06)', border: 'rgba(249,115,22,0.12)' },
+  teal:    { main: '#14b8a6', bg: 'rgba(20,184,166,0.06)', border: 'rgba(20,184,166,0.12)' },
+  rose:    { main: '#f43f5e', bg: 'rgba(244,63,94,0.06)',  border: 'rgba(244,63,94,0.12)' },
+  sky:     { main: '#0ea5e9', bg: 'rgba(14,165,233,0.06)', border: 'rgba(14,165,233,0.12)' },
+  lime:    { main: '#84cc16', bg: 'rgba(132,204,22,0.06)', border: 'rgba(132,204,22,0.12)' },
+  fuchsia: { main: '#d946ef', bg: 'rgba(217,70,239,0.06)', border: 'rgba(217,70,239,0.12)' },
+  slate:   { main: '#64748b', bg: 'rgba(100,116,139,0.06)',border: 'rgba(100,116,139,0.12)' },
+  yellow:  { main: '#eab308', bg: 'rgba(234,179,8,0.06)',  border: 'rgba(234,179,8,0.12)' },
+  blue:    { main: '#3b82f6', bg: 'rgba(59,130,246,0.06)', border: 'rgba(59,130,246,0.12)' },
 }
 
 export function getDeptColor(color: string): { main: string; bg: string; border: string } {
