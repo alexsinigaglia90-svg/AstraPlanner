@@ -164,6 +164,53 @@ export const orgRouter = router({
   }),
 
   // -------------------------------------------------------------------------
+  // createSite
+  // -------------------------------------------------------------------------
+  createSite: managerProcedure
+    .input(
+      z.object({
+        name: z.string().min(1).max(255),
+        code: z.string().min(1).max(20),
+        site_type: z.enum([
+          'warehouse', 'distribution_center', 'fulfillment_center',
+          'manufacturing_plant', 'retail_store', 'office', 'other',
+        ]).default('warehouse'),
+        city: z.string().min(1).max(100),
+        country_code: z.string().length(2).default('NL'),
+        timezone: z.string().default('Europe/Amsterdam'),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const { data, error } = await ctx.supabase
+        .from('site')
+        .insert({
+          organization_id: ctx.organizationId,
+          name: input.name,
+          code: input.code,
+          site_type: input.site_type,
+          address_line1: '-',
+          city: input.city,
+          postal_code: '-',
+          country_code: input.country_code,
+          timezone: input.timezone,
+          operating_hours_json: {
+            monday: { open: '06:00', close: '22:00' },
+            tuesday: { open: '06:00', close: '22:00' },
+            wednesday: { open: '06:00', close: '22:00' },
+            thursday: { open: '06:00', close: '22:00' },
+            friday: { open: '06:00', close: '22:00' },
+            saturday: { open: '06:00', close: '18:00' },
+            sunday: { open: '00:00', close: '00:00' },
+          },
+        })
+        .select('id, name, code')
+        .single()
+
+      assertNoError(error, 'createSite')
+      return data!
+    }),
+
+  // -------------------------------------------------------------------------
   // getSite
   // -------------------------------------------------------------------------
   getSite: viewerProcedure

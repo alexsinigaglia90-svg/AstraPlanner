@@ -33,6 +33,7 @@ export interface OnboardingStep {
   id: string
   label: string
   completed: boolean
+  href: string
 }
 
 export function useOnboarding() {
@@ -102,11 +103,11 @@ export function useOnboarding() {
   )
 
   const steps: OnboardingStep[] = [
-    { id: 'sites',     label: 'Maak een site aan',    completed: sitesQuery.data ?? false },
-    { id: 'shifts',    label: 'Stel shifts in',       completed: shiftsQuery.data ?? false },
-    { id: 'roles',     label: 'Voeg rollen toe',      completed: rolesQuery.data ?? false },
-    { id: 'employees', label: 'Voeg medewerkers toe', completed: employeesQuery.data ?? false },
-    { id: 'processes', label: 'Definieer processen',  completed: processesQuery.data ?? false },
+    { id: 'sites',     label: 'Maak een site aan',    completed: sitesQuery.data ?? false,     href: '/dashboard/settings/sites' },
+    { id: 'shifts',    label: 'Stel shifts in',       completed: shiftsQuery.data ?? false,    href: '/dashboard/settings/shifts' },
+    { id: 'roles',     label: 'Voeg rollen toe',      completed: rolesQuery.data ?? false,     href: '/dashboard/settings/roles' },
+    { id: 'employees', label: 'Voeg medewerkers toe', completed: employeesQuery.data ?? false, href: '/dashboard/employees' },
+    { id: 'processes', label: 'Definieer processen',  completed: processesQuery.data ?? false,  href: '/dashboard/processes' },
   ]
 
   const completedCount = steps.filter((s) => s.completed).length

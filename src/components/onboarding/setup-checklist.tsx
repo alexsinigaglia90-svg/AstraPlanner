@@ -8,6 +8,7 @@
  */
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, Check } from 'lucide-react'
 import { useOnboarding } from '@/hooks/use-onboarding'
@@ -58,14 +59,20 @@ function ProgressRing({ completed, total, size, strokeWidth }: ProgressRingProps
 
 // ── Step item ────────────────────────────────────────────────────────────────
 
-function StepItem({ label, completed }: { label: string; completed: boolean }) {
+function StepItem({ label, completed, href, onNavigate }: { label: string; completed: boolean; href: string; onNavigate: (href: string) => void }) {
   return (
-    <div
+    <button
+      onClick={() => onNavigate(href)}
       style={{
         display: 'flex',
         alignItems: 'center',
         gap: '10px',
         padding: '5px 0',
+        width: '100%',
+        background: 'none',
+        border: 'none',
+        cursor: 'pointer',
+        textAlign: 'left',
       }}
     >
       {/* Check circle */}
@@ -98,7 +105,7 @@ function StepItem({ label, completed }: { label: string; completed: boolean }) {
       >
         {label}
       </span>
-    </div>
+    </button>
   )
 }
 
@@ -107,6 +114,7 @@ function StepItem({ label, completed }: { label: string; completed: boolean }) {
 export function SetupChecklist() {
   const { showChecklist, isLoading, steps, completedCount, totalCount, dismissChecklist } = useOnboarding()
   const [expanded, setExpanded] = useState(false)
+  const router = useRouter()
 
   if (!showChecklist) return null
 
@@ -199,7 +207,7 @@ export function SetupChecklist() {
             {/* Steps */}
             <div style={{ padding: '10px 16px 6px 16px' }}>
               {steps.map((step) => (
-                <StepItem key={step.id} label={step.label} completed={step.completed} />
+                <StepItem key={step.id} label={step.label} completed={step.completed} href={step.href} onNavigate={(h) => { setExpanded(false); router.push(h) }} />
               ))}
             </div>
 

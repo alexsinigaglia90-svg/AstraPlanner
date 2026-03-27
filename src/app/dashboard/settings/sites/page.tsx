@@ -398,6 +398,20 @@ export default function SiteListPage() {
   const isLoading = isDemo ? false : liveLoading
   const [view, setView] = useState<ViewMode>('grid')
   const [search, setSearch] = useState('')
+  const [showAddSite, setShowAddSite] = useState(false)
+  const [newSiteName, setNewSiteName] = useState('')
+  const [newSiteCode, setNewSiteCode] = useState('')
+  const [newSiteCity, setNewSiteCity] = useState('')
+  const utils = trpc.useUtils()
+  const createSite = trpc.org.createSite.useMutation({
+    onSuccess: () => {
+      utils.org.listSites.invalidate()
+      setShowAddSite(false)
+      setNewSiteName('')
+      setNewSiteCode('')
+      setNewSiteCity('')
+    },
+  })
 
   const filtered = (sites ?? []).filter((s) =>
     s.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -556,8 +570,10 @@ export default function SiteListPage() {
           <motion.button
             variants={scalePress}
             whileTap="press"
-            disabled
-            title="Coming soon"
+            onClick={() => {
+              if (isDemo) { window.alert('Dit is een demo — start je eigen omgeving om wijzigingen te maken'); return }
+              setShowAddSite(true)
+            }}
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -570,8 +586,7 @@ export default function SiteListPage() {
               fontFamily: 'var(--font-body)',
               fontSize: '13px',
               fontWeight: 600,
-              cursor: 'not-allowed',
-              opacity: 0.5,
+              cursor: 'pointer',
             }}
           >
             <Plus size={15} />
@@ -643,6 +658,150 @@ export default function SiteListPage() {
                 onClick={() => router.push(`/dashboard/settings/sites/${site.id}`)}
               />
             ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Add Site Dialog ─────────────────────────────────────────────── */}
+      <AnimatePresence>
+        {showAddSite && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setShowAddSite(false)}
+            style={{
+              position: 'fixed',
+              inset: 0,
+              zIndex: 40,
+              background: 'rgba(0,0,0,0.3)',
+              backdropFilter: 'blur(4px)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                width: '400px',
+                background: 'var(--card)',
+                borderRadius: 'var(--radius-lg)',
+                border: '1px solid var(--border)',
+                boxShadow: 'var(--elevation-4)',
+                padding: '28px',
+              }}
+            >
+              <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '18px', fontWeight: 700, color: 'var(--foreground)', marginBottom: '4px' }}>
+                Nieuwe site
+              </h3>
+              <p style={{ fontFamily: 'var(--font-body)', fontSize: '13px', color: 'var(--muted-foreground)', marginBottom: '20px' }}>
+                Voeg een nieuwe locatie toe aan je organisatie
+              </p>
+
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault()
+                  if (!newSiteName.trim() || !newSiteCode.trim() || !newSiteCity.trim()) return
+                  createSite.mutate({ name: newSiteName.trim(), code: newSiteCode.trim().toUpperCase(), city: newSiteCity.trim() })
+                }}
+                style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}
+              >
+                <div>
+                  <label style={{ fontFamily: 'var(--font-body)', fontSize: '12px', fontWeight: 600, color: 'var(--muted-foreground)', display: 'block', marginBottom: '4px' }}>
+                    Naam
+                  </label>
+                  <input
+                    value={newSiteName}
+                    onChange={(e) => setNewSiteName(e.target.value)}
+                    placeholder="Bijv. Amsterdam DC"
+                    autoFocus
+                    style={{
+                      width: '100%', height: '40px', borderRadius: 'var(--radius-sm)',
+                      border: '1px solid var(--border)', padding: '0 12px',
+                      fontSize: '14px', fontFamily: 'var(--font-body)',
+                      color: 'var(--foreground)', background: 'var(--background)',
+                      outline: 'none', boxSizing: 'border-box',
+                    }}
+                  />
+                </div>
+                <div style={{ display: 'flex', gap: '12px' }}>
+                  <div style={{ flex: 1 }}>
+                    <label style={{ fontFamily: 'var(--font-body)', fontSize: '12px', fontWeight: 600, color: 'var(--muted-foreground)', display: 'block', marginBottom: '4px' }}>
+                      Code
+                    </label>
+                    <input
+                      value={newSiteCode}
+                      onChange={(e) => setNewSiteCode(e.target.value)}
+                      placeholder="AMS"
+                      maxLength={20}
+                      style={{
+                        width: '100%', height: '40px', borderRadius: 'var(--radius-sm)',
+                        border: '1px solid var(--border)', padding: '0 12px',
+                        fontSize: '14px', fontFamily: 'var(--font-mono)',
+                        color: 'var(--foreground)', background: 'var(--background)',
+                        outline: 'none', boxSizing: 'border-box', textTransform: 'uppercase',
+                      }}
+                    />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <label style={{ fontFamily: 'var(--font-body)', fontSize: '12px', fontWeight: 600, color: 'var(--muted-foreground)', display: 'block', marginBottom: '4px' }}>
+                      Stad
+                    </label>
+                    <input
+                      value={newSiteCity}
+                      onChange={(e) => setNewSiteCity(e.target.value)}
+                      placeholder="Amsterdam"
+                      style={{
+                        width: '100%', height: '40px', borderRadius: 'var(--radius-sm)',
+                        border: '1px solid var(--border)', padding: '0 12px',
+                        fontSize: '14px', fontFamily: 'var(--font-body)',
+                        color: 'var(--foreground)', background: 'var(--background)',
+                        outline: 'none', boxSizing: 'border-box',
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {createSite.isError && (
+                  <div style={{ fontSize: '12px', color: 'var(--destructive)', fontFamily: 'var(--font-body)' }}>
+                    {createSite.error?.message ?? 'Er is iets misgegaan'}
+                  </div>
+                )}
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '4px' }}>
+                  <button
+                    type="button"
+                    onClick={() => setShowAddSite(false)}
+                    style={{
+                      padding: '8px 16px', borderRadius: 'var(--radius-sm)',
+                      border: '1px solid var(--border)', background: 'var(--card)',
+                      fontFamily: 'var(--font-body)', fontSize: '13px', fontWeight: 500,
+                      color: 'var(--foreground)', cursor: 'pointer',
+                    }}
+                  >
+                    Annuleren
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={!newSiteName.trim() || !newSiteCode.trim() || !newSiteCity.trim() || createSite.isPending}
+                    style={{
+                      padding: '8px 16px', borderRadius: 'var(--radius-sm)',
+                      border: 'none', background: 'linear-gradient(135deg, var(--primary), #8B5CF6)',
+                      fontFamily: 'var(--font-body)', fontSize: '13px', fontWeight: 600,
+                      color: '#FFFFFF', cursor: createSite.isPending ? 'not-allowed' : 'pointer',
+                      opacity: (!newSiteName.trim() || !newSiteCode.trim() || !newSiteCity.trim()) ? 0.5 : 1,
+                    }}
+                  >
+                    {createSite.isPending ? 'Aanmaken...' : 'Site aanmaken'}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
