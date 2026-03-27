@@ -10,6 +10,9 @@ import { trpc } from '@/lib/trpc/client'
 import { fadeInUp, containerStagger, scalePress } from '@/lib/motion'
 import { AnimatedCounter } from '@/components/domain/animated-counter'
 import { SlideOver } from '@/components/domain/slide-over'
+import { useToast } from '@/components/domain/toast'
+import { useDemoStore } from '@/hooks/use-demo'
+import { demoOrganization, demoSites, demoEmployees, demoProcesses } from '@/components/onboarding/demo-seed'
 
 // ── Hardcoded counts (wire to real data later) ──────────────────────────────
 const STAT_SITES = 2
@@ -164,7 +167,13 @@ const PLAN_FEATURES: Record<string, string[]> = {
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function OrgSettingsPage() {
-  const { data, isLoading, error } = trpc.org.getOrganization.useQuery()
+  const isDemo = useDemoStore((s) => s.isDemo)
+  const { showError } = useToast()
+
+  const { data: liveData, isLoading: liveLoading, error } = trpc.org.getOrganization.useQuery(
+    undefined,
+    { enabled: !isDemo },
+  )
   const utils = trpc.useUtils()
   const mutation = trpc.org.updateOrganization.useMutation({
     onSuccess: () => {
@@ -173,25 +182,43 @@ export default function OrgSettingsPage() {
     },
   })
 
+  // In demo mode use seed data; otherwise use live data
+  const data = isDemo
+    ? (demoOrganization as typeof liveData)
+    : liveData
+  const isLoading = isDemo ? false : liveLoading
+
   const [slideOpen, setSlideOpen] = useState(false)
   const [formName, setFormName] = useState('')
   const [formEmail, setFormEmail] = useState('')
 
   function openEdit() {
+    if (isDemo) {
+      showError('Dit is een demo — start je eigen omgeving om wijzigingen te maken')
+      return
+    }
     setFormName(data?.name ?? '')
     setFormEmail((data as Record<string, string> | undefined)?.billing_email ?? '')
     setSlideOpen(true)
   }
 
   function handleSave() {
+    if (isDemo) {
+      showError('Dit is een demo — start je eigen omgeving om wijzigingen te maken')
+      return
+    }
     mutation.mutate({ name: formName })
   }
 
+  const demoStatSites = isDemo ? demoSites.length : STAT_SITES
+  const demoStatEmployees = isDemo ? demoEmployees.length : STAT_EMPLOYEES
+  const demoStatProcesses = isDemo ? demoProcesses.length : STAT_PROCESSES
+
   const settings = data?.settings_json as Record<string, string> | undefined
-  const tier = data?.subscription_tier ?? 'trial'
+  const tier = isDemo ? 'professional' : (data?.subscription_tier ?? 'trial')
   const features: string[] = PLAN_FEATURES[tier] ?? ['Basic access']
 
-  if (error) {
+  if (error && !isDemo) {
     return (
       <div
         className="rounded-[var(--radius-md)] p-6 text-sm"
@@ -263,17 +290,17 @@ export default function OrgSettingsPage() {
             <MiniStatCard
               icon={<MapPin size={16} style={{ color: 'var(--primary)' }} />}
               label="Sites"
-              value={STAT_SITES}
+              value={demoStatSites}
             />
             <MiniStatCard
               icon={<Users size={16} style={{ color: 'var(--primary)' }} />}
               label="Employees"
-              value={STAT_EMPLOYEES}
+              value={demoStatEmployees}
             />
             <MiniStatCard
               icon={<GitBranch size={16} style={{ color: 'var(--primary)' }} />}
               label="Processes"
-              value={STAT_PROCESSES}
+              value={demoStatProcesses}
             />
           </motion.div>
         </motion.div>
