@@ -14,6 +14,7 @@ import { ExcelDropZone } from './excel-drop-zone'
 import { SmartIcon } from './smart-icon'
 import { DemandTypeWizard } from './demand-type-wizard'
 import type { ImportRow } from './excel-drop-zone'
+import { useDemoStore } from '@/hooks/use-demo'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -129,18 +130,21 @@ export function DemandGrid({ siteId, weekRange, onWeekRangeChange }: DemandGridP
   const [expandedTypeId, setExpandedTypeId] = useState<string | null>(null)
   const [lastSaved, setLastSaved] = useState(false)
   const [wizardOpen, setWizardOpen] = useState(false)
+  const isDemo = useDemoStore((s) => s.isDemo)
 
   const utils = trpc.useUtils()
 
   // ── Data fetching ──────────────────────────────────────────────────────
 
-  const { data: demandTypes = [] } = trpc.demand.listDemandTypes.useQuery({})
+  const { data: liveDemandTypes = [] } = trpc.demand.listDemandTypes.useQuery({}, { enabled: !isDemo })
+  const demandTypes = isDemo ? [] : liveDemandTypes
 
-  const { data: forecasts = [] } = trpc.demand.listForecasts.useQuery({
+  const { data: liveForecasts = [] } = trpc.demand.listForecasts.useQuery({
     site_id: siteId,
     period_start: weekRange.start,
     period_end: weekRange.end,
-  })
+  }, { enabled: !isDemo })
+  const forecasts = isDemo ? [] : liveForecasts
 
   const upsertForecast = trpc.demand.upsertForecast.useMutation({
     onSuccess: () => {
@@ -190,6 +194,7 @@ export function DemandGrid({ siteId, weekRange, onWeekRangeChange }: DemandGridP
 
   const handleCellChange = useCallback(
     (demandTypeId: string, monday: string, volume: number) => {
+      if (isDemo) return
       upsertForecast.mutate({
         site_id: siteId,
         demand_type_id: demandTypeId,
@@ -204,7 +209,7 @@ export function DemandGrid({ siteId, weekRange, onWeekRangeChange }: DemandGridP
 
   const handlePasteConfirm = useCallback(
     (cells: Array<{ demand_type_id: string; period_start: string; volume: number }>) => {
-      if (cells.length === 0) return
+      if (isDemo || cells.length === 0) return
       bulkUpsert.mutate({
         forecasts: cells.map((c) => ({
           site_id: siteId,
@@ -221,7 +226,7 @@ export function DemandGrid({ siteId, weekRange, onWeekRangeChange }: DemandGridP
 
   const handleExcelImport = useCallback(
     (rows: ImportRow[]) => {
-      if (rows.length === 0) return
+      if (isDemo || rows.length === 0) return
       bulkUpsert.mutate({
         forecasts: rows.map((r) => ({
           site_id: siteId,
@@ -238,6 +243,7 @@ export function DemandGrid({ siteId, weekRange, onWeekRangeChange }: DemandGridP
 
   const handleOverrideChange = useCallback(
     (forecastId: string, processId: string, volume: number | null) => {
+      if (isDemo) return
       upsertOverride.mutate({
         demand_forecast_id: forecastId,
         process_id: processId,

@@ -6,6 +6,8 @@ import { ArrowLeft, Edit2 } from 'lucide-react'
 import { useRouter, useParams } from 'next/navigation'
 import { trpc } from '@/lib/trpc/client'
 import { fadeInUp, containerStagger, bouncy, scalePress } from '@/lib/motion'
+import { useDemoStore } from '@/hooks/use-demo'
+import { demoEmployees } from '@/components/onboarding/demo-seed'
 import { Avatar } from '@/components/domain/avatar'
 import { ProficiencyDots } from '@/components/domain/proficiency-dots'
 import { SlideOver } from '@/components/domain/slide-over'
@@ -131,14 +133,19 @@ export default function EmployeeDetailPage() {
   const router = useRouter()
   const params = useParams()
   const employeeId = params.employeeId as string
+  const isDemo = useDemoStore((s) => s.isDemo)
   const [editOpen, setEditOpen]         = useState(false)
   const [addSkillOpen, setAddSkillOpen] = useState(false)
   const [absenceOpen, setAbsenceOpen]   = useState(false)
 
-  const { data: emp, isLoading, error } = trpc.workforce.getEmployee.useQuery(
+  const { data: liveEmp, isLoading: liveLoading, error } = trpc.workforce.getEmployee.useQuery(
     { id: employeeId },
-    { enabled: !!employeeId },
+    { enabled: !!employeeId && !isDemo },
   )
+  const emp = isDemo
+    ? (demoEmployees.find((e) => e.id === employeeId) ?? demoEmployees[0]) as typeof liveEmp
+    : liveEmp
+  const isLoading = isDemo ? false : liveLoading
 
   if (!employeeId) return null
 
@@ -161,7 +168,7 @@ export default function EmployeeDetailPage() {
     )
   }
 
-  if (error || !emp) {
+  if ((error || !emp) && !isDemo) {
     return (
       <div
         style={{
@@ -179,6 +186,8 @@ export default function EmployeeDetailPage() {
       </div>
     )
   }
+
+  if (!emp) return null
 
   const contractType = emp.contract_type as ContractType
   const status = emp.status as EmployeeStatus

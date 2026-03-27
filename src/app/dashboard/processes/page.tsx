@@ -6,6 +6,8 @@ import { Plus } from 'lucide-react'
 import { trpc } from '@/lib/trpc/client'
 import { useSiteStore } from '@/stores/site-store'
 import { fadeInUp, containerStagger, scalePress, bouncy } from '@/lib/motion'
+import { useDemoStore } from '@/hooks/use-demo'
+import { demoDepartments, demoProcesses } from '@/components/onboarding/demo-seed'
 import { DepartmentColumn } from '@/components/domain/department-column'
 import { DepartmentCreateForm } from '@/components/domain/department-create-form'
 import { ProcessWizard, type ProcessFormData } from '@/components/domain/process-wizard'
@@ -147,6 +149,8 @@ function AdaptiveGrid({
 
 export default function ProcessesPage() {
   const { activeSiteId } = useSiteStore()
+  const isDemo = useDemoStore((s) => s.isDemo)
+  const DEMO_MSG = 'Dit is een demo — start je eigen omgeving om wijzigingen te maken'
   const [showAddDept, setShowAddDept] = useState(false)
   const [wizardOpen, setWizardOpen] = useState(false)
   const [wizardDeptId, setWizardDeptId] = useState<string | null>(null)
@@ -156,22 +160,31 @@ export default function ProcessesPage() {
 
   // Queries
   const {
-    data: departments,
-    isLoading: deptsLoading,
+    data: liveDepts,
+    isLoading: depsLiveLoading,
     error: deptsError,
   } = trpc.org.listDepartments.useQuery(
     { site_id: activeSiteId! },
-    { enabled: !!activeSiteId },
+    { enabled: !!activeSiteId && !isDemo },
   )
 
   const {
-    data: processes,
-    isLoading: procsLoading,
+    data: liveProcs,
+    isLoading: procsLiveLoading,
     error: procsError,
   } = trpc.org.listProcesses.useQuery(
     { site_id: activeSiteId! },
-    { enabled: !!activeSiteId },
+    { enabled: !!activeSiteId && !isDemo },
   )
+
+  const departments = isDemo
+    ? (demoDepartments.filter((d) => d.site_id === activeSiteId) as typeof liveDepts)
+    : liveDepts
+  const processes = isDemo
+    ? (demoProcesses as unknown as typeof liveProcs)
+    : liveProcs
+  const deptsLoading = isDemo ? false : depsLiveLoading
+  const procsLoading = isDemo ? false : procsLiveLoading
 
   // Mutations
   const upsertProcess = trpc.org.upsertProcess.useMutation()
@@ -199,16 +212,19 @@ export default function ProcessesPage() {
 
   // Handlers
   const handleAddProcess = async (deptId: string, data: { name: string; unit_of_measure: string; norm_uph: number }) => {
+    if (isDemo) { toast.showError(DEMO_MSG); return }
     await upsertProcess.mutateAsync({ ...data, department_id: deptId })
     invalidateAll()
   }
 
   const handleEditProcess = async (id: string, data: { name: string; unit_of_measure: string; norm_uph: number }, deptId: string) => {
+    if (isDemo) { toast.showError(DEMO_MSG); return }
     await upsertProcess.mutateAsync({ id, ...data, department_id: deptId })
     invalidateAll()
   }
 
   const handleDeleteProcess = async (id: string) => {
+    if (isDemo) { toast.showError(DEMO_MSG); return }
     try {
       await deleteProcess.mutateAsync({ id })
       invalidateAll()
@@ -218,22 +234,26 @@ export default function ProcessesPage() {
   }
 
   const handleAddDepartment = async (data: { name: string; color: string }) => {
+    if (isDemo) { toast.showError(DEMO_MSG); return }
     await upsertDepartment.mutateAsync({ ...data, site_id: activeSiteId! })
     setShowAddDept(false)
     invalidateAll()
   }
 
   const handleRenameDepartment = async (id: string, name: string, color: string) => {
+    if (isDemo) { toast.showError(DEMO_MSG); return }
     await upsertDepartment.mutateAsync({ id, name, site_id: activeSiteId!, color })
     invalidateAll()
   }
 
   const handleChangeColor = async (id: string, name: string, color: string) => {
+    if (isDemo) { toast.showError(DEMO_MSG); return }
     await upsertDepartment.mutateAsync({ id, name, site_id: activeSiteId!, color })
     invalidateAll()
   }
 
   const handleDeleteDepartment = async (id: string) => {
+    if (isDemo) { toast.showError(DEMO_MSG); return }
     try {
       await deleteDepartment.mutateAsync({ id })
       invalidateAll()

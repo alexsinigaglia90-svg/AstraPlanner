@@ -13,6 +13,8 @@ import { Avatar } from '@/components/domain/avatar'
 import { AddEmployeeWizard } from '@/components/domain/add-employee-wizard'
 import { SlideOver } from '@/components/domain/slide-over'
 import { EditEmployeeForm } from '@/components/domain/edit-employee-form'
+import { useDemoStore } from '@/hooks/use-demo'
+import { demoEmployees, demoDepartments, demoRoles, demoProcesses } from '@/components/onboarding/demo-seed'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -359,6 +361,8 @@ function InteractionHint() {
 export default function EmployeesPage() {
   const router = useRouter()
   const { activeSiteId } = useSiteStore()
+  const isDemo = useDemoStore((s) => s.isDemo)
+  const DEMO_MSG = 'Dit is een demo — start je eigen omgeving om wijzigingen te maken'
 
   const [rawSearch, setRawSearch] = useState('')
   const [search, setSearch] = useState('')
@@ -372,38 +376,41 @@ export default function EmployeesPage() {
 
   const deptsQuery = trpc.org.listDepartments.useQuery(
     { site_id: activeSiteId! },
-    { enabled: !!activeSiteId },
+    { enabled: !!activeSiteId && !isDemo },
   )
   const rolesQuery = trpc.org.listRoles.useQuery(
     { site_id: activeSiteId! },
-    { enabled: !!activeSiteId },
+    { enabled: !!activeSiteId && !isDemo },
   )
 
   const processesQuery = trpc.org.listProcesses.useQuery(
     { site_id: activeSiteId! },
-    { enabled: !!activeSiteId },
+    { enabled: !!activeSiteId && !isDemo },
   )
   const skillsQuery = trpc.workforce.listSkillMatrix.useQuery(
     { site_id: activeSiteId! },
-    { enabled: !!activeSiteId },
+    { enabled: !!activeSiteId && !isDemo },
   )
 
   // Lookup maps for card display
+  const deptMapData = isDemo ? demoDepartments : (deptsQuery.data ?? [])
+  const roleMapData = isDemo ? demoRoles : (rolesQuery.data ?? [])
+  const procMapData = isDemo ? demoProcesses : (processesQuery.data ?? [])
   const deptMap = useMemo(() => {
     const m = new Map<string, string>()
-    for (const d of deptsQuery.data ?? []) m.set(d.id, d.name)
+    for (const d of deptMapData) m.set(d.id, d.name)
     return m
-  }, [deptsQuery.data])
+  }, [deptMapData])
   const roleMap = useMemo(() => {
     const m = new Map<string, string>()
-    for (const r of rolesQuery.data ?? []) m.set(r.id, r.name)
+    for (const r of roleMapData) m.set(r.id, r.name)
     return m
-  }, [rolesQuery.data])
+  }, [roleMapData])
   const procNameMap = useMemo(() => {
     const m = new Map<string, string>()
-    for (const p of processesQuery.data ?? []) m.set(p.id, p.name)
+    for (const p of procMapData) m.set(p.id, p.name)
     return m
-  }, [processesQuery.data])
+  }, [procMapData])
   // Map employee_id → list of process names
   const employeeSkillNames = useMemo(() => {
     const m = new Map<string, string[]>()
@@ -432,7 +439,7 @@ export default function EmployeesPage() {
     setAllEmployees([])
   }, [search, statusFilter, contractFilter, deptFilter, activeSiteId])
 
-  const { data, isLoading, error } = trpc.workforce.listEmployees.useQuery(
+  const { data: liveData, isLoading: liveLoading, error } = trpc.workforce.listEmployees.useQuery(
     {
       site_id: activeSiteId!,
       search: search || undefined,
@@ -442,8 +449,13 @@ export default function EmployeesPage() {
       limit: 50,
       cursor,
     },
-    { enabled: !!activeSiteId },
+    { enabled: !!activeSiteId && !isDemo },
   )
+  const demoEmpFiltered = isDemo
+    ? demoEmployees.filter((e) => e.home_site_id === activeSiteId)
+    : []
+  const data = isDemo ? { items: demoEmpFiltered, nextCursor: null } : liveData
+  const isLoading = isDemo ? false : liveLoading
 
   useEffect(() => {
     if (data?.items) {
@@ -561,7 +573,7 @@ export default function EmployeesPage() {
           <motion.button
             variants={scalePress}
             whileTap="press"
-            onClick={() => setAddOpen(true)}
+            onClick={() => { if (isDemo) { return } setAddOpen(true) }}
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -818,12 +830,12 @@ export default function EmployeesPage() {
       )}
 
       {/* Load more */}
-      {data?.next_cursor && (
+      {((data as { next_cursor?: string | null; nextCursor?: string | null } | undefined)?.next_cursor ?? (data as { next_cursor?: string | null; nextCursor?: string | null } | undefined)?.nextCursor) && (
         <motion.div variants={fadeInUp} style={{ display: 'flex', justifyContent: 'center' }}>
           <motion.button
             variants={scalePress}
             whileTap="press"
-            onClick={() => setCursor(data.next_cursor ?? undefined)}
+            onClick={() => setCursor((data as { next_cursor?: string | null } | undefined)?.next_cursor ?? undefined)}
             disabled={isLoading}
             style={{
               padding: '9px 24px',

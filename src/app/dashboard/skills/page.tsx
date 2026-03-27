@@ -6,6 +6,8 @@ import { Search, X, Plus } from 'lucide-react'
 import { trpc } from '@/lib/trpc/client'
 import { useSiteStore } from '@/stores/site-store'
 import { containerStagger, fadeInUp, bouncy, snappy, scalePress } from '@/lib/motion'
+import { useDemoStore } from '@/hooks/use-demo'
+import { demoEmployees, demoProcesses, demoDepartments } from '@/components/onboarding/demo-seed'
 import { Avatar } from '@/components/domain/avatar'
 import { AnimatedCounter } from '@/components/domain/animated-counter'
 import { getDeptColor } from '@/components/domain/process-card'
@@ -357,6 +359,8 @@ function SkeletonGrid() {
 
 export default function SkillMatrixPage() {
   const { activeSiteId } = useSiteStore()
+  const isDemo = useDemoStore((s) => s.isDemo)
+  const DEMO_MSG = 'Dit is een demo — start je eigen omgeving om wijzigingen te maken'
   const { showError, showSuccess } = useToast()
   const utils = trpc.useUtils()
   const containerRef = useRef<HTMLDivElement>(null)
@@ -370,19 +374,19 @@ export default function SkillMatrixPage() {
 
   const employees = trpc.workforce.listEmployees.useQuery(
     { site_id: activeSiteId!, limit: 200 },
-    { enabled: !!activeSiteId },
+    { enabled: !!activeSiteId && !isDemo },
   )
   const processes = trpc.org.listProcesses.useQuery(
     { site_id: activeSiteId! },
-    { enabled: !!activeSiteId },
+    { enabled: !!activeSiteId && !isDemo },
   )
   const skills = trpc.workforce.listSkillMatrix.useQuery(
     { site_id: activeSiteId! },
-    { enabled: !!activeSiteId },
+    { enabled: !!activeSiteId && !isDemo },
   )
   const departments = trpc.org.listDepartments.useQuery(
     { site_id: activeSiteId! },
-    { enabled: !!activeSiteId },
+    { enabled: !!activeSiteId && !isDemo },
   )
 
   // ── Mutations ──────────────────────────────────────────────────────────
@@ -392,24 +396,36 @@ export default function SkillMatrixPage() {
 
   // ── Derived data ───────────────────────────────────────────────────────
 
+  // Build demo skill matrix from embedded employee skills
+  const demoSkillEntries = isDemo
+    ? demoEmployees.flatMap((e) =>
+        e.skills.map((s) => ({ employee_id: e.id, process_id: s.process_id, proficiency_level: s.proficiency_level }))
+      )
+    : []
+
+  const empData = isDemo ? { items: demoEmployees.filter((e) => e.home_site_id === activeSiteId) as unknown as NonNullable<typeof employees.data>['items'] } : employees.data
+  const procData = isDemo ? (demoProcesses as unknown as typeof processes.data & NonNullable<typeof processes.data>) : (processes.data ?? [])
+  const skillData = isDemo ? demoSkillEntries : (skills.data ?? [])
+  const deptData = isDemo ? demoDepartments.filter((d) => d.site_id === activeSiteId) : (departments.data ?? [])
+
   const skillMap = useMemo(() => {
     const map = new Map<string, number>()
-    for (const s of skills.data ?? []) {
+    for (const s of skillData) {
       map.set(`${s.employee_id}:${s.process_id}`, s.proficiency_level)
     }
     return map
-  }, [skills.data])
+  }, [skillData])
 
   const deptMap = useMemo(() => {
     const map = new Map<string, { id: string; name: string; color: string }>()
-    for (const d of departments.data ?? []) {
+    for (const d of deptData) {
       map.set(d.id, d)
     }
     return map
-  }, [departments.data])
+  }, [deptData])
 
   const groupedProcesses = useMemo(() => {
-    const procs = processes.data ?? []
+    const procs = procData
     const groups = new Map<string, typeof procs>()
     for (const p of procs) {
       const list = groups.get(p.department_id) ?? []
@@ -421,7 +437,7 @@ export default function SkillMatrixPage() {
       const nb = deptMap.get(b[0])?.name ?? ''
       return na.localeCompare(nb)
     })
-  }, [processes.data, deptMap])
+  }, [procData, deptMap])
 
   const orderedProcesses = useMemo(
     () => groupedProcesses.flatMap(([, procs]) => procs),
@@ -429,7 +445,7 @@ export default function SkillMatrixPage() {
   )
 
   const filteredEmployees = useMemo(() => {
-    let list = employees.data?.items ?? []
+    let list = empData?.items ?? []
     if (activeDept) {
       list = list.filter((e: { department_id: string | null }) => e.department_id === activeDept)
     }
@@ -441,14 +457,14 @@ export default function SkillMatrixPage() {
       )
     }
     return list
-  }, [employees.data, activeDept, search])
+  }, [empData, activeDept, search])
 
   // ── Statistics ─────────────────────────────────────────────────────────
 
   const stats = useMemo(() => {
     const empList = filteredEmployees as { id: string }[]
     const procList = orderedProcesses
-    const totalSkills = skills.data?.length ?? 0
+    const totalSkills = skillData.length
     const totalCells = empList.length * procList.length
     const filledCells = empList.reduce((acc, emp) => {
       return acc + procList.filter((proc) => (skillMap.get(`${emp.id}:${proc.id}`) ?? 0) > 0).length
@@ -458,7 +474,7 @@ export default function SkillMatrixPage() {
       : 0
     const skillGaps = totalCells - filledCells
     return { totalSkills, avgCoverage, skillGaps }
-  }, [filteredEmployees, orderedProcesses, skillMap, skills.data])
+  }, [filteredEmployees, orderedProcesses, skillMap, skillData])
 
   // ── Coverage per employee ──────────────────────────────────────────────
 
@@ -646,7 +662,7 @@ export default function SkillMatrixPage() {
         >
           All
         </button>
-        {(departments.data ?? []).map((dept) => {
+        {deptData.map((dept) => {
           const active = activeDept === dept.id
           const dc = getDeptColor(dept.color)
           return (

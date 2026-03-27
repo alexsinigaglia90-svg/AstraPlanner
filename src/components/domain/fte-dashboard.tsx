@@ -5,6 +5,7 @@ import { motion } from 'framer-motion'
 import { trpc } from '@/lib/trpc/client'
 import { containerStagger, fadeInUp, bouncy } from '@/lib/motion'
 import { useToast } from '@/components/domain/toast'
+import { useDemoStore } from '@/hooks/use-demo'
 import { KpiHeroCard } from '@/components/domain/kpi-hero-card'
 import { CoverageHeatmap } from '@/components/domain/coverage-heatmap'
 import { GapDrilldown } from '@/components/domain/gap-drilldown'
@@ -46,6 +47,7 @@ function getWeekNumber(iso: string): number {
 
 export function FteDashboard({ siteId, weekRange }: FteDashboardProps) {
   const toast = useToast()
+  const isDemo = useDemoStore((s) => s.isDemo)
   const utils = trpc.useUtils()
 
   const [selectedCell, setSelectedCell] = useState<SelectedCell | null>(null)
@@ -56,7 +58,7 @@ export function FteDashboard({ siteId, weekRange }: FteDashboardProps) {
     site_id: siteId,
     period_start: weekRange.start,
     period_end: weekRange.end,
-  })
+  }, { enabled: !isDemo })
 
   const computeMutation = trpc.workload.compute.useMutation({
     onMutate: () => {
@@ -78,6 +80,7 @@ export function FteDashboard({ siteId, weekRange }: FteDashboardProps) {
   // ── Recompute ────────────────────────────────────────────────────────────
 
   const recompute = useCallback(() => {
+    if (isDemo) return
     computeMutation.mutate({
       site_id: siteId,
       plan_version_id: null,
