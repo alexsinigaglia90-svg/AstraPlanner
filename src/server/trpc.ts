@@ -62,6 +62,19 @@ export const protectedProcedure = t.procedure.use(async ({ ctx, next }) => {
   return next({ ctx: authed })
 })
 
+// Authenticated but no org required — for onboarding flows
+export const authenticatedProcedure = t.procedure.use(async ({ ctx, next }) => {
+  if (!ctx.user) {
+    throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Not authenticated' })
+  }
+  return next({
+    ctx: {
+      ...ctx,
+      user: ctx.user,
+    },
+  })
+})
+
 // Role-gated procedure factory
 export function roleProcedure(minRole: AppRole) {
   return protectedProcedure.use(async ({ ctx, next }) => {
