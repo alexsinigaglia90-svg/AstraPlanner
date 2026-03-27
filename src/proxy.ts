@@ -22,10 +22,23 @@ export async function proxy(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   const pathname = request.nextUrl.pathname
 
+  // Auth callback — always allow through (token exchange)
+  if (pathname.startsWith('/auth/callback')) {
+    return response
+  }
+
   // Auth pages — redirect to dashboard if already logged in
   if (pathname.startsWith('/login') || pathname.startsWith('/signup')) {
     if (user) {
       return NextResponse.redirect(new URL('/dashboard', request.url))
+    }
+    return response
+  }
+
+  // Reset password — must be authenticated (user clicked email link)
+  if (pathname.startsWith('/reset-password')) {
+    if (!user) {
+      return NextResponse.redirect(new URL('/login', request.url))
     }
     return response
   }

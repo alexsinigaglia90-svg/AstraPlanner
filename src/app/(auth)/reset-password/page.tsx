@@ -2,39 +2,50 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
 import { createClient } from '@/lib/supabase/client'
 import { bouncy, snappy } from '@/lib/motion'
 
-export default function LoginPage() {
+export default function ResetPasswordPage() {
   const router = useRouter()
-  const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [shaking, setShaking] = useState(false)
+  const [success, setSuccess] = useState(false)
   const [focusedField, setFocusedField] = useState<string | null>(null)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    setLoading(true)
     setError(null)
 
-    const supabase = createClient()
-    const { error: authError } = await supabase.auth.signInWithPassword({ email, password })
-
-    if (authError) {
-      setLoading(false)
-      setError(authError.message)
-      setShaking(true)
-      setTimeout(() => setShaking(false), 500)
+    if (password.length < 8) {
+      setError('Password must be at least 8 characters')
       return
     }
 
-    router.push('/dashboard')
-    router.refresh()
+    if (password !== confirmPassword) {
+      setError('Passwords do not match')
+      return
+    }
+
+    setLoading(true)
+
+    const supabase = createClient()
+    const { error: updateError } = await supabase.auth.updateUser({ password })
+
+    if (updateError) {
+      setLoading(false)
+      setError(updateError.message)
+      return
+    }
+
+    setSuccess(true)
+    setTimeout(() => {
+      router.push('/dashboard')
+      router.refresh()
+    }, 2000)
   }
 
   const inputClasses = (field: string) => ({
@@ -43,7 +54,7 @@ export default function LoginPage() {
       width: '100%',
       borderRadius: '16px',
       border: `2px solid ${focusedField === field ? 'rgba(99,102,241,0.5)' : 'rgba(99,102,241,0.08)'}`,
-      padding: field === 'password' ? '0 48px 0 18px' : '0 18px',
+      padding: '0 48px 0 18px',
       fontSize: '15px',
       fontFamily: 'var(--font-body)',
       color: '#1E1B4B',
@@ -57,10 +68,46 @@ export default function LoginPage() {
     } satisfies React.CSSProperties,
   })
 
+  if (success) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={bouncy}
+        className="relative text-center"
+        style={{
+          background: 'rgba(255, 255, 255, 0.85)',
+          backdropFilter: 'blur(20px)',
+          WebkitBackdropFilter: 'blur(20px)',
+          borderRadius: '20px',
+          border: '1px solid rgba(0, 0, 0, 0.06)',
+          padding: '48px 36px',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.04), 0 8px 30px rgba(0,0,0,0.04)',
+        }}
+      >
+        <motion.div
+          initial={{ scale: 0 }}
+          animate={{ scale: 1 }}
+          transition={{ ...bouncy, delay: 0.1 }}
+          className="mx-auto mb-4 flex items-center justify-center"
+          style={{ width: 56, height: 56, borderRadius: '16px', background: 'rgba(34,197,94,0.1)' }}
+        >
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#22C55E" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M20 6L9 17l-5-5" />
+          </svg>
+        </motion.div>
+        <h2 className="text-[22px] font-bold mb-2" style={{ fontFamily: 'var(--font-display)', color: '#1E1B4B' }}>
+          Password updated
+        </h2>
+        <p className="text-[14px]" style={{ color: 'rgba(100,116,139,0.7)', fontFamily: 'var(--font-body)' }}>
+          Redirecting to dashboard...
+        </p>
+      </motion.div>
+    )
+  }
+
   return (
     <motion.div
-      animate={shaking ? { x: [0, -10, 10, -10, 10, -5, 5, 0], rotate: [0, -0.5, 0.5, -0.5, 0.5, 0, 0, 0] } : { x: 0, rotate: 0 }}
-      transition={shaking ? { duration: 0.5, ease: 'easeInOut' } : {}}
       className="relative"
       style={{
         background: 'rgba(255, 255, 255, 0.85)',
@@ -72,14 +119,8 @@ export default function LoginPage() {
         boxShadow: '0 1px 3px rgba(0,0,0,0.04), 0 8px 30px rgba(0,0,0,0.04)',
       }}
     >
-      {/* Top highlight line */}
       <div className="absolute top-0 left-8 right-8 h-[1px]"
         style={{ background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.9) 30%, rgba(255,255,255,0.9) 70%, transparent)' }}
-      />
-
-      {/* Decorative corner accent */}
-      <div className="absolute -top-20 -right-20 w-40 h-40 rounded-full opacity-30"
-        style={{ background: 'radial-gradient(circle, rgba(99,102,241,0.15), transparent 70%)' }}
       />
 
       <motion.h2
@@ -89,7 +130,7 @@ export default function LoginPage() {
         className="text-[26px] font-black mb-1"
         style={{ fontFamily: 'var(--font-display)', color: '#1E1B4B' }}
       >
-        Welcome back
+        Set new password
       </motion.h2>
       <motion.p
         initial={{ opacity: 0, y: 10 }}
@@ -98,50 +139,28 @@ export default function LoginPage() {
         className="text-[14px] mb-8"
         style={{ color: 'rgba(100, 116, 139, 0.7)', fontFamily: 'var(--font-body)' }}
       >
-        Sign in to continue to your workspace
+        Choose a strong password for your account
       </motion.p>
 
       <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-5">
-        {/* Email */}
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.35, ...bouncy }}
           className="flex flex-col gap-2"
         >
-          <label htmlFor="email" className="text-[12px] font-bold uppercase tracking-[0.1em]"
-            style={{ color: 'rgba(79, 70, 229, 0.6)', fontFamily: 'var(--font-body)' }}
-          >
-            Email address
-          </label>
-          <input
-            id="email" type="email" autoComplete="email" required
-            value={email} onChange={(e) => setEmail(e.target.value)}
-            onFocus={() => setFocusedField('email')} onBlur={() => setFocusedField(null)}
-            disabled={loading} placeholder="you@company.com"
-            {...inputClasses('email')}
-          />
-        </motion.div>
-
-        {/* Password */}
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4, ...bouncy }}
-          className="flex flex-col gap-2"
-        >
           <label htmlFor="password" className="text-[12px] font-bold uppercase tracking-[0.1em]"
             style={{ color: 'rgba(79, 70, 229, 0.6)', fontFamily: 'var(--font-body)' }}
           >
-            Password
+            New password
           </label>
           <div className="relative">
             <input
               id="password" type={showPassword ? 'text' : 'password'}
-              autoComplete="current-password" required
+              autoComplete="new-password" required minLength={8}
               value={password} onChange={(e) => setPassword(e.target.value)}
               onFocus={() => setFocusedField('password')} onBlur={() => setFocusedField(null)}
-              disabled={loading} placeholder="••••••••"
+              disabled={loading} placeholder="At least 8 characters"
               {...inputClasses('password')}
             />
             <button
@@ -161,24 +180,29 @@ export default function LoginPage() {
           </div>
         </motion.div>
 
-        {/* Forgot password */}
         <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.42 }}
-          className="flex justify-end -mt-2"
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.4, ...bouncy }}
+          className="flex flex-col gap-2"
         >
-          <Link href="/forgot-password"
-            className="text-[12px] font-semibold transition-colors duration-200"
-            style={{ color: 'rgba(99,102,241,0.6)', textDecoration: 'none', fontFamily: 'var(--font-body)' }}
-            onMouseEnter={(e) => { e.currentTarget.style.color = '#6366F1' }}
-            onMouseLeave={(e) => { e.currentTarget.style.color = 'rgba(99,102,241,0.6)' }}
+          <label htmlFor="confirm-password" className="text-[12px] font-bold uppercase tracking-[0.1em]"
+            style={{ color: 'rgba(79, 70, 229, 0.6)', fontFamily: 'var(--font-body)' }}
           >
-            Forgot password?
-          </Link>
+            Confirm password
+          </label>
+          <div className="relative">
+            <input
+              id="confirm-password" type={showPassword ? 'text' : 'password'}
+              autoComplete="new-password" required
+              value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)}
+              onFocus={() => setFocusedField('confirm')} onBlur={() => setFocusedField(null)}
+              disabled={loading} placeholder="Repeat your password"
+              {...inputClasses('confirm')}
+            />
+          </div>
         </motion.div>
 
-        {/* Submit */}
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
@@ -201,11 +225,7 @@ export default function LoginPage() {
               cursor: loading ? 'not-allowed' : 'pointer',
               color: 'white',
               background: 'linear-gradient(135deg, #6366F1 0%, #8B5CF6 50%, #A855F7 100%)',
-              boxShadow: `
-                0 4px 14px rgba(99, 102, 241, 0.35),
-                0 1px 3px rgba(99, 102, 241, 0.2),
-                inset 0 1px 0 rgba(255,255,255,0.15)
-              `,
+              boxShadow: '0 4px 14px rgba(99,102,241,0.35), 0 1px 3px rgba(99,102,241,0.2), inset 0 1px 0 rgba(255,255,255,0.15)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -213,7 +233,6 @@ export default function LoginPage() {
               letterSpacing: '0.01em',
             }}
           >
-            {/* Animated gradient shimmer */}
             <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-700"
               style={{
                 background: 'linear-gradient(105deg, transparent 35%, rgba(255,255,255,0.2) 42%, rgba(255,255,255,0.25) 48%, rgba(255,255,255,0.2) 54%, transparent 65%)',
@@ -228,9 +247,9 @@ export default function LoginPage() {
               </svg>
             ) : (
               <>
-                Sign in
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="transition-transform duration-200 group-hover:translate-x-0.5">
-                  <path d="M5 12h14" /><path d="m12 5 7 7-7 7" />
+                Update password
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M20 6L9 17l-5-5" />
                 </svg>
               </>
             )}
@@ -238,7 +257,6 @@ export default function LoginPage() {
         </motion.div>
       </form>
 
-      {/* Error */}
       <AnimatePresence>
         {error && (
           <motion.div
@@ -265,46 +283,6 @@ export default function LoginPage() {
           </motion.div>
         )}
       </AnimatePresence>
-
-      {/* Divider */}
-      <div className="flex items-center gap-4 my-7">
-        <div className="flex-1 h-[1px]" style={{ background: 'rgba(99,102,241,0.08)' }} />
-        <span className="text-[11px] font-medium uppercase tracking-wider" style={{ color: 'rgba(100, 116, 139, 0.35)', fontFamily: 'var(--font-body)' }}>
-          new here?
-        </span>
-        <div className="flex-1 h-[1px]" style={{ background: 'rgba(99,102,241,0.08)' }} />
-      </div>
-
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.55 }}
-        className="text-center"
-      >
-        <Link href="/signup"
-          className="inline-flex items-center gap-2 text-[14px] font-semibold transition-all duration-200 px-5 py-2.5 rounded-xl"
-          style={{
-            color: '#6366F1',
-            textDecoration: 'none',
-            fontFamily: 'var(--font-body)',
-            background: 'rgba(99,102,241,0.04)',
-            border: '1px solid rgba(99,102,241,0.08)',
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = 'rgba(99,102,241,0.08)'
-            e.currentTarget.style.borderColor = 'rgba(99,102,241,0.15)'
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = 'rgba(99,102,241,0.04)'
-            e.currentTarget.style.borderColor = 'rgba(99,102,241,0.08)'
-          }}
-        >
-          Create a free account
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M5 12h14" /><path d="m12 5 7 7-7 7" />
-          </svg>
-        </Link>
-      </motion.div>
 
       <style>{`
         @keyframes btnShimmer {
