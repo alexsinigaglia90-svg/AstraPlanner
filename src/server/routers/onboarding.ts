@@ -146,12 +146,14 @@ export const onboardingRouter = router({
     const admin = createAdminClient()
 
     // Find organization with matching domain
-    const { data: org } = await admin
+    // Use containment operator @> for JSONB (more reliable than ->> arrow syntax)
+    const { data: orgs } = await admin
       .from('organization')
       .select('id, name')
-      .eq('settings_json->>domain', domain)
-      .single()
+      .contains('settings_json', { domain })
+      .limit(1)
 
+    const org = orgs?.[0]
     if (!org) return { match: false } as const
 
     // Get site count
