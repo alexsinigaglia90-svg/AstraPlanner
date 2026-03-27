@@ -913,8 +913,15 @@ export const orgRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       const admin = createAdminClient()
-      const baseCode = input.name.toUpperCase().replace(/[^A-Z0-9\s]/g, '').replace(/\s+/g, '_').substring(0, 16)
-      const code = input.id ? baseCode : `${baseCode}_${Date.now().toString(36).slice(-4)}`.substring(0, 20)
+      let code: string
+      if (input.id) {
+        // Edit: keep existing code to avoid unique constraint violation
+        const { data: existing } = await admin.from('job_role').select('code').eq('id', input.id).single()
+        code = existing?.code ?? input.name.toUpperCase().replace(/[^A-Z0-9\s]/g, '').replace(/\s+/g, '_').substring(0, 16)
+      } else {
+        const baseCode = input.name.toUpperCase().replace(/[^A-Z0-9\s]/g, '').replace(/\s+/g, '_').substring(0, 16)
+        code = `${baseCode}_${Date.now().toString(36).slice(-4)}`.substring(0, 20)
+      }
       const row = {
         ...(input.id ? { id: input.id } : {}),
         name: input.name,
