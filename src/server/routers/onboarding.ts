@@ -35,14 +35,16 @@ export const onboardingRouter = router({
       const slug = `${baseSlug}-${Date.now().toString(36)}`
       const billingEmail = ctx.user.email ?? ''
 
-      // Create organization record (sector stored in settings_json since no column exists)
+      // Create organization record (sector + domain stored in settings_json since no column exists)
+      const domain = ctx.user.email?.split('@')[1] ?? ''
+
       const { data: org, error: orgError } = await admin
         .from('organization')
         .insert({
           name: input.name,
           slug,
           billing_email: billingEmail,
-          settings_json: { sector: input.sector },
+          settings_json: { sector: input.sector, domain },
         })
         .select('id')
         .single()
@@ -124,5 +126,146 @@ export const onboardingRouter = router({
     }
 
     return { mode: null }
+  }),
+
+  checkDomainMatch: authenticatedProcedure.query(async ({ ctx }) => {
+    // If user already has an org, no match needed
+    if (ctx.organizationId) {
+      return { match: false } as const
+    }
+
+    const domain = ctx.user.email?.split('@')[1] ?? ''
+    if (!domain) return { match: false } as const
+
+    // Skip public/free email domains
+    const freeEmailDomains = (await import('free-email-domains')).default
+    if ((freeEmailDomains as string[]).includes(domain)) {
+      return { match: false } as const
+    }
+
+    const admin = createAdminClient()
+
+    // Find organization with matching domain
+    const { data: org } = await admin
+      .from('organization')
+      .select('id, name')
+      .eq('settings_json->>domain', domain)
+      .single()
+
+    if (!org) return { match: false } as const
+
+    // Get site count
+    const { count: siteCount } = await admin
+      .from('site')
+      .select('id', { count: 'exact', head: true })
+      .eq('organization_id', org.id)
+
+    return {
+      match: true,
+      organization: {
+        id: org.id,
+        name: org.name,
+        siteCount: siteCount ?? 0,
+      },
+    } as const
+  }),
+
+  requestJoin: authenticatedProcedure
+    .input(z.object({ organization_id: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      // Guard: user must not already have an org
+      if (ctx.organizationId) {
+        throw new TRPCError({
+          code: 'CONFLICT',
+          message: 'User already belongs to an organization',
+        })
+      }
+
+      const admin = createAdminClient()
+
+      // Guard: no existing pending request for this user+org combo
+      const { data: existing } = await admin
+        .from('join_request')
+        .select('id')
+        .eq('user_id', ctx.user.id)
+        .eq('organization_id', input.organization_id)
+        .eq('status', 'pending')
+        .maybeSingle()
+
+      if (existing) {
+        throw new TRPCError({
+          code: 'CONFLICT',
+          message: 'A pending join request already exists for this organization',
+        })
+      }
+
+      const fullName = (ctx.user.user_metadata?.full_name as string | undefined) ?? ctx.user.email ?? 'Unknown'
+
+      // Insert join request
+      const { data: request, error: requestError } = await admin
+        .from('join_request')
+        .insert({
+          user_id: ctx.user.id,
+          organization_id: input.organization_id,
+          email: ctx.user.email,
+          full_name: fullName,
+          status: 'pending',
+        })
+        .select('id')
+        .single()
+
+      if (requestError || !request) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: requestError?.message ?? 'Failed to create join request',
+        })
+      }
+
+      // Fetch org name for notification title
+      const { data: org } = await admin
+        .from('organization')
+        .select('name')
+        .eq('id', input.organization_id)
+        .single()
+
+      const orgName = org?.name ?? 'organisatie'
+
+      // Insert notification for org admins
+      await admin.from('notification').insert({
+        organization_id: input.organization_id,
+        type: 'join_request',
+        title: `${fullName} wil lid worden van ${orgName}`,
+        body: `${ctx.user.email} heeft een verzoek ingediend om lid te worden.`,
+        link: '/dashboard/settings/team',
+        is_read: false,
+      })
+
+      return { requestId: request.id }
+    }),
+
+  getJoinStatus: authenticatedProcedure.query(async ({ ctx }) => {
+    const admin = createAdminClient()
+
+    const { data: request } = await admin
+      .from('join_request')
+      .select('status, organization_id')
+      .eq('user_id', ctx.user.id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (!request) return { status: null }
+
+    // Get org name
+    const { data: org } = await admin
+      .from('organization')
+      .select('name')
+      .eq('id', request.organization_id)
+      .single()
+
+    return {
+      status: request.status as string,
+      organizationName: org?.name ?? null,
+    }
   }),
 })

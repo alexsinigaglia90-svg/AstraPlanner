@@ -7,6 +7,7 @@ import {
   managerProcedure,
   viewerProcedure,
 } from '../trpc'
+import { createAdminClient } from '@/lib/supabase/admin'
 
 const roleEnum = z.enum([
   'tenant_admin', 'site_manager', 'planner', 'supervisor', 'employee', 'viewer',
@@ -282,5 +283,106 @@ export const adminRouter = router({
       }
 
       return { updated: count ?? input.notification_ids.length }
+    }),
+
+  listJoinRequests: adminProcedure.query(async ({ ctx }) => {
+    const admin = createAdminClient()
+
+    const { data, error } = await admin
+      .from('join_request')
+      .select('id, user_id, email, full_name, status, created_at')
+      .eq('organization_id', ctx.organizationId)
+      .order('created_at', { ascending: false })
+
+    if (error) {
+      throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: error.message })
+    }
+
+    return {
+      requests: (data ?? []) as Array<{
+        id: string
+        user_id: string
+        email: string | null
+        full_name: string | null
+        status: string
+        created_at: string
+      }>,
+    }
+  }),
+
+  resolveJoinRequest: adminProcedure
+    .input(
+      z.object({
+        request_id: z.string().uuid(),
+        action: z.enum(['approve', 'reject']),
+        role: z.string().optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const admin = createAdminClient()
+
+      // Get the request and verify it belongs to this organization
+      const { data: request, error: fetchError } = await admin
+        .from('join_request')
+        .select('id, user_id, organization_id, status')
+        .eq('id', input.request_id)
+        .single()
+
+      if (fetchError || !request) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Join request not found' })
+      }
+
+      if (request.organization_id !== ctx.organizationId) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Join request does not belong to your organization' })
+      }
+
+      if (input.action === 'approve') {
+        const assignedRole = input.role ?? 'employee'
+
+        // Update user app_metadata
+        const { error: metaError } = await admin.auth.admin.updateUserById(request.user_id, {
+          app_metadata: {
+            organization_id: ctx.organizationId,
+            role: assignedRole,
+            site_ids: [],
+            mode: null,
+          },
+        })
+
+        if (metaError) {
+          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: metaError.message })
+        }
+
+        // Update join request record
+        const { error: updateError } = await admin
+          .from('join_request')
+          .update({
+            status: 'approved',
+            assigned_role: assignedRole,
+            decided_by: ctx.user.id,
+            decided_at: new Date().toISOString(),
+          })
+          .eq('id', input.request_id)
+
+        if (updateError) {
+          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: updateError.message })
+        }
+      } else {
+        // Reject
+        const { error: updateError } = await admin
+          .from('join_request')
+          .update({
+            status: 'rejected',
+            decided_by: ctx.user.id,
+            decided_at: new Date().toISOString(),
+          })
+          .eq('id', input.request_id)
+
+        if (updateError) {
+          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: updateError.message })
+        }
+      }
+
+      return { success: true }
     }),
 })
