@@ -6,6 +6,8 @@ import { ArrowLeft, Pencil, Check, X, MapPin, Clock, Users, Building } from 'luc
 import Link from 'next/link'
 import { trpc } from '@/lib/trpc/client'
 import { fadeInUp, containerStagger, scalePress } from '@/lib/motion'
+import { useDemoGuard } from '@/hooks/use-demo-query'
+import { demoSites, demoDepartments } from '@/components/onboarding/demo-seed'
 
 function SkeletonLine({ width = '60%' }: { width?: string }) {
   return (
@@ -22,9 +24,20 @@ interface PageProps {
 
 export default function SiteDetailPage({ params }: PageProps) {
   const { siteId } = use(params)
+  const { isDemo, guardMutation } = useDemoGuard()
 
-  const { data: site, isLoading, error } = trpc.org.getSite.useQuery({ id: siteId })
-  const { data: departments, isLoading: deptLoading } = trpc.org.listDepartments.useQuery({ site_id: siteId })
+  const { data: liveSite, isLoading: liveLoading, error } = trpc.org.getSite.useQuery(
+    { id: siteId },
+    { enabled: !isDemo },
+  )
+  const { data: liveDepts, isLoading: deptLiveLoading } = trpc.org.listDepartments.useQuery(
+    { site_id: siteId },
+    { enabled: !isDemo },
+  )
+  const site = isDemo ? (demoSites.find((s) => s.id === siteId) ?? demoSites[0]) as typeof liveSite : liveSite
+  const departments = isDemo ? demoDepartments.filter((d) => d.site_id === siteId) as typeof liveDepts : liveDepts
+  const isLoading = isDemo ? false : liveLoading
+  const deptLoading = isDemo ? false : deptLiveLoading
   const utils = trpc.useUtils()
 
   const mutation = trpc.org.updateSiteSettings.useMutation({
@@ -45,6 +58,7 @@ export default function SiteDetailPage({ params }: PageProps) {
   })
 
   function handleEdit() {
+    if (isDemo) return
     setForm({
       name: site?.name ?? '',
       timezone: site?.timezone ?? '',
@@ -57,6 +71,7 @@ export default function SiteDetailPage({ params }: PageProps) {
   }
 
   function handleSave() {
+    if (isDemo) return
     mutation.mutate({
       site_id: siteId,
       name: form.name || undefined,
@@ -70,7 +85,7 @@ export default function SiteDetailPage({ params }: PageProps) {
     })
   }
 
-  if (error) {
+  if (error && !isDemo) {
     return (
       <div
         className="rounded-[var(--radius-md)] p-6 text-sm"

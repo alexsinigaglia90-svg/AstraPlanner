@@ -15,6 +15,8 @@ import { bouncy, snappy, fadeInUp, containerStagger, scalePress } from '@/lib/mo
 import { getDeptColor } from '@/components/domain/process-card'
 import { SmartIcon } from '@/components/domain/smart-icon'
 import { sortByFlow } from '@/lib/warehouse-icons'
+import { useDemoStore } from '@/hooks/use-demo'
+import { demoRoles, demoDepartments } from '@/components/onboarding/demo-seed'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -1195,14 +1197,16 @@ function RolesAdaptiveGrid({
 
 export default function RolesSettingsPage() {
   const { activeSiteId: siteId } = useSiteStore()
+  const isDemo = useDemoStore((s) => s.isDemo)
+  const DEMO_MSG = 'Dit is een demo — start je eigen omgeving om wijzigingen te maken'
 
   const deptsQuery = trpc.org.listDepartments.useQuery(
     { site_id: siteId! },
-    { enabled: !!siteId },
+    { enabled: !!siteId && !isDemo },
   )
   const rolesQuery = trpc.org.listRoles.useQuery(
     { site_id: siteId! },
-    { enabled: !!siteId },
+    { enabled: !!siteId && !isDemo },
   )
   const deleteMut = trpc.org.deleteRole.useMutation()
   const utils = trpc.useUtils()
@@ -1212,8 +1216,10 @@ export default function RolesSettingsPage() {
   const [wizardDeptId, setWizardDeptId] = useState<string | undefined>(undefined)
   const [editValues, setEditValues] = useState<(RoleFormState & { id: string }) | undefined>(undefined)
 
-  const roles = rolesQuery.data ?? []
-  const departments = (deptsQuery.data ?? []) as DeptData[]
+  const roles = isDemo ? (demoRoles as unknown as typeof rolesQuery.data & unknown[]) : (rolesQuery.data ?? [])
+  const departments = isDemo
+    ? (demoDepartments.filter((d) => d.site_id === siteId) as unknown as DeptData[])
+    : ((deptsQuery.data ?? []) as DeptData[])
 
   // Group roles by department
   const rolesByDept = useMemo(() => {
@@ -1226,16 +1232,18 @@ export default function RolesSettingsPage() {
     return map
   }, [roles])
 
-  const isLoading = deptsQuery.isLoading || rolesQuery.isLoading
-  const error = deptsQuery.error || rolesQuery.error
+  const isLoading = isDemo ? false : (deptsQuery.isLoading || rolesQuery.isLoading)
+  const error = isDemo ? null : (deptsQuery.error || rolesQuery.error)
 
   const handleAddRole = useCallback((deptId: string) => {
+    if (isDemo) { toast.showError(DEMO_MSG); return }
     setEditValues(undefined)
     setWizardDeptId(deptId)
     setWizardOpen(true)
-  }, [])
+  }, [isDemo, toast])
 
   const handleEditRole = useCallback((role: RoleData) => {
+    if (isDemo) { toast.showError(DEMO_MSG); return }
     setEditValues({
       id: role.id,
       name: role.name,
@@ -1255,6 +1263,7 @@ export default function RolesSettingsPage() {
   }, [])
 
   const handleDeleteRole = useCallback(async (roleId: string) => {
+    if (isDemo) { toast.showError(DEMO_MSG); return }
     try {
       await deleteMut.mutateAsync({ id: roleId })
       await utils.org.listRoles.invalidate()

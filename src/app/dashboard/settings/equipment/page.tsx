@@ -8,6 +8,8 @@ import { trpc } from '@/lib/trpc/client'
 import { useSiteStore } from '@/stores/site-store'
 import { useToast } from '@/components/domain/toast'
 import { bouncy, snappy, fadeInUp, containerStagger, scalePress } from '@/lib/motion'
+import { useDemoStore } from '@/hooks/use-demo'
+import { demoEquipment } from '@/components/onboarding/demo-seed'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -190,13 +192,15 @@ function EquipmentCard({
 
 export default function EquipmentSettingsPage() {
   const { activeSiteId: siteId } = useSiteStore()
+  const isDemo = useDemoStore((s) => s.isDemo)
+  const DEMO_MSG = 'Dit is een demo — start je eigen omgeving om wijzigingen te maken'
   const toast = useToast()
   const [modalOpen, setModalOpen] = useState(false)
   const [formState, setFormState] = useState<EquipmentFormState>(defaultForm())
 
   const equipmentQuery = trpc.org.listEquipment.useQuery(
     { site_id: siteId! },
-    { enabled: !!siteId },
+    { enabled: !!siteId && !isDemo },
   )
 
   const upsertMut = trpc.org.upsertEquipment.useMutation()
@@ -209,6 +213,7 @@ export default function EquipmentSettingsPage() {
 
   const handleSave = useCallback(async () => {
     if (!siteId || !formState.name.trim()) return
+    if (isDemo) { toast.showError(DEMO_MSG); return }
     try {
       await upsertMut.mutateAsync({
         ...(formState.id ? { id: formState.id } : {}),
@@ -228,6 +233,7 @@ export default function EquipmentSettingsPage() {
   }, [siteId, formState, upsertMut, invalidate, toast])
 
   const handleDelete = useCallback(async (id: string) => {
+    if (isDemo) { toast.showError(DEMO_MSG); return }
     try {
       await deleteMut.mutateAsync({ id })
       invalidate()
@@ -249,6 +255,7 @@ export default function EquipmentSettingsPage() {
   }
 
   const openAdd = () => {
+    if (isDemo) { toast.showError(DEMO_MSG); return }
     setFormState(defaultForm())
     setModalOpen(true)
   }
@@ -273,7 +280,10 @@ export default function EquipmentSettingsPage() {
     )
   }
 
-  const equipment = equipmentQuery.data ?? []
+  const demoEquipData = isDemo
+    ? demoEquipment.filter((e) => e.site_id === siteId).map((e) => ({ ...e, category: 'mhe', description: null }))
+    : []
+  const equipment = isDemo ? demoEquipData : (equipmentQuery.data ?? [])
 
   // ── Render ───────────────────────────────────────────────────────────────
 

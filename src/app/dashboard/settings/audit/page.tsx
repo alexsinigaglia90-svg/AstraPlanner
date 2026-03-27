@@ -5,12 +5,17 @@ import { motion } from 'framer-motion'
 import { FileText, ChevronDown, ChevronRight } from 'lucide-react'
 import { trpc } from '@/lib/trpc/client'
 import { fadeInUp, containerStagger } from '@/lib/motion'
+import { useDemoStore } from '@/hooks/use-demo'
 
 export default function AuditLogPage() {
+  const isDemo = useDemoStore((s) => s.isDemo)
   const [expandedId, setExpandedId] = useState<string | null>(null)
-  const { data, isLoading, error } = trpc.admin.getAuditLog.useQuery({
-    limit: 50,
-  })
+  const { data: liveData, isLoading: liveLoading, error } = trpc.admin.getAuditLog.useQuery(
+    { limit: 50 },
+    { enabled: !isDemo },
+  )
+  const data = isDemo ? { items: [] } : liveData
+  const isLoading = isDemo ? false : liveLoading
 
   return (
     <motion.div
@@ -37,7 +42,7 @@ export default function AuditLogPage() {
         </div>
       </motion.div>
 
-      {error && (
+      {error && !isDemo && (
         <div style={{
           padding: '16px', borderRadius: 'var(--radius-md)',
           backgroundColor: 'var(--card)', border: '1px solid var(--destructive)',

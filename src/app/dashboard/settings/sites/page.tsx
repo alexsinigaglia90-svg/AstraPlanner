@@ -10,6 +10,8 @@ import { useRouter } from 'next/navigation'
 import { trpc } from '@/lib/trpc/client'
 import { fadeInUp, containerStagger, scalePress, bouncy } from '@/lib/motion'
 import { AnimatedCounter } from '@/components/domain/animated-counter'
+import { useDemoStore } from '@/hooks/use-demo'
+import { demoSites } from '@/components/onboarding/demo-seed'
 
 // ── Placeholder site stats (wire later) ──────────────────────────────────────
 const SITE_STATS: Record<string, { employees: number; processes: number; departments: number }> = {}
@@ -386,7 +388,13 @@ type ViewMode = 'grid' | 'list'
 
 export default function SiteListPage() {
   const router = useRouter()
-  const { data: sites, isLoading, error } = trpc.org.listSites.useQuery()
+  const isDemo = useDemoStore((s) => s.isDemo)
+  const { data: liveSites, isLoading: liveLoading, error } = trpc.org.listSites.useQuery(
+    undefined,
+    { enabled: !isDemo },
+  )
+  const sites = isDemo ? (demoSites as typeof liveSites) : liveSites
+  const isLoading = isDemo ? false : liveLoading
   const [view, setView] = useState<ViewMode>('grid')
   const [search, setSearch] = useState('')
 
@@ -395,7 +403,7 @@ export default function SiteListPage() {
     s.code.toLowerCase().includes(search.toLowerCase())
   )
 
-  if (error) {
+  if (error && !isDemo) {
     return (
       <div
         style={{

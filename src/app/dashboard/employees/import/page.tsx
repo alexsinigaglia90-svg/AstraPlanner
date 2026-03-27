@@ -7,6 +7,8 @@ import { Download, Upload, FileSpreadsheet, Check, AlertCircle, X } from 'lucide
 import { bouncy, snappy, wobbly, gentle, scalePress } from '@/lib/motion'
 import { trpc } from '@/lib/trpc/client'
 import { useSiteStore } from '@/stores/site-store'
+import { useDemoStore } from '@/hooks/use-demo'
+import { demoShifts, demoEmployees, demoProcesses } from '@/components/onboarding/demo-seed'
 import { matchShift, matchCrew } from '@/lib/shift-matcher'
 import * as XLSX from 'xlsx'
 
@@ -231,24 +233,25 @@ function validateSkillsData(
 export default function EmployeeImportPage() {
   const router = useRouter()
   const { activeSiteId } = useSiteStore()
+  const isDemo = useDemoStore((s) => s.isDemo)
   const utils = trpc.useUtils()
   const bulkImport = trpc.workforce.bulkImportEmployees.useMutation()
   const bulkImportSkills = trpc.workforce.bulkImportSkills.useMutation()
   const shiftsQuery = trpc.org.listShifts.useQuery(
     { site_id: activeSiteId! },
-    { enabled: !!activeSiteId },
+    { enabled: !!activeSiteId && !isDemo },
   )
   const crewsQuery = trpc.org.listCrews.useQuery(
     { site_id: activeSiteId! },
-    { enabled: !!activeSiteId },
+    { enabled: !!activeSiteId && !isDemo },
   )
   const processesQuery = trpc.org.listProcesses.useQuery(
     { site_id: activeSiteId! },
-    { enabled: !!activeSiteId },
+    { enabled: !!activeSiteId && !isDemo },
   )
   const employeesQuery = trpc.workforce.listEmployees.useQuery(
     { site_id: activeSiteId!, limit: 1000 },
-    { enabled: !!activeSiteId },
+    { enabled: !!activeSiteId && !isDemo },
   )
 
   // ── Combined import state ──────────────────────────────────────────────────
@@ -360,6 +363,7 @@ export default function EmployeeImportPage() {
 
   // ── Combined import ────────────────────────────────────────────────────────
   const handleImport = async () => {
+    if (isDemo) { window.alert('Dit is een demo — start je eigen omgeving om wijzigingen te maken'); return }
     if (!validation || !activeSiteId) return
     setState('importing')
     setImportError(null)

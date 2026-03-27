@@ -9,6 +9,8 @@ import { useSiteStore } from '@/stores/site-store'
 import { bouncy, fadeInUp, containerStagger, scalePress } from '@/lib/motion'
 import { getDeptColor, DEPT_COLORS } from '@/components/domain/process-card'
 import { useToast } from '@/components/domain/toast'
+import { useDemoStore } from '@/hooks/use-demo'
+import { demoShifts } from '@/components/onboarding/demo-seed'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -807,13 +809,16 @@ function CrewModal({
 
 export default function ShiftsSettingsPage() {
   const { activeSiteId } = useSiteStore()
+  const isDemo = useDemoStore((s) => s.isDemo)
   const utils = trpc.useUtils()
   const toast = useToast()
 
+  const DEMO_MSG = 'Dit is een demo — start je eigen omgeving om wijzigingen te maken'
+
   // Queries
-  const shifts = trpc.org.listShifts.useQuery({ site_id: activeSiteId! }, { enabled: !!activeSiteId })
-  const crews = trpc.org.listCrews.useQuery({ site_id: activeSiteId! }, { enabled: !!activeSiteId })
-  const rotation = trpc.org.getRotation.useQuery({ site_id: activeSiteId! }, { enabled: !!activeSiteId })
+  const shifts = trpc.org.listShifts.useQuery({ site_id: activeSiteId! }, { enabled: !!activeSiteId && !isDemo })
+  const crews = trpc.org.listCrews.useQuery({ site_id: activeSiteId! }, { enabled: !!activeSiteId && !isDemo })
+  const rotation = trpc.org.getRotation.useQuery({ site_id: activeSiteId! }, { enabled: !!activeSiteId && !isDemo })
 
   // Mutations
   const upsertShift = trpc.org.upsertShift.useMutation({
@@ -861,6 +866,7 @@ export default function ShiftsSettingsPage() {
 
   const handleSaveShift = useCallback(async (data: ShiftFormState) => {
     if (!activeSiteId) return
+    if (isDemo) { toast.showError(DEMO_MSG); return }
     await upsertShift.mutateAsync({
       id: data.id,
       name: data.name,
@@ -875,6 +881,7 @@ export default function ShiftsSettingsPage() {
   }, [activeSiteId, upsertShift])
 
   const handleDeleteShift = useCallback(async (id: string) => {
+    if (isDemo) { toast.showError(DEMO_MSG); return }
     try {
       await deleteShift.mutateAsync({ id })
       toast.showSuccess('Shift deleted')
@@ -885,6 +892,7 @@ export default function ShiftsSettingsPage() {
 
   const handleSaveCrew = useCallback(async (data: CrewFormState) => {
     if (!activeSiteId) return
+    if (isDemo) { toast.showError(DEMO_MSG); return }
     await upsertCrew.mutateAsync({
       id: data.id,
       name: data.name,
@@ -896,6 +904,7 @@ export default function ShiftsSettingsPage() {
   }, [activeSiteId, upsertCrew])
 
   const handleDeleteCrew = useCallback(async (id: string) => {
+    if (isDemo) { toast.showError(DEMO_MSG); return }
     try {
       await deleteCrew.mutateAsync({ id })
       toast.showSuccess('Crew deleted')
@@ -921,6 +930,7 @@ export default function ShiftsSettingsPage() {
 
   const handleSaveRotation = async () => {
     if (!activeSiteId) return
+    if (isDemo) { toast.showError(DEMO_MSG); return }
     const entries: { crew_id: string; shift_pattern_id: string; week_number: number }[] = []
     for (const [crewId, weeks] of Object.entries(rotationMatrix)) {
       for (const [weekStr, shiftId] of Object.entries(weeks)) {
@@ -941,8 +951,9 @@ export default function ShiftsSettingsPage() {
     )
   }
 
-  const shiftList = shifts.data ?? []
-  const crewList = crews.data ?? []
+  const demoShiftData = isDemo ? demoShifts.filter((s) => s.site_id === activeSiteId) : []
+  const shiftList = isDemo ? demoShiftData : (shifts.data ?? [])
+  const crewList = isDemo ? [] as typeof crews.data & unknown[] : (crews.data ?? [])
   const usedColors = crewList.map((c) => c.color)
   const showRotation = shiftList.length > 0 && crewList.length > 0
 
