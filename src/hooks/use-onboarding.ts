@@ -13,6 +13,22 @@ import { useSiteStore } from '@/stores/site-store'
 
 const DISMISSED_KEY = 'astra_checklist_dismissed'
 
+function getStorageBool(key: string): boolean {
+  try {
+    return localStorage.getItem(key) === 'true'
+  } catch {
+    return false
+  }
+}
+
+function setStorageBool(key: string) {
+  try {
+    localStorage.setItem(key, 'true')
+  } catch {
+    // ignore — localStorage may be unavailable in private browsing
+  }
+}
+
 export interface OnboardingStep {
   id: string
   label: string
@@ -26,12 +42,12 @@ export function useOnboarding() {
 
   const [dismissed, setDismissed] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false
-    return localStorage.getItem(DISMISSED_KEY) === 'true'
+    return getStorageBool(DISMISSED_KEY)
   })
 
   // Re-sync on hydration
   useEffect(() => {
-    setDismissed(localStorage.getItem(DISMISSED_KEY) === 'true')
+    setDismissed(getStorageBool(DISMISSED_KEY))
   }, [])
 
   // Only enable queries when: demo resolved, not demo, not dismissed
@@ -77,13 +93,20 @@ export function useOnboarding() {
     },
   )
 
+  const isLoading = enabled && (
+    sitesQuery.isLoading ||
+    shiftsQuery.isLoading ||
+    rolesQuery.isLoading ||
+    employeesQuery.isLoading ||
+    processesQuery.isLoading
+  )
+
   const steps: OnboardingStep[] = [
-    { id: 'sites',     label: 'Maak een site aan',        completed: sitesQuery.data ?? false },
-    { id: 'shifts',    label: 'Stel shifts in',           completed: shiftsQuery.data ?? false },
-    { id: 'roles',     label: 'Voeg rollen toe',          completed: rolesQuery.data ?? false },
-    { id: 'employees', label: 'Voeg medewerkers toe',     completed: employeesQuery.data ?? false },
-    { id: 'processes', label: 'Definieer processen',      completed: processesQuery.data ?? false },
-    { id: 'planning',  label: 'Plan je eerste week',      completed: false },
+    { id: 'sites',     label: 'Maak een site aan',    completed: sitesQuery.data ?? false },
+    { id: 'shifts',    label: 'Stel shifts in',       completed: shiftsQuery.data ?? false },
+    { id: 'roles',     label: 'Voeg rollen toe',      completed: rolesQuery.data ?? false },
+    { id: 'employees', label: 'Voeg medewerkers toe', completed: employeesQuery.data ?? false },
+    { id: 'processes', label: 'Definieer processen',  completed: processesQuery.data ?? false },
   ]
 
   const completedCount = steps.filter((s) => s.completed).length
@@ -92,12 +115,13 @@ export function useOnboarding() {
   const showChecklist = enabled && !dismissed
 
   const dismissChecklist = useCallback(() => {
-    localStorage.setItem(DISMISSED_KEY, 'true')
+    setStorageBool(DISMISSED_KEY)
     setDismissed(true)
   }, [])
 
   return {
     showChecklist,
+    isLoading,
     steps,
     completedCount,
     totalCount,

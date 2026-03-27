@@ -4,6 +4,7 @@
  * ContextualTooltip
  * Shows a one-time tooltip anchored to a child element.
  * Dismissed after 8 seconds or on click. Never shown in demo mode.
+ * Returns children unwrapped if already seen or in demo mode.
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react'
@@ -19,6 +20,22 @@ interface ContextualTooltipProps {
   children: React.ReactNode
 }
 
+function isSeen(key: string): boolean {
+  try {
+    return localStorage.getItem(key) === 'true'
+  } catch {
+    return true // fail safe: don't show tooltip if localStorage unavailable
+  }
+}
+
+function markSeen(key: string) {
+  try {
+    localStorage.setItem(key, 'true')
+  } catch {
+    // ignore
+  }
+}
+
 export function ContextualTooltip({
   id,
   text,
@@ -31,33 +48,37 @@ export function ContextualTooltip({
   const [visible, setVisible] = useState(false)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  const dismiss = useCallback(() => {
+    setVisible(false)
+    markSeen(storageKey)
+  }, [storageKey])
+
+  // Show tooltip after delay (only if not seen before)
   useEffect(() => {
     if (isDemo) return
-    const seen = localStorage.getItem(storageKey) === 'true'
-    if (seen) return
-    // Small delay before showing
+    if (isSeen(storageKey)) return
     timerRef.current = setTimeout(() => setVisible(true), 600)
     return () => { if (timerRef.current) clearTimeout(timerRef.current) }
   }, [isDemo, storageKey])
 
+  // Auto-dismiss after 8 seconds
   useEffect(() => {
     if (!visible) return
     timerRef.current = setTimeout(() => dismiss(), 8000)
     return () => { if (timerRef.current) clearTimeout(timerRef.current) }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visible])
+  }, [visible, dismiss])
 
-  const dismiss = useCallback(() => {
-    setVisible(false)
-    localStorage.setItem(storageKey, 'true')
-  }, [storageKey])
+  // If demo mode or already seen in a previous session, render children only (no wrapper)
+  if (isDemo || isSeen(storageKey)) {
+    return <>{children}</>
+  }
 
   // Arrow + tooltip positioning per anchor
   const tooltipStyle: React.CSSProperties = (() => {
     const base: React.CSSProperties = {
       position: 'absolute',
       zIndex: 100,
-      pointerEvents: 'auto',
+      pointerEvents: 'none',
     }
     switch (anchor) {
       case 'top':
@@ -72,59 +93,21 @@ export function ContextualTooltip({
   })()
 
   const arrowStyle: React.CSSProperties = (() => {
-    const arrow: React.CSSProperties = {
-      position: 'absolute',
-      width: 0,
-      height: 0,
-    }
+    const arrow: React.CSSProperties = { position: 'absolute', width: 0, height: 0 }
     switch (anchor) {
       case 'top':
-        return {
-          ...arrow,
-          bottom: -6,
-          left: '50%',
-          transform: 'translateX(-50%)',
-          borderLeft: '6px solid transparent',
-          borderRight: '6px solid transparent',
-          borderTop: '6px solid rgba(255,255,255,0.95)',
-        }
+        return { ...arrow, bottom: -6, left: '50%', transform: 'translateX(-50%)', borderLeft: '6px solid transparent', borderRight: '6px solid transparent', borderTop: '6px solid rgba(255,255,255,0.95)' }
       case 'bottom':
-        return {
-          ...arrow,
-          top: -6,
-          left: '50%',
-          transform: 'translateX(-50%)',
-          borderLeft: '6px solid transparent',
-          borderRight: '6px solid transparent',
-          borderBottom: '6px solid rgba(255,255,255,0.95)',
-        }
+        return { ...arrow, top: -6, left: '50%', transform: 'translateX(-50%)', borderLeft: '6px solid transparent', borderRight: '6px solid transparent', borderBottom: '6px solid rgba(255,255,255,0.95)' }
       case 'left':
-        return {
-          ...arrow,
-          right: -6,
-          top: '50%',
-          transform: 'translateY(-50%)',
-          borderTop: '6px solid transparent',
-          borderBottom: '6px solid transparent',
-          borderLeft: '6px solid rgba(255,255,255,0.95)',
-        }
+        return { ...arrow, right: -6, top: '50%', transform: 'translateY(-50%)', borderTop: '6px solid transparent', borderBottom: '6px solid transparent', borderLeft: '6px solid rgba(255,255,255,0.95)' }
       case 'right':
-        return {
-          ...arrow,
-          left: -6,
-          top: '50%',
-          transform: 'translateY(-50%)',
-          borderTop: '6px solid transparent',
-          borderBottom: '6px solid transparent',
-          borderRight: '6px solid rgba(255,255,255,0.95)',
-        }
+        return { ...arrow, left: -6, top: '50%', transform: 'translateY(-50%)', borderTop: '6px solid transparent', borderBottom: '6px solid transparent', borderRight: '6px solid rgba(255,255,255,0.95)' }
     }
   })()
 
-  if (isDemo) return <>{children}</>
-
   return (
-    <div style={{ position: 'relative', display: 'inline-flex' }} onClick={dismiss}>
+    <div style={{ position: 'relative', display: 'inline-flex' }}>
       {children}
       <AnimatePresence>
         {visible && (
@@ -134,6 +117,7 @@ export function ContextualTooltip({
             exit={{ opacity: 0, scale: 0.92 }}
             transition={{ type: 'spring', stiffness: 340, damping: 24 }}
             style={tooltipStyle}
+            onClick={dismiss}
           >
             <div
               style={{
@@ -144,7 +128,7 @@ export function ContextualTooltip({
                 borderRadius: '8px',
                 padding: '8px 12px',
                 boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
-                whiteSpace: 'nowrap',
+                maxWidth: '220px',
                 position: 'relative',
               }}
             >

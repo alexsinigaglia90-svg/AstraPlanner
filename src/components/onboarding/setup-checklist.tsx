@@ -105,13 +105,13 @@ function StepItem({ label, completed }: { label: string; completed: boolean }) {
 // ── Main component ───────────────────────────────────────────────────────────
 
 export function SetupChecklist() {
-  const { showChecklist, steps, completedCount, totalCount, dismissChecklist } = useOnboarding()
+  const { showChecklist, isLoading, steps, completedCount, totalCount, dismissChecklist } = useOnboarding()
   const [expanded, setExpanded] = useState(false)
 
   if (!showChecklist) return null
 
   // All done — hide automatically
-  if (completedCount === totalCount) return null
+  if (!isLoading && completedCount === totalCount) return null
 
   return (
     <motion.div
