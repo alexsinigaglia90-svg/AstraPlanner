@@ -52,6 +52,22 @@ export default function TeamSettingsPage() {
 
   const [selectedRoles, setSelectedRoles] = useState<Record<string, string>>({})
 
+  // Invite state
+  const [inviteEmail, setInviteEmail] = useState('')
+  const [inviteName, setInviteName] = useState('')
+  const [inviteRole, setInviteRole] = useState('viewer')
+  const [inviteSuccess, setInviteSuccess] = useState<string | null>(null)
+
+  const inviteUser = trpc.admin.inviteUser.useMutation({
+    onSuccess: (result) => {
+      setInviteSuccess(`Uitnodiging verstuurd naar ${result.email}`)
+      setInviteEmail('')
+      setInviteName('')
+      setInviteRole('viewer')
+      setTimeout(() => setInviteSuccess(null), 5000)
+    },
+  })
+
   const resolveRequest = trpc.admin.resolveJoinRequest.useMutation({
     onSuccess: () => {
       utils.admin.listJoinRequests.invalidate()
@@ -106,6 +122,112 @@ export default function TeamSettingsPage() {
             Beheer lid-verzoeken en je teamleden
           </p>
         </div>
+      </motion.div>
+
+      {/* Section: Invite new member */}
+      <motion.div
+        variants={fadeInUp}
+        style={{
+          background: 'var(--card)',
+          border: '1px solid var(--border)',
+          borderRadius: 'var(--radius-lg)',
+          padding: '20px',
+        }}
+      >
+        <h3
+          style={{
+            fontFamily: 'var(--font-display)',
+            fontSize: '15px',
+            fontWeight: 700,
+            color: 'var(--foreground)',
+            margin: '0 0 12px 0',
+          }}
+        >
+          Teamlid uitnodigen
+        </h3>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault()
+            if (!inviteEmail.trim() || !inviteName.trim()) return
+            inviteUser.mutate({
+              email: inviteEmail.trim(),
+              full_name: inviteName.trim(),
+              role: inviteRole as 'site_manager' | 'planner' | 'supervisor' | 'employee' | 'viewer',
+              site_ids: [],
+            })
+          }}
+          style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}
+        >
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <input
+              value={inviteName}
+              onChange={(e) => setInviteName(e.target.value)}
+              placeholder="Volledige naam"
+              style={{
+                flex: 1, height: '38px', borderRadius: 'var(--radius-sm)',
+                border: '1px solid var(--border)', padding: '0 12px',
+                fontSize: '13px', fontFamily: 'var(--font-body)',
+                color: 'var(--foreground)', background: 'var(--background)',
+                outline: 'none', boxSizing: 'border-box',
+              }}
+            />
+            <input
+              value={inviteEmail}
+              onChange={(e) => setInviteEmail(e.target.value)}
+              placeholder="email@bedrijf.nl"
+              type="email"
+              style={{
+                flex: 1, height: '38px', borderRadius: 'var(--radius-sm)',
+                border: '1px solid var(--border)', padding: '0 12px',
+                fontSize: '13px', fontFamily: 'var(--font-body)',
+                color: 'var(--foreground)', background: 'var(--background)',
+                outline: 'none', boxSizing: 'border-box',
+              }}
+            />
+          </div>
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+            <select
+              value={inviteRole}
+              onChange={(e) => setInviteRole(e.target.value)}
+              style={{
+                height: '38px', borderRadius: 'var(--radius-sm)',
+                border: '1px solid var(--border)', padding: '0 10px',
+                fontSize: '13px', fontFamily: 'var(--font-body)',
+                color: 'var(--foreground)', background: 'var(--background)',
+                outline: 'none', cursor: 'pointer', minWidth: '140px',
+              }}
+            >
+              {ROLE_OPTIONS.map((r) => (
+                <option key={r.value} value={r.value}>{r.label}</option>
+              ))}
+            </select>
+            <button
+              type="submit"
+              disabled={!inviteEmail.trim() || !inviteName.trim() || inviteUser.isPending}
+              style={{
+                height: '38px', padding: '0 18px', borderRadius: 'var(--radius-sm)',
+                border: 'none', background: 'linear-gradient(135deg, var(--primary), #8B5CF6)',
+                color: '#FFFFFF', fontFamily: 'var(--font-body)', fontSize: '13px',
+                fontWeight: 600, cursor: inviteUser.isPending ? 'not-allowed' : 'pointer',
+                opacity: (!inviteEmail.trim() || !inviteName.trim()) ? 0.5 : 1,
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {inviteUser.isPending ? 'Versturen...' : 'Uitnodiging versturen'}
+            </button>
+          </div>
+
+          {inviteUser.isError && (
+            <div style={{ fontSize: '12px', color: 'var(--destructive)', fontFamily: 'var(--font-body)' }}>
+              {inviteUser.error?.message ?? 'Er is iets misgegaan'}
+            </div>
+          )}
+          {inviteSuccess && (
+            <div style={{ fontSize: '12px', color: '#059669', fontFamily: 'var(--font-body)', fontWeight: 500 }}>
+              {inviteSuccess}
+            </div>
+          )}
+        </form>
       </motion.div>
 
       {/* Section 1: Pending requests */}

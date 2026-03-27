@@ -59,7 +59,8 @@ export const adminRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const { data, error } = await ctx.supabase.auth.admin.inviteUserByEmail(input.email, {
+      const adminClient = createAdminClient()
+      const { data, error } = await adminClient.auth.admin.inviteUserByEmail(input.email, {
         data: {
           full_name: input.full_name,
           role: input.role,
