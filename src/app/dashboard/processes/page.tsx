@@ -8,6 +8,7 @@ import { useSiteStore } from '@/stores/site-store'
 import { fadeInUp, containerStagger, scalePress, bouncy } from '@/lib/motion'
 import { useDemoStore } from '@/hooks/use-demo'
 import { demoDepartments, demoProcesses } from '@/components/onboarding/demo-seed'
+import { ContextualTooltip } from '@/components/onboarding/contextual-tooltip'
 import { DepartmentColumn } from '@/components/domain/department-column'
 import { DepartmentCreateForm } from '@/components/domain/department-create-form'
 import { ProcessWizard, type ProcessFormData } from '@/components/domain/process-wizard'
@@ -423,6 +424,7 @@ export default function ProcessesPage() {
           )}
         </div>
 
+        <ContextualTooltip id="processes-add" text="Definieer je operationele processen" anchor="top">
         <motion.button
           variants={scalePress}
           whileTap="press"
@@ -445,6 +447,7 @@ export default function ProcessesPage() {
           <Plus size={15} />
           Department
         </motion.button>
+        </ContextualTooltip>
       </motion.div>
 
       {/* Error state */}

@@ -15,6 +15,7 @@ import { SlideOver } from '@/components/domain/slide-over'
 import { EditEmployeeForm } from '@/components/domain/edit-employee-form'
 import { useDemoStore } from '@/hooks/use-demo'
 import { demoEmployees, demoDepartments, demoRoles, demoProcesses } from '@/components/onboarding/demo-seed'
+import { ContextualTooltip } from '@/components/onboarding/contextual-tooltip'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -570,6 +571,7 @@ export default function EmployeesPage() {
         </div>
 
           {/* Add Employee button */}
+          <ContextualTooltip id="employees-add" text="Voeg je team toe aan AstraPlanner" anchor="top">
           <motion.button
             variants={scalePress}
             whileTap="press"
@@ -593,6 +595,7 @@ export default function EmployeesPage() {
             <Plus size={14} />
             Add
           </motion.button>
+          </ContextualTooltip>
 
           {/* Import button */}
           <Link href="/dashboard/employees/import" style={{ textDecoration: 'none' }}>

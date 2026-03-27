@@ -12,6 +12,7 @@ import { fadeInUp, containerStagger, scalePress, bouncy } from '@/lib/motion'
 import { AnimatedCounter } from '@/components/domain/animated-counter'
 import { useDemoStore } from '@/hooks/use-demo'
 import { demoSites } from '@/components/onboarding/demo-seed'
+import { ContextualTooltip } from '@/components/onboarding/contextual-tooltip'
 
 // ── Placeholder site stats (wire later) ──────────────────────────────────────
 const SITE_STATS: Record<string, { employees: number; processes: number; departments: number }> = {}
@@ -551,6 +552,7 @@ export default function SiteListPage() {
           </div>
 
           {/* Add site button */}
+          <ContextualTooltip id="sites-add" text="Voeg je eerste site toe om te beginnen" anchor="top">
           <motion.button
             variants={scalePress}
             whileTap="press"
@@ -575,6 +577,7 @@ export default function SiteListPage() {
             <Plus size={15} />
             Add Site
           </motion.button>
+          </ContextualTooltip>
         </div>
       </motion.div>
 

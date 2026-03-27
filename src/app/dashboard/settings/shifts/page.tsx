@@ -11,6 +11,7 @@ import { getDeptColor, DEPT_COLORS } from '@/components/domain/process-card'
 import { useToast } from '@/components/domain/toast'
 import { useDemoStore } from '@/hooks/use-demo'
 import { demoShifts } from '@/components/onboarding/demo-seed'
+import { ContextualTooltip } from '@/components/onboarding/contextual-tooltip'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -965,6 +966,7 @@ export default function ShiftsSettingsPage() {
           <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 700, color: 'var(--foreground)', margin: 0 }}>
             Shifts
           </h2>
+          <ContextualTooltip id="shifts-add" text="Configureer je diensten per site" anchor="top">
           <motion.button
             variants={scalePress}
             whileTap="press"
@@ -973,6 +975,7 @@ export default function ShiftsSettingsPage() {
           >
             <Plus size={14} /> Add Shift
           </motion.button>
+          </ContextualTooltip>
         </div>
 
         {shifts.isLoading ? (
