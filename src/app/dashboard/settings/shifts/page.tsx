@@ -114,19 +114,15 @@ function breakDuration(b: BreakRule): number {
   return base + ramp
 }
 
-function formatBreaks(json: Record<string, unknown>): string {
+function getBreaksSorted(json: Record<string, unknown>): { time: string; minutes: number }[] {
   const rules = parseBreakRules(json)
-  if (rules.length === 0) return 'No breaks'
-  return rules.map((r) => {
-    const dur = breakDuration(r)
-    const time = `${formatTime(r.start_time)}–${formatTime(r.end_time)}`
-    const blockMin = Math.round((timeToHours(r.end_time) - timeToHours(r.start_time)) * 60)
-    const staggerInfo = r.staggered ? ` ${r.stagger_groups}gr` : ''
-    const perPerson = r.staggered ? Math.round(blockMin / r.stagger_groups) : blockMin
-    return r.include_ramp
-      ? `${time} (${dur}min eff.${staggerInfo})`
-      : `${time} (${perPerson}min${r.staggered ? `/person, ${blockMin}min block` : ''})`
-  }).join(', ')
+  if (rules.length === 0) return []
+  return [...rules]
+    .sort((a, b) => timeToHours(a.start_time) - timeToHours(b.start_time))
+    .map((r) => ({
+      time: `${formatTime(r.start_time)}–${formatTime(r.end_time)}`,
+      minutes: Math.round((timeToHours(r.end_time) - timeToHours(r.start_time)) * 60),
+    }))
 }
 
 const AVAILABLE_COLORS = Object.keys(DEPT_COLORS)
@@ -298,7 +294,7 @@ function ShiftCard({
       {/* Time text + duration */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: 'var(--foreground)' }}>
-          {formatTime(shift.start_time)} &mdash; {formatTime(shift.end_time)}
+          {formatTime(shift.start_time)} — {formatTime(shift.end_time)}
         </span>
         <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--muted-foreground)' }}>
           {shift.duration_hours.toFixed(1)} hrs
@@ -314,33 +310,25 @@ function ShiftCard({
         )}
       </div>
 
-      {/* Days of week */}
-      <div style={{ display: 'flex', gap: 4 }}>
-        {DAY_LABELS.map((label, i) => {
-          const dayNum = i + 1
-          const active = shift.days_of_week.includes(dayNum)
-          return (
-            <div
-              key={dayNum}
-              style={{
-                width: 26, height: 26, borderRadius: '50%',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 9, fontWeight: 700, fontFamily: 'var(--font-body)',
-                backgroundColor: active ? 'var(--primary)' : 'var(--border)',
-                color: active ? '#fff' : 'var(--muted-foreground)',
-                letterSpacing: '0.02em',
-              }}
-            >
-              {label}
-            </div>
-          )
-        })}
-      </div>
-
-      {/* Breaks */}
-      <span style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: 'var(--muted-foreground)' }}>
-        {formatBreaks(shift.break_rules_json)}
-      </span>
+      {/* Breaks — sorted chronologically */}
+      {(() => {
+        const breaks = getBreaksSorted(shift.break_rules_json)
+        if (breaks.length === 0) return null
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {breaks.map((b, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--muted-foreground)' }}>
+                  {b.time}
+                </span>
+                <span style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: 'var(--muted-foreground)', opacity: 0.7 }}>
+                  {b.minutes}min
+                </span>
+              </div>
+            ))}
+          </div>
+        )
+      })()}
     </motion.div>
   )
 }
