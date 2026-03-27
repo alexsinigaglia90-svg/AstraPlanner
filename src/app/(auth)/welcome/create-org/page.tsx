@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { motion } from 'framer-motion'
 import { bouncy, snappy, containerStagger, fadeInUp } from '@/lib/motion'
 import { trpc } from '@/lib/trpc/client'
+import { createClient } from '@/lib/supabase/client'
 
 const SECTORS = [
   'Logistiek & Warehousing',
@@ -27,7 +28,11 @@ function CreateOrgForm() {
   const [focusedField, setFocusedField] = useState<string | null>(null)
 
   const createOrg = trpc.onboarding.createOrganization.useMutation({
-    onSuccess: () => {
+    onSuccess: async () => {
+      // Force session refresh so JWT contains the new org_id
+      const supabase = createClient()
+      await supabase.auth.refreshSession()
+
       if (mode === 'ai_assisted') {
         router.push('/dashboard?ai=open')
       } else {

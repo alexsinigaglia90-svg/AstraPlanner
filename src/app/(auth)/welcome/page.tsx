@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { snappy, containerStagger, fadeInUp } from '@/lib/motion'
 import { trpc } from '@/lib/trpc/client'
+import { createClient } from '@/lib/supabase/client'
 
 const choices = [
   {
@@ -55,7 +56,9 @@ export default function WelcomePage() {
   const [loadingId, setLoadingId] = useState<string | null>(null)
 
   const setDemoMode = trpc.onboarding.setDemoMode.useMutation({
-    onSuccess: () => {
+    onSuccess: async () => {
+      const supabase = createClient()
+      await supabase.auth.refreshSession()
       router.push('/dashboard')
       router.refresh()
     },

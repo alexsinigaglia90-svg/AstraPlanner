@@ -3,14 +3,23 @@ import { TRPCError } from '@trpc/server'
 import { router, authenticatedProcedure } from '../trpc'
 import { createAdminClient } from '@/lib/supabase/admin'
 
+/** Generate a URL-safe slug from a name */
+function slugify(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 100)
+}
+
 export const onboardingRouter = router({
-  /**
-   * Create a new organization for the authenticated user.
-   * Guards that the user has no existing org before creating.
-   * On metadata update failure, rolls back org creation.
-   */
   createOrganization: authenticatedProcedure
-    .input(z.object({ name: z.string().min(1).max(100), sector: z.string().min(1).max(100) }))
+    .input(
+      z.object({
+        name: z.string().min(1).max(100),
+        sector: z.string().min(1).max(100),
+      })
+    )
     .mutation(async ({ ctx, input }) => {
       if (ctx.organizationId) {
         throw new TRPCError({
@@ -21,10 +30,20 @@ export const onboardingRouter = router({
 
       const admin = createAdminClient()
 
-      // Create organization record
+      // Generate slug + use user email as billing_email
+      const baseSlug = slugify(input.name)
+      const slug = `${baseSlug}-${Date.now().toString(36)}`
+      const billingEmail = ctx.user.email ?? ''
+
+      // Create organization record (sector stored in settings_json since no column exists)
       const { data: org, error: orgError } = await admin
         .from('organization')
-        .insert({ name: input.name, sector: input.sector })
+        .insert({
+          name: input.name,
+          slug,
+          billing_email: billingEmail,
+          settings_json: { sector: input.sector },
+        })
         .select('id')
         .single()
 
@@ -35,7 +54,7 @@ export const onboardingRouter = router({
         })
       }
 
-      // Update user app_metadata with org and role
+      // Update user app_metadata with org, role, and clear any demo mode
       const { error: metaError } = await admin.auth.admin.updateUserById(
         ctx.user.id,
         {
@@ -44,15 +63,13 @@ export const onboardingRouter = router({
             organization_id: org.id,
             role: 'tenant_admin',
             site_ids: [],
-            onboarding_mode: null,
+            mode: null,
           },
         }
       )
 
       if (metaError) {
-        // Roll back org creation
         await admin.from('organization').delete().eq('id', org.id)
-
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: `Failed to assign organization to user: ${metaError.message}`,
@@ -62,10 +79,6 @@ export const onboardingRouter = router({
       return { organizationId: org.id }
     }),
 
-  /**
-   * Set demo mode for the authenticated user.
-   * Guards that the user has no existing org.
-   */
   setDemoMode: authenticatedProcedure.mutation(async ({ ctx }) => {
     if (ctx.organizationId) {
       throw new TRPCError({
@@ -93,18 +106,12 @@ export const onboardingRouter = router({
     return { mode: 'demo' }
   }),
 
-  /**
-   * Exit demo mode — removes mode from app_metadata.
-   */
   exitDemoMode: authenticatedProcedure.mutation(async ({ ctx }) => {
     const admin = createAdminClient()
 
-    // Spread existing metadata and set mode to null to remove it
-    const { mode: _removed, ...restMeta } = ctx.user.app_metadata ?? {}
-
     const { error } = await admin.auth.admin.updateUserById(ctx.user.id, {
       app_metadata: {
-        ...restMeta,
+        ...ctx.user.app_metadata,
         mode: null,
       },
     })
