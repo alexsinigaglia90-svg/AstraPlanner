@@ -27,10 +27,15 @@ export async function proxy(request: NextRequest) {
     return response
   }
 
-  // Auth pages — redirect to dashboard if already logged in
+  // Auth pages — redirect based on onboarding state
   if (pathname.startsWith('/login') || pathname.startsWith('/signup')) {
     if (user) {
-      return NextResponse.redirect(new URL('/dashboard', request.url))
+      const hasOrg = !!user.app_metadata?.organization_id
+      const isDemo = user.app_metadata?.mode === 'demo'
+      if (hasOrg || isDemo) {
+        return NextResponse.redirect(new URL('/dashboard', request.url))
+      }
+      return NextResponse.redirect(new URL('/welcome', request.url))
     }
     return response
   }
@@ -43,10 +48,28 @@ export async function proxy(request: NextRequest) {
     return response
   }
 
-  // Protected pages — redirect to login if not authenticated
+  // Welcome/onboarding — must be authenticated, must NOT have org/demo
+  if (pathname.startsWith('/welcome')) {
+    if (!user) {
+      return NextResponse.redirect(new URL('/login', request.url))
+    }
+    const hasOrg = !!user.app_metadata?.organization_id
+    const isDemo = user.app_metadata?.mode === 'demo'
+    if (hasOrg || isDemo) {
+      return NextResponse.redirect(new URL('/dashboard', request.url))
+    }
+    return response
+  }
+
+  // Protected pages — require auth + org or demo mode
   if (pathname.startsWith('/dashboard')) {
     if (!user) {
       return NextResponse.redirect(new URL('/login', request.url))
+    }
+    const hasOrg = !!user.app_metadata?.organization_id
+    const isDemo = user.app_metadata?.mode === 'demo'
+    if (!hasOrg && !isDemo) {
+      return NextResponse.redirect(new URL('/welcome', request.url))
     }
   }
 
