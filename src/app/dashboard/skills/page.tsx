@@ -504,6 +504,7 @@ export default function SkillMatrixPage() {
   const handleDialSelect = useCallback(
     async (level: number) => {
       if (!dialCell) return
+      if (isDemo) { showError(DEMO_MSG); setDialCell(null); return }
       try {
         await updateSkill.mutateAsync({
           employee_id: dialCell.empId,
@@ -521,6 +522,7 @@ export default function SkillMatrixPage() {
 
   const handleDialRemove = useCallback(async () => {
     if (!dialCell) return
+    if (isDemo) { showError(DEMO_MSG); setDialCell(null); return }
     try {
       await deleteSkill.mutateAsync({
         employee_id: dialCell.empId,
@@ -536,6 +538,7 @@ export default function SkillMatrixPage() {
   const handleBulkSet = useCallback(
     async (level: number | 'clear') => {
       if (!selectedEmployee) return
+      if (isDemo) { showError(DEMO_MSG); return }
       try {
         if (level === 'clear') {
           for (const proc of orderedProcesses) {

@@ -134,6 +134,7 @@ export default function EmployeeDetailPage() {
   const params = useParams()
   const employeeId = params.employeeId as string
   const isDemo = useDemoStore((s) => s.isDemo)
+  const DEMO_MSG = 'Dit is een demo — start je eigen omgeving om wijzigingen te maken'
   const [editOpen, setEditOpen]         = useState(false)
   const [addSkillOpen, setAddSkillOpen] = useState(false)
   const [absenceOpen, setAbsenceOpen]   = useState(false)
@@ -304,7 +305,7 @@ export default function EmployeeDetailPage() {
         <motion.button
           variants={scalePress}
           whileTap="press"
-          onClick={() => setEditOpen(true)}
+          onClick={() => { if (isDemo) { window.alert(DEMO_MSG); return }; setEditOpen(true) }}
           style={{
             display: 'inline-flex',
             alignItems: 'center',
@@ -485,7 +486,7 @@ export default function EmployeeDetailPage() {
         <motion.button
           variants={scalePress}
           whileTap="press"
-          onClick={() => setAddSkillOpen(true)}
+          onClick={() => { if (isDemo) { window.alert(DEMO_MSG); return }; setAddSkillOpen(true) }}
           style={{
             alignSelf: 'flex-start',
             padding: '7px 14px',
@@ -591,7 +592,7 @@ export default function EmployeeDetailPage() {
         <motion.button
           variants={scalePress}
           whileTap="press"
-          onClick={() => setAbsenceOpen(true)}
+          onClick={() => { if (isDemo) { window.alert(DEMO_MSG); return }; setAbsenceOpen(true) }}
           style={{
             alignSelf: 'flex-start',
             padding: '7px 14px',

@@ -5,22 +5,27 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { MapPin, ChevronDown, Check, Search } from 'lucide-react'
 import { trpc } from '@/lib/trpc/client'
 import { useSiteStore } from '@/stores/site-store'
+import { useDemoStore } from '@/hooks/use-demo'
+import { demoSites, DEMO_SITE_AMS } from '@/components/onboarding/demo-seed'
 import { bouncy } from '@/lib/motion'
 
 export function SiteSelector() {
-  const { data: sites, isLoading } = trpc.org.listSites.useQuery()
+  const isDemo = useDemoStore((s) => s.isDemo)
+  const demoResolved = useDemoStore((s) => s.demoResolved)
+  const { data: liveSites, isLoading } = trpc.org.listSites.useQuery(undefined, { enabled: demoResolved && !isDemo })
+  const sites = isDemo ? demoSites : liveSites
   const { activeSiteId, setActiveSite } = useSiteStore()
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
   const ref = useRef<HTMLDivElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
 
-  // Auto-select first site if none selected
+  // Auto-select first site if none selected (prefer Amsterdam DC in demo)
   useEffect(() => {
     if (!activeSiteId && sites && sites.length > 0) {
-      setActiveSite(sites[0]!.id)
+      setActiveSite(isDemo ? DEMO_SITE_AMS : sites[0]!.id)
     }
-  }, [activeSiteId, sites, setActiveSite])
+  }, [activeSiteId, sites, setActiveSite, isDemo])
 
   // Close on click outside
   useEffect(() => {
