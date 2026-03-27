@@ -10,7 +10,7 @@ export const onboardingRouter = router({
    * On metadata update failure, rolls back org creation.
    */
   createOrganization: authenticatedProcedure
-    .input(z.object({ name: z.string().min(1), sector: z.string().min(1) }))
+    .input(z.object({ name: z.string().min(1).max(100), sector: z.string().min(1).max(100) }))
     .mutation(async ({ ctx, input }) => {
       if (ctx.organizationId) {
         throw new TRPCError({
@@ -44,6 +44,7 @@ export const onboardingRouter = router({
             organization_id: org.id,
             role: 'tenant_admin',
             site_ids: [],
+            onboarding_mode: null,
           },
         }
       )
