@@ -181,7 +181,8 @@ export const orgRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const { data, error } = await ctx.supabase
+      const admin = createAdminClient()
+      const { data, error } = await admin
         .from('site')
         .insert({
           organization_id: ctx.organizationId,
