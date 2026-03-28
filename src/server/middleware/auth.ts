@@ -9,11 +9,14 @@ export function enforceAuth(ctx: Context) {
   if (!ctx.organizationId) {
     throw new TRPCError({ code: 'FORBIDDEN', message: 'No organization assigned' })
   }
+  if (!ctx.role) {
+    throw new TRPCError({ code: 'FORBIDDEN', message: 'No role assigned — contact your administrator' })
+  }
   return {
     ...ctx,
     user: ctx.user,
     organizationId: ctx.organizationId,
-    role: ctx.role!,
+    role: ctx.role,
   }
 }
 

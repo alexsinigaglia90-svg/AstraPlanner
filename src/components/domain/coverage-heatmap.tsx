@@ -1,7 +1,7 @@
 'use client'
 
 import { Fragment, useMemo, useState } from 'react'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import { bouncy } from '@/lib/motion'
 import { SmartIcon } from './smart-icon'
 
@@ -46,34 +46,57 @@ function getCoverageLevel(cell: HeatmapCell): CoverageLevel {
   return 'critical'
 }
 
-const levelColors: Record<
+// Gradient-based color system — richer than flat fills
+const levelTheme: Record<
   CoverageLevel,
-  { bg: string; text: string; border: string }
+  {
+    bg: string
+    bgHover: string
+    gradient: string
+    text: string
+    glow: string
+    border: string
+  }
 > = {
   over: {
-    bg: 'rgba(59,130,246,0.1)',
+    bg: 'rgba(59,130,246,0.07)',
+    bgHover: 'rgba(59,130,246,0.14)',
+    gradient: 'linear-gradient(135deg, rgba(59,130,246,0.10), rgba(99,102,241,0.06))',
     text: '#3B82F6',
-    border: '1px solid rgba(59,130,246,0.25)',
+    glow: 'rgba(59,130,246,0.25)',
+    border: 'rgba(59,130,246,0.18)',
   },
   good: {
-    bg: 'rgba(16,185,129,0.1)',
+    bg: 'rgba(16,185,129,0.07)',
+    bgHover: 'rgba(16,185,129,0.14)',
+    gradient: 'linear-gradient(135deg, rgba(16,185,129,0.10), rgba(52,211,153,0.05))',
     text: '#10B981',
-    border: '1px solid rgba(16,185,129,0.2)',
+    glow: 'rgba(16,185,129,0.25)',
+    border: 'rgba(16,185,129,0.18)',
   },
   warn: {
-    bg: 'rgba(245,158,11,0.1)',
+    bg: 'rgba(245,158,11,0.07)',
+    bgHover: 'rgba(245,158,11,0.14)',
+    gradient: 'linear-gradient(135deg, rgba(245,158,11,0.10), rgba(251,191,36,0.05))',
     text: '#F59E0B',
-    border: '1px solid rgba(245,158,11,0.2)',
+    glow: 'rgba(245,158,11,0.25)',
+    border: 'rgba(245,158,11,0.18)',
   },
   critical: {
-    bg: 'rgba(239,68,68,0.08)',
+    bg: 'rgba(239,68,68,0.06)',
+    bgHover: 'rgba(239,68,68,0.14)',
+    gradient: 'linear-gradient(135deg, rgba(239,68,68,0.10), rgba(248,113,113,0.04))',
     text: '#EF4444',
-    border: '1px solid rgba(239,68,68,0.2)',
+    glow: 'rgba(239,68,68,0.30)',
+    border: 'rgba(239,68,68,0.18)',
   },
   none: {
     bg: 'transparent',
+    bgHover: 'rgba(100,116,139,0.04)',
+    gradient: 'none',
     text: 'var(--muted-foreground, #94A3B8)',
-    border: '1.5px dashed rgba(203,213,225,0.4)',
+    glow: 'transparent',
+    border: 'rgba(203,213,225,0.3)',
   },
 }
 
@@ -85,22 +108,124 @@ const legendItems: { level: CoverageLevel; label: string }[] = [
   { level: 'none', label: 'Geen data' },
 ]
 
-// ── Pulse keyframes (injected once) ─────────────────────────────────────────
+// ── Mini Coverage Bar (per process row) ──────────────────────────────────────
 
-const PULSE_STYLE_ID = 'coverage-heatmap-pulse'
+function ProcessCoverageBar({ pct }: { pct: number }) {
+  const clamped = Math.max(0, Math.min(pct, 150))
+  const ratio = clamped / 150
+  const color =
+    pct > 110 ? '#3B82F6' : pct >= 90 ? '#10B981' : pct >= 70 ? '#F59E0B' : '#EF4444'
 
-function ensurePulseKeyframes() {
-  if (typeof document === 'undefined') return
-  if (document.getElementById(PULSE_STYLE_ID)) return
-  const style = document.createElement('style')
-  style.id = PULSE_STYLE_ID
-  style.textContent = `
-@keyframes coveragePulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.85; }
+  return (
+    <div
+      style={{
+        width: 40,
+        height: 4,
+        borderRadius: 2,
+        background: 'rgba(100,116,139,0.08)',
+        overflow: 'hidden',
+        flexShrink: 0,
+      }}
+    >
+      <motion.div
+        initial={{ width: 0 }}
+        animate={{ width: `${ratio * 100}%` }}
+        transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1], delay: 0.3 }}
+        style={{
+          height: '100%',
+          borderRadius: 2,
+          background: color,
+        }}
+      />
+    </div>
+  )
 }
-`
-  document.head.appendChild(style)
+
+// ── Tooltip Card ─────────────────────────────────────────────────────────────
+
+function CellTooltip({
+  cell,
+  processName,
+  weekNum,
+  level,
+}: {
+  cell: HeatmapCell | undefined
+  processName: string
+  weekNum: number
+  level: CoverageLevel
+}) {
+  const theme = levelTheme[level]
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 4, scale: 0.96 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, y: 4, scale: 0.96 }}
+      transition={{ duration: 0.15, ease: [0.2, 0, 0, 1] }}
+      style={{
+        position: 'absolute',
+        bottom: 'calc(100% + 8px)',
+        left: '50%',
+        transform: 'translateX(-50%)',
+        // Glassmorphism tooltip
+        background: 'rgba(255,255,255,0.92)',
+        backdropFilter: 'blur(12px) saturate(1.6)',
+        WebkitBackdropFilter: 'blur(12px) saturate(1.6)',
+        border: '1px solid rgba(255,255,255,0.7)',
+        fontFamily: 'var(--font-sans, "DM Sans", sans-serif)',
+        fontSize: 11,
+        lineHeight: 1.5,
+        padding: '8px 12px',
+        borderRadius: 10,
+        pointerEvents: 'none',
+        zIndex: 50,
+        boxShadow: '0 8px 24px rgba(30,27,75,0.12), 0 2px 6px rgba(30,27,75,0.06)',
+        minWidth: 160,
+        textAlign: 'left',
+      }}
+    >
+      {/* Header */}
+      <div
+        style={{
+          fontWeight: 600,
+          color: 'var(--foreground, #1E1B4B)',
+          marginBottom: 3,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+        }}
+      >
+        {processName}
+        <span
+          style={{
+            fontSize: 10,
+            fontWeight: 500,
+            color: theme.text,
+            background: level === 'none' ? 'transparent' : `${theme.text}11`,
+            borderRadius: 4,
+            padding: '0 5px',
+          }}
+        >
+          Wk {weekNum}
+        </span>
+      </div>
+      {/* Data */}
+      {cell && level !== 'none' ? (
+        <div style={{ color: 'var(--muted-foreground, #64748B)' }}>
+          <span style={{ fontFamily: 'var(--font-mono, monospace)', fontWeight: 600, color: theme.text }}>
+            {cell.fte_available}
+          </span>
+          {' FTE beschikbaar van '}
+          <span style={{ fontFamily: 'var(--font-mono, monospace)', fontWeight: 600 }}>
+            {cell.fte_needed ?? '?'}
+          </span>
+          {' nodig'}
+        </div>
+      ) : (
+        <div style={{ color: 'var(--muted-foreground, #94A3B8)' }}>Geen data</div>
+      )}
+    </motion.div>
+  )
 }
 
 // ── Component ────────────────────────────────────────────────────────────────
@@ -116,83 +241,52 @@ export function CoverageHeatmap({
     period_start: string
   } | null>(null)
 
-  // Inject CSS keyframes on mount
-  useMemo(() => ensurePulseKeyframes(), [])
-
-  // Group data by process
+  // Group data by process + compute per-process avg coverage
   const { processes, cellMap } = useMemo(() => {
-    const seen = new Map<string, string>()
+    const seen = new Map<string, { name: string; totalPct: number; count: number }>()
     const map = new Map<string, HeatmapCell>()
 
     for (const cell of data) {
-      if (!seen.has(cell.process_id)) {
-        seen.set(cell.process_id, cell.process_name)
+      const existing = seen.get(cell.process_id)
+      if (existing) {
+        if (cell.status === 'computed') {
+          existing.totalPct += cell.coverage_pct
+          existing.count++
+        }
+      } else {
+        seen.set(cell.process_id, {
+          name: cell.process_name,
+          totalPct: cell.status === 'computed' ? cell.coverage_pct : 0,
+          count: cell.status === 'computed' ? 1 : 0,
+        })
       }
       map.set(`${cell.process_id}::${cell.period_start}`, cell)
     }
 
     return {
-      processes: Array.from(seen.entries()).map(([id, name]) => ({
+      processes: Array.from(seen.entries()).map(([id, info]) => ({
         id,
-        name,
+        name: info.name,
+        avgCoverage: info.count > 0 ? Math.round(info.totalPct / info.count) : 0,
       })),
       cellMap: map,
     }
   }, [data])
 
-  // ── Styles ───────────────────────────────────────────────────────────────
-
-  const gridStyle: React.CSSProperties = {
-    display: 'grid',
-    gridTemplateColumns: `160px repeat(${weeks.length}, 1fr)`,
-    gap: 4,
-    width: '100%',
-  }
-
-  const headerStyle: React.CSSProperties = {
-    fontFamily: 'var(--font-sans, "DM Sans", sans-serif)',
-    fontSize: 11,
-    fontWeight: 600,
-    color: 'var(--muted-foreground, #64748B)',
-    textTransform: 'uppercase' as const,
-    letterSpacing: '0.05em',
-    padding: '8px 4px',
-    textAlign: 'center' as const,
-    userSelect: 'none' as const,
-  }
-
-  const rowLabelStyle: React.CSSProperties = {
-    fontFamily: 'var(--font-sans, "DM Sans", sans-serif)',
-    fontSize: 13,
-    fontWeight: 500,
-    color: 'var(--foreground, #1E1B4B)',
-    display: 'flex',
-    alignItems: 'center',
-    gap: 8,
-    padding: '6px 8px',
-    borderRadius: 8,
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap' as const,
-    minWidth: 0,
-  }
-
-  const legendContainerStyle: React.CSSProperties = {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    gap: 14,
-    padding: '4px 0',
-  }
-
-  // ── Render ────────────────────────────────────────────────────────────────
-
   return (
     <div style={{ position: 'relative' }}>
-      {/* Legend */}
-      <div style={legendContainerStyle}>
+      {/* ── Legend ───────────────────────────────────────────── */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'flex-end',
+          gap: 16,
+          padding: '2px 0 10px',
+        }}
+      >
         {legendItems.map((item) => {
-          const colors = levelColors[item.level]
+          const theme = levelTheme[item.level]
           return (
             <div
               key={item.level}
@@ -200,23 +294,26 @@ export function CoverageHeatmap({
                 display: 'flex',
                 alignItems: 'center',
                 gap: 5,
-                fontSize: 11,
+                fontSize: 10.5,
                 fontFamily: 'var(--font-sans, "DM Sans", sans-serif)',
+                fontWeight: 500,
                 color: 'var(--muted-foreground, #64748B)',
               }}
             >
               <span
                 style={{
                   display: 'inline-block',
-                  width: 10,
-                  height: 10,
-                  borderRadius: '50%',
+                  width: 8,
+                  height: 8,
+                  borderRadius: 3,
                   background:
-                    item.level === 'none' ? 'transparent' : colors.bg,
+                    item.level === 'none'
+                      ? 'transparent'
+                      : theme.gradient,
                   border:
                     item.level === 'none'
                       ? '1.5px dashed rgba(203,213,225,0.6)'
-                      : `2px solid ${colors.text}`,
+                      : `1.5px solid ${theme.text}44`,
                 }}
               />
               {item.label}
@@ -225,119 +322,131 @@ export function CoverageHeatmap({
         })}
       </div>
 
-      {/* Grid */}
-      <div style={gridStyle}>
-        {/* Header row: empty corner + week labels */}
-        <div style={{ ...headerStyle, textAlign: 'left' }} />
-        {weeks.map((week) => (
-          <div key={week} style={headerStyle}>
+      {/* ── Grid ────────────────────────────────────────────── */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: `180px repeat(${weeks.length}, 1fr)`,
+          gap: 3,
+          width: '100%',
+        }}
+      >
+        {/* Header row */}
+        <div style={{ padding: '6px 8px' }} />
+        {weeks.map((week, i) => (
+          <motion.div
+            key={week}
+            initial={{ opacity: 0, y: -6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ ...bouncy, delay: i * 0.03 }}
+            style={{
+              fontFamily: 'var(--font-sans, "DM Sans", sans-serif)',
+              fontSize: 10.5,
+              fontWeight: 600,
+              color: 'var(--muted-foreground, #64748B)',
+              textTransform: 'uppercase',
+              letterSpacing: '0.06em',
+              padding: '6px 4px 8px',
+              textAlign: 'center',
+              userSelect: 'none',
+              position: 'relative',
+            }}
+          >
             Wk {getWeekNumber(week)}
-          </div>
+            {/* Animated underline accent */}
+            <motion.div
+              initial={{ scaleX: 0 }}
+              animate={{ scaleX: 1 }}
+              transition={{ duration: 0.5, delay: 0.2 + i * 0.04, ease: [0.22, 1, 0.36, 1] }}
+              style={{
+                position: 'absolute',
+                bottom: 0,
+                left: '20%',
+                right: '20%',
+                height: 2,
+                borderRadius: 1,
+                background: 'linear-gradient(90deg, var(--primary, #6366F1), #818CF8)',
+                opacity: 0.3,
+                transformOrigin: 'center',
+              }}
+            />
+          </motion.div>
         ))}
 
         {/* Data rows */}
         {processes.map((process, rowIdx) => (
           <Fragment key={process.id}>
-            {/* Row label */}
+            {/* Row label with mini coverage bar */}
             <motion.div
-              key={`label-${process.id}`}
-              style={rowLabelStyle}
-              initial={{ opacity: 0, x: -12 }}
+              initial={{ opacity: 0, x: -10 }}
               animate={{ opacity: 1, x: 0 }}
-              transition={{
-                ...bouncy,
-                delay: rowIdx * 0.04,
+              transition={{ ...bouncy, delay: rowIdx * 0.04 }}
+              style={{
+                fontFamily: 'var(--font-sans, "DM Sans", sans-serif)',
+                fontSize: 12.5,
+                fontWeight: 500,
+                color: 'var(--foreground, #1E1B4B)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 7,
+                padding: '5px 8px',
+                borderRadius: 8,
+                minWidth: 0,
               }}
             >
               <SmartIcon
                 name={process.name}
                 type="process"
                 color="var(--primary, #6366F1)"
-                size={14}
+                size={13}
               />
               <span
                 style={{
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
                   whiteSpace: 'nowrap',
+                  flex: 1,
+                  minWidth: 0,
                 }}
               >
                 {process.name}
               </span>
+              {/* Mini coverage bar */}
+              <ProcessCoverageBar pct={process.avgCoverage} />
             </motion.div>
 
             {/* Week cells */}
             {weeks.map((week, colIdx) => {
               const cell = cellMap.get(`${process.id}::${week}`)
               const level = cell ? getCoverageLevel(cell) : 'none'
-              const colors = levelColors[level]
+              const theme = levelTheme[level]
               const isSelected =
                 selectedCell?.process_id === process.id &&
                 selectedCell?.period_start === week
               const isHovered =
                 hoveredCell?.process_id === process.id &&
                 hoveredCell?.period_start === week
-              const delayMs = rowIdx * weeks.length + colIdx
+              const enterDelay = (rowIdx * weeks.length + colIdx) * 0.02
               const weekNum = getWeekNumber(week)
-
-              const tooltipText = cell
-                ? `${process.name} \u00B7 Wk ${weekNum}\n${cell.fte_available} FTE beschikbaar van ${cell.fte_needed ?? '?'} nodig`
-                : `${process.name} \u00B7 Wk ${weekNum}\nGeen data`
-
-              const cellStyle: React.CSSProperties = {
-                position: 'relative',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                padding: '6px 4px',
-                borderRadius: 8,
-                background: colors.bg,
-                border: isSelected
-                  ? '3px solid var(--primary, #6366F1)'
-                  : colors.border,
-                boxShadow: isSelected
-                  ? '0 0 0 2px rgba(99,102,241,0.2)'
-                  : 'none',
-                cursor: 'pointer',
-                userSelect: 'none' as const,
-                minHeight: 44,
-                animation:
-                  level === 'critical'
-                    ? 'coveragePulse 3s ease-in-out infinite'
-                    : undefined,
-              }
 
               return (
                 <motion.div
                   key={`${process.id}-${week}`}
-                  style={cellStyle}
-                  initial={{ opacity: 0, scale: 0.85 }}
+                  initial={{ opacity: 0, scale: 0.88 }}
                   animate={{
                     opacity: 1,
-                    scale: isSelected ? 1.08 : 1,
+                    scale: isSelected ? 1.06 : 1,
                   }}
-                  transition={{
-                    ...bouncy,
-                    delay: delayMs * 0.03,
-                  }}
+                  transition={{ ...bouncy, delay: enterDelay }}
                   whileHover={{
                     scale: 1.08,
-                    boxShadow: '0 4px 16px rgba(99,102,241,0.18)',
-                    transition: {
-                      duration: 0.2,
-                      ease: [0.34, 1.56, 0.64, 1],
-                    },
+                    transition: { duration: 0.18, ease: [0.34, 1.56, 0.64, 1] },
                   }}
                   onClick={() => onCellClick(process.id, week)}
                   onMouseEnter={() =>
-                    setHoveredCell({
-                      process_id: process.id,
-                      period_start: week,
-                    })
+                    setHoveredCell({ process_id: process.id, period_start: week })
                   }
                   onMouseLeave={() => setHoveredCell(null)}
-                  title={tooltipText}
                   role="button"
                   tabIndex={0}
                   onKeyDown={(e) => {
@@ -346,18 +455,61 @@ export function CoverageHeatmap({
                       onCellClick(process.id, week)
                     }
                   }}
-                  aria-label={tooltipText.replace('\n', ', ')}
+                  aria-label={
+                    cell
+                      ? `${process.name} Wk ${weekNum}: ${cell.fte_available} FTE van ${cell.fte_needed ?? '?'} nodig`
+                      : `${process.name} Wk ${weekNum}: Geen data`
+                  }
+                  style={{
+                    position: 'relative',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '5px 4px',
+                    borderRadius: 10,
+                    // Gradient fill instead of flat
+                    background: isHovered ? theme.bgHover : (level === 'none' ? theme.bg : theme.gradient),
+                    border: isSelected
+                      ? `2px solid var(--primary, #6366F1)`
+                      : `1px solid ${theme.border}`,
+                    boxShadow: isSelected
+                      ? '0 0 0 3px rgba(99,102,241,0.15)'
+                      : isHovered
+                        ? `0 4px 16px ${theme.glow}`
+                        : 'none',
+                    cursor: 'pointer',
+                    userSelect: 'none',
+                    minHeight: 46,
+                    transition: 'background 0.2s ease, box-shadow 0.25s ease, border 0.2s ease',
+                    overflow: 'visible',
+                  }}
                 >
+                  {/* Radial glow on hover */}
+                  {isHovered && level !== 'none' && (
+                    <div
+                      style={{
+                        position: 'absolute',
+                        inset: -2,
+                        borderRadius: 12,
+                        background: `radial-gradient(circle at center, ${theme.glow}, transparent 70%)`,
+                        opacity: 0.4,
+                        pointerEvents: 'none',
+                      }}
+                    />
+                  )}
+
                   {/* Coverage percentage */}
                   <span
                     style={{
-                      fontFamily:
-                        'var(--font-mono, "JetBrains Mono", monospace)',
+                      fontFamily: 'var(--font-mono, "JetBrains Mono", monospace)',
                       fontVariantNumeric: 'tabular-nums',
                       fontSize: 13,
-                      fontWeight: 600,
-                      color: colors.text,
+                      fontWeight: 700,
+                      color: theme.text,
                       lineHeight: 1.3,
+                      position: 'relative',
+                      zIndex: 1,
                     }}
                   >
                     {level === 'none'
@@ -371,45 +523,32 @@ export function CoverageHeatmap({
                   {cell && level !== 'none' && (
                     <span
                       style={{
-                        fontFamily:
-                          'var(--font-mono, "JetBrains Mono", monospace)',
+                        fontFamily: 'var(--font-mono, "JetBrains Mono", monospace)',
                         fontVariantNumeric: 'tabular-nums',
                         fontSize: 9,
                         color: 'var(--muted-foreground, #64748B)',
                         lineHeight: 1.2,
                         marginTop: 1,
+                        position: 'relative',
+                        zIndex: 1,
+                        opacity: 0.8,
                       }}
                     >
-                      {cell.fte_available} / {cell.fte_needed ?? '?'}
+                      {cell.fte_available}/{cell.fte_needed ?? '?'}
                     </span>
                   )}
 
-                  {/* Tooltip overlay on hover */}
-                  {isHovered && (
-                    <div
-                      style={{
-                        position: 'absolute',
-                        bottom: 'calc(100% + 6px)',
-                        left: '50%',
-                        transform: 'translateX(-50%)',
-                        background: 'var(--popover, #1E1B4B)',
-                        color: 'var(--popover-foreground, #F8FAFC)',
-                        fontFamily: 'var(--font-sans, "DM Sans", sans-serif)',
-                        fontSize: 11,
-                        lineHeight: 1.5,
-                        padding: '6px 10px',
-                        borderRadius: 8,
-                        whiteSpace: 'pre-line',
-                        pointerEvents: 'none',
-                        zIndex: 50,
-                        boxShadow: '0 4px 12px rgba(0,0,0,0.25)',
-                        minWidth: 160,
-                        textAlign: 'center',
-                      }}
-                    >
-                      {tooltipText}
-                    </div>
-                  )}
+                  {/* Glassmorphism tooltip */}
+                  <AnimatePresence>
+                    {isHovered && (
+                      <CellTooltip
+                        cell={cell}
+                        processName={process.name}
+                        weekNum={weekNum}
+                        level={level}
+                      />
+                    )}
+                  </AnimatePresence>
                 </motion.div>
               )
             })}

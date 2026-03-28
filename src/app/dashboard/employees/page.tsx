@@ -14,6 +14,7 @@ import { AddEmployeeWizard } from '@/components/domain/add-employee-wizard'
 import { SlideOver } from '@/components/domain/slide-over'
 import { EditEmployeeForm } from '@/components/domain/edit-employee-form'
 import { useDemoStore } from '@/hooks/use-demo'
+import { useToast } from '@/components/domain/toast'
 import { demoEmployees, demoDepartments, demoRoles, demoProcesses } from '@/components/onboarding/demo-seed'
 import { ContextualTooltip } from '@/components/onboarding/contextual-tooltip'
 
@@ -363,6 +364,7 @@ export default function EmployeesPage() {
   const router = useRouter()
   const { activeSiteId } = useSiteStore()
   const isDemo = useDemoStore((s) => s.isDemo)
+  const toast = useToast()
   const DEMO_MSG = 'Dit is een demo — start je eigen omgeving om wijzigingen te maken'
 
   const [rawSearch, setRawSearch] = useState('')
@@ -406,7 +408,7 @@ export default function EmployeesPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 
   const handleBulkDeleteRequest = () => {
-    if (isDemo) { window.alert('Dit is een demo — start je eigen omgeving om wijzigingen te maken'); return }
+    if (isDemo) { toast.showError(DEMO_MSG); return }
     if (selectedIds.size === 0) return
     setShowDeleteConfirm(true)
   }
@@ -431,7 +433,7 @@ export default function EmployeesPage() {
     utils.workforce.listEmployees.invalidate()
 
     if (errors.length > 0) {
-      window.alert(`${deleted} verwijderd, ${errors.length} mislukt: ${errors[0]}`)
+      toast.showError(`${deleted} verwijderd, ${errors.length} mislukt: ${errors[0]}`)
     }
   }
 

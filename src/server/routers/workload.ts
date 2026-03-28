@@ -84,7 +84,7 @@ export const workloadRouter = router({
             return {
               process_id: m.process_id,
               process_name: m.process?.name ?? '',
-              conversion_ratio: m.conversion_ratio,
+              conversion_ratio: Number(m.conversion_ratio),
             }
           }),
         }
@@ -152,7 +152,7 @@ export const workloadRouter = router({
         }> = []
 
         for (const proc of processNorms ?? []) {
-          const normUph = proc.norm_uph as number
+          const normUph = Number(proc.norm_uph)
           if (!normUph || normUph <= 0) continue
 
           for (const [levelStr, multiplier] of Object.entries(PROFICIENCY_MULTIPLIERS)) {
@@ -166,7 +166,7 @@ export const workloadRouter = router({
               units_per_hour: uph,
               unit_of_measure: 'units',
               effective_date: new Date().toISOString().split('T')[0] ?? '',
-              source: 'auto_seeded',
+              source: 'manual',
               created_by: ctx.user?.id ?? '',
             })
             seededStandards.push({
@@ -191,7 +191,7 @@ export const workloadRouter = router({
           process_id: s.process_id,
           site_id: s.site_id,
           skill_level: s.skill_level,
-          units_per_hour: s.units_per_hour,
+          units_per_hour: Number(s.units_per_hour),
         })),
         ...seededStandards,
       ]
@@ -221,8 +221,8 @@ export const workloadRouter = router({
           employee_id: es.employee_id,
           process_id: es.process_id,
           proficiency_level: es.proficiency_level,
-          available_hours: emp?.weekly_hours_contracted ?? DEFAULT_WEEKLY_HOURS,
-          productive_pct: emp?.job_role?.productive_pct ?? 0.95,
+          available_hours: Number(emp?.weekly_hours_contracted) || DEFAULT_WEEKLY_HOURS,
+          productive_pct: Number(emp?.job_role?.productive_pct) || 0.95,
         }
       })
 
@@ -365,7 +365,7 @@ export const workloadRouter = router({
         .eq('organization_id', ctx.organizationId)
         .eq('site_id', input.site_id)
         .gte('period_start', input.period_start)
-        .lte('period_end', input.period_end)
+        .lte('period_start', input.period_end)
         .order('process_id')
         .order('period_start')
 

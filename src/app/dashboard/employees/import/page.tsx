@@ -8,6 +8,7 @@ import { bouncy, snappy, wobbly, gentle, scalePress } from '@/lib/motion'
 import { trpc } from '@/lib/trpc/client'
 import { useSiteStore } from '@/stores/site-store'
 import { useDemoStore } from '@/hooks/use-demo'
+import { useToast } from '@/components/domain/toast'
 import { demoShifts, demoEmployees, demoProcesses } from '@/components/onboarding/demo-seed'
 import { matchShift, matchCrew, matchRole } from '@/lib/shift-matcher'
 import * as XLSX from 'xlsx'
@@ -235,6 +236,7 @@ export default function EmployeeImportPage() {
   const router = useRouter()
   const { activeSiteId } = useSiteStore()
   const isDemo = useDemoStore((s) => s.isDemo)
+  const toast = useToast()
   const utils = trpc.useUtils()
   const bulkImport = trpc.workforce.bulkImportEmployees.useMutation()
   const bulkImportSkills = trpc.workforce.bulkImportSkills.useMutation()
@@ -368,7 +370,7 @@ export default function EmployeeImportPage() {
 
   // ── Combined import ────────────────────────────────────────────────────────
   const handleImport = async () => {
-    if (isDemo) { window.alert('Dit is een demo — start je eigen omgeving om wijzigingen te maken'); return }
+    if (isDemo) { toast.showError('Dit is een demo — start je eigen omgeving om wijzigingen te maken'); return }
     if (!validation || !activeSiteId) return
     setState('importing')
     setImportError(null)

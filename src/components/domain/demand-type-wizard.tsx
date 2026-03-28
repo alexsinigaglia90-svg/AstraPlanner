@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, TrendingUp, Link2, CheckCircle2 } from 'lucide-react'
+import { X, Link2, Sliders, CheckCircle2 } from 'lucide-react'
 import { bouncy, snappy, scalePress } from '@/lib/motion'
 import { trpc } from '@/lib/trpc/client'
 import { SmartIcon } from './smart-icon'
@@ -53,8 +53,20 @@ const TOTAL_STEPS = 3
 export function DemandTypeWizard({ open, onClose, siteId, onSaved, editId }: DemandTypeWizardProps) {
   const utils = trpc.useUtils()
   const upsert = trpc.demand.upsertDemandType.useMutation()
-  const processes = trpc.org.listProcesses.useQuery({ site_id: siteId }, { enabled: open && siteId.length > 0 })
-  const existingTypes = trpc.demand.listDemandTypes.useQuery({}, { enabled: open && !!editId })
+
+  // Fetch processes + departments for grouping
+  const processes = trpc.org.listProcesses.useQuery(
+    { site_id: siteId },
+    { enabled: open && siteId.length > 0 },
+  )
+  const departments = trpc.org.listDepartments.useQuery(
+    { site_id: siteId },
+    { enabled: open && siteId.length > 0 },
+  )
+  const existingTypes = trpc.demand.listDemandTypes.useQuery(
+    {},
+    { enabled: open && !!editId },
+  )
 
   const [step, setStep] = useState(1)
   const [direction, setDirection] = useState(1)
@@ -94,9 +106,64 @@ export function DemandTypeWizard({ open, onClose, siteId, onSaved, editId }: Dem
   // -- Derived ---------------------------------------------------------------
 
   const allProcesses = processes.data ?? []
+  const allDepartments = departments.data ?? []
+  const isLoading = processes.isLoading || departments.isLoading
 
-  const canStep1 = naam.trim().length > 0 && eenheid.trim().length > 0
-  const canStep2 = selectedProcesses.size > 0
+  // Group processes by department
+  const deptMap = useMemo(() => {
+    const m = new Map<string, { name: string; color: string }>()
+    for (const d of allDepartments) m.set(d.id, { name: d.name, color: d.color })
+    return m
+  }, [allDepartments])
+
+  const processesByDept = useMemo(() => {
+    const groups: Array<{
+      deptId: string
+      deptName: string
+      deptColor: string
+      processes: typeof allProcesses
+    }> = []
+    const grouped = new Map<string, typeof allProcesses>()
+    for (const p of allProcesses) {
+      const list = grouped.get(p.department_id) ?? []
+      list.push(p)
+      grouped.set(p.department_id, list)
+    }
+    for (const [deptId, procs] of grouped) {
+      const dept = deptMap.get(deptId)
+      groups.push({
+        deptId,
+        deptName: dept?.name ?? 'Overig',
+        deptColor: dept?.color ?? '#888',
+        processes: procs,
+      })
+    }
+    return groups
+  }, [allProcesses, deptMap])
+
+  const canStep1 = selectedProcesses.size > 0
+  const canStep2 = naam.trim().length > 0 && eenheid.trim().length > 0
+
+  // Auto-derive name + unit from selected processes when moving to step 2
+  const deriveNameAndUnit = () => {
+    if (editId) return // don't override on edit
+
+    const selected = allProcesses.filter((p) => selectedProcesses.has(p.id))
+    if (selected.length === 0) return
+
+    // Auto-name: join selected process names
+    if (!naam.trim()) {
+      setNaam(selected.map((p) => p.name).join(' + '))
+    }
+
+    // Auto-unit: take from first selected process
+    if (!eenheid.trim()) {
+      const first = selected[0]
+      if (first?.unit_of_measure) {
+        setEenheid(first.unit_of_measure)
+      }
+    }
+  }
 
   // -- Handlers --------------------------------------------------------------
 
@@ -121,6 +188,9 @@ export function DemandTypeWizard({ open, onClose, siteId, onSaved, editId }: Dem
   }
 
   const goTo = (target: number) => {
+    if (target === 2 && step === 1) {
+      deriveNameAndUnit()
+    }
     setDirection(target > step ? 1 : -1)
     setStep(target)
   }
@@ -149,6 +219,10 @@ export function DemandTypeWizard({ open, onClose, siteId, onSaved, editId }: Dem
       setSaving(false)
     }
   }
+
+  // -- Step subtitles --------------------------------------------------------
+
+  const stepLabels = ['Selecteer Processen', 'Configuratie', 'Review & Opslaan']
 
   // -- Render ----------------------------------------------------------------
 
@@ -185,7 +259,7 @@ export function DemandTypeWizard({ open, onClose, siteId, onSaved, editId }: Dem
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
               transition={bouncy}
               style={{
-                width: '100%', maxWidth: 520,
+                width: '100%', maxWidth: 560,
                 backgroundColor: 'var(--card)',
                 borderRadius: '16px',
                 boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
@@ -210,7 +284,7 @@ export function DemandTypeWizard({ open, onClose, siteId, onSaved, editId }: Dem
                     fontFamily: 'var(--font-body)', fontSize: 12,
                     color: 'var(--muted-foreground)', margin: '2px 0 0',
                   }}>
-                    {step === 1 ? 'Naam & Eenheid' : step === 2 ? 'Koppel Processen' : 'Review & Opslaan'}
+                    {stepLabels[step - 1]}
                   </p>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -242,56 +316,10 @@ export function DemandTypeWizard({ open, onClose, siteId, onSaved, editId }: Dem
               <div style={{ padding: '24px', minHeight: 300, position: 'relative', overflow: 'hidden' }}>
                 <AnimatePresence mode="wait" custom={direction}>
 
-                  {/* ── Step 1: Naam & Eenheid ────────────────────────── */}
+                  {/* ── Step 1: Selecteer Processen ───────────────────── */}
                   {step === 1 && (
                     <motion.div
                       key="step1"
-                      custom={direction}
-                      initial={{ x: direction > 0 ? 40 : -40, opacity: 0 }}
-                      animate={{ x: 0, opacity: 1 }}
-                      exit={{ x: direction > 0 ? -40 : 40, opacity: 0 }}
-                      transition={snappy}
-                      style={{ display: 'flex', flexDirection: 'column', gap: 16 }}
-                    >
-                      <div style={{
-                        width: 40, height: 40, borderRadius: 10,
-                        background: 'linear-gradient(135deg, rgba(99,102,241,0.12), rgba(139,92,246,0.08))',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      }}>
-                        <TrendingUp size={18} style={{ color: 'var(--primary)' }} />
-                      </div>
-
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                        <label style={labelStyle}>
-                          Naam <span style={{ color: 'var(--destructive)' }}>*</span>
-                        </label>
-                        <input
-                          autoFocus
-                          style={inputStyle}
-                          value={naam}
-                          onChange={(e) => setNaam(e.target.value)}
-                          placeholder="bijv. Outbound Orders, Inbound Pallets"
-                        />
-                      </div>
-
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                        <label style={labelStyle}>
-                          Eenheid <span style={{ color: 'var(--destructive)' }}>*</span>
-                        </label>
-                        <input
-                          style={inputStyle}
-                          value={eenheid}
-                          onChange={(e) => setEenheid(e.target.value)}
-                          placeholder="bijv. orders, pallets, stuks"
-                        />
-                      </div>
-                    </motion.div>
-                  )}
-
-                  {/* ── Step 2: Koppel Processen ──────────────────────── */}
-                  {step === 2 && (
-                    <motion.div
-                      key="step2"
                       custom={direction}
                       initial={{ x: direction > 0 ? 40 : -40, opacity: 0 }}
                       animate={{ x: 0, opacity: 1 }}
@@ -311,15 +339,15 @@ export function DemandTypeWizard({ open, onClose, siteId, onSaved, editId }: Dem
                         fontFamily: 'var(--font-body)', fontSize: 13,
                         color: 'var(--muted-foreground)', margin: 0,
                       }}>
-                        Selecteer processen en stel de conversieratio in.
+                        Welke processen worden aangestuurd door dit demand type?
                       </p>
 
                       <div style={{
-                        display: 'flex', flexDirection: 'column', gap: 8,
-                        maxHeight: 260, overflowY: 'auto',
+                        display: 'flex', flexDirection: 'column', gap: 12,
+                        maxHeight: 320, overflowY: 'auto',
                         paddingRight: 4,
                       }}>
-                        {processes.isLoading && (
+                        {isLoading && (
                           <div style={{
                             fontFamily: 'var(--font-body)', fontSize: 13,
                             color: 'var(--muted-foreground)', padding: 16, textAlign: 'center',
@@ -328,7 +356,7 @@ export function DemandTypeWizard({ open, onClose, siteId, onSaved, editId }: Dem
                           </div>
                         )}
 
-                        {allProcesses.length === 0 && !processes.isLoading && (
+                        {allProcesses.length === 0 && !isLoading && (
                           <div style={{
                             fontFamily: 'var(--font-body)', fontSize: 13,
                             color: 'var(--muted-foreground)', padding: 16, textAlign: 'center',
@@ -337,55 +365,185 @@ export function DemandTypeWizard({ open, onClose, siteId, onSaved, editId }: Dem
                           </div>
                         )}
 
-                        {allProcesses.map((proc) => {
-                          const isSelected = selectedProcesses.has(proc.id)
-                          const ratio = selectedProcesses.get(proc.id) ?? 1.0
+                        {/* Processes grouped by department */}
+                        {processesByDept.map((group) => (
+                          <div key={group.deptId}>
+                            {/* Department header */}
+                            <div style={{
+                              display: 'flex', alignItems: 'center', gap: 6,
+                              marginBottom: 6,
+                            }}>
+                              <div style={{
+                                width: 8, height: 8, borderRadius: '50%',
+                                backgroundColor: group.deptColor,
+                                flexShrink: 0,
+                              }} />
+                              <span style={{
+                                fontFamily: 'var(--font-body)', fontSize: 10,
+                                fontWeight: 700, textTransform: 'uppercase',
+                                letterSpacing: '0.06em',
+                                color: 'var(--muted-foreground)',
+                              }}>
+                                {group.deptName}
+                              </span>
+                            </div>
 
-                          return (
-                            <motion.div
-                              key={proc.id}
-                              whileHover={{ y: -2, boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}
-                              transition={snappy}
-                              onClick={() => toggleProcess(proc.id)}
-                              style={{
-                                display: 'flex', alignItems: 'center', gap: 10,
-                                padding: '10px 12px',
-                                borderRadius: 12,
-                                border: isSelected
-                                  ? '2px solid var(--primary)'
-                                  : '1px solid var(--border)',
-                                backgroundColor: isSelected
-                                  ? 'rgba(99,102,241,0.06)'
-                                  : 'var(--card)',
-                                cursor: 'pointer',
-                                userSelect: 'none',
-                                transition: 'border-color 150ms, background-color 150ms',
-                              }}
-                            >
-                              <SmartIcon name={proc.name} type="process" color="var(--primary)" size={18} />
-                              <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{
-                                  fontFamily: 'var(--font-display)', fontSize: 13,
-                                  fontWeight: 600, color: 'var(--foreground)',
-                                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                                }}>
-                                  {proc.name}
-                                </div>
-                                {proc.code && (
+                            {/* Process list */}
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                              {group.processes.map((proc) => {
+                                const isSelected = selectedProcesses.has(proc.id)
+
+                                return (
+                                  <motion.div
+                                    key={proc.id}
+                                    whileHover={{ y: -1, boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}
+                                    transition={snappy}
+                                    onClick={() => toggleProcess(proc.id)}
+                                    style={{
+                                      display: 'flex', alignItems: 'center', gap: 10,
+                                      padding: '10px 12px',
+                                      borderRadius: 10,
+                                      border: isSelected
+                                        ? '2px solid var(--primary)'
+                                        : '1px solid var(--border)',
+                                      backgroundColor: isSelected
+                                        ? 'rgba(99,102,241,0.06)'
+                                        : 'var(--card)',
+                                      cursor: 'pointer',
+                                      userSelect: 'none',
+                                      transition: 'border-color 150ms, background-color 150ms',
+                                    }}
+                                  >
+                                    {/* Checkbox indicator */}
+                                    <div style={{
+                                      width: 18, height: 18, borderRadius: 5,
+                                      border: isSelected ? '2px solid var(--primary)' : '2px solid var(--border)',
+                                      backgroundColor: isSelected ? 'var(--primary)' : 'transparent',
+                                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                      flexShrink: 0,
+                                      transition: 'all 150ms',
+                                    }}>
+                                      {isSelected && (
+                                        <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                                          <path d="M2 5L4 7L8 3" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                                        </svg>
+                                      )}
+                                    </div>
+
+                                    <SmartIcon name={proc.name} type="process" color="var(--primary)" size={18} />
+                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                      <div style={{
+                                        fontFamily: 'var(--font-display)', fontSize: 13,
+                                        fontWeight: 600, color: 'var(--foreground)',
+                                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                                      }}>
+                                        {proc.name}
+                                      </div>
+                                      <div style={{
+                                        fontFamily: 'var(--font-mono)', fontSize: 10,
+                                        color: 'var(--muted-foreground)',
+                                      }}>
+                                        {proc.unit_of_measure}{proc.norm_uph ? ` \u00B7 ${proc.norm_uph} UPH` : ''}
+                                      </div>
+                                    </div>
+                                  </motion.div>
+                                )
+                              })}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {selectedProcesses.size > 0 && (
+                        <div style={{
+                          fontFamily: 'var(--font-body)', fontSize: 12,
+                          color: 'var(--primary)', fontWeight: 600,
+                        }}>
+                          {selectedProcesses.size} proces{selectedProcesses.size !== 1 ? 'sen' : ''} geselecteerd
+                        </div>
+                      )}
+                    </motion.div>
+                  )}
+
+                  {/* ── Step 2: Configuratie (ratio's + naam/eenheid) ── */}
+                  {step === 2 && (
+                    <motion.div
+                      key="step2"
+                      custom={direction}
+                      initial={{ x: direction > 0 ? 40 : -40, opacity: 0 }}
+                      animate={{ x: 0, opacity: 1 }}
+                      exit={{ x: direction > 0 ? -40 : 40, opacity: 0 }}
+                      transition={snappy}
+                      style={{ display: 'flex', flexDirection: 'column', gap: 16 }}
+                    >
+                      <div style={{
+                        width: 40, height: 40, borderRadius: 10,
+                        background: 'linear-gradient(135deg, rgba(99,102,241,0.12), rgba(139,92,246,0.08))',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      }}>
+                        <Sliders size={18} style={{ color: 'var(--primary)' }} />
+                      </div>
+
+                      {/* Auto-derived name + unit (editable) */}
+                      <div style={{ display: 'flex', gap: 12 }}>
+                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                          <label style={labelStyle}>
+                            Naam <span style={{ color: 'var(--destructive)' }}>*</span>
+                          </label>
+                          <input
+                            autoFocus
+                            style={inputStyle}
+                            value={naam}
+                            onChange={(e) => setNaam(e.target.value)}
+                            placeholder="bijv. Outbound Orders"
+                          />
+                        </div>
+                        <div style={{ width: 140, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                          <label style={labelStyle}>
+                            Eenheid <span style={{ color: 'var(--destructive)' }}>*</span>
+                          </label>
+                          <input
+                            style={inputStyle}
+                            value={eenheid}
+                            onChange={(e) => setEenheid(e.target.value)}
+                            placeholder="orders"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Conversion ratios per selected process */}
+                      <div>
+                        <label style={{ ...labelStyle, marginBottom: 8, display: 'block' }}>
+                          Conversieratio per proces
+                        </label>
+                        <div style={{
+                          display: 'flex', flexDirection: 'column', gap: 6,
+                          maxHeight: 200, overflowY: 'auto',
+                        }}>
+                          {Array.from(selectedProcesses.entries()).map(([pid, ratio]) => {
+                            const proc = allProcesses.find((p) => p.id === pid)
+                            if (!proc) return null
+
+                            return (
+                              <div
+                                key={pid}
+                                style={{
+                                  display: 'flex', alignItems: 'center', gap: 10,
+                                  padding: '8px 12px', borderRadius: 10,
+                                  border: '1px solid var(--border)',
+                                  backgroundColor: 'rgba(99,102,241,0.03)',
+                                }}
+                              >
+                                <SmartIcon name={proc.name} type="process" color="var(--primary)" size={16} />
+                                <div style={{ flex: 1, minWidth: 0 }}>
                                   <div style={{
-                                    fontFamily: 'var(--font-mono)', fontSize: 10,
-                                    color: 'var(--muted-foreground)',
+                                    fontFamily: 'var(--font-display)', fontSize: 13,
+                                    fontWeight: 600, color: 'var(--foreground)',
                                   }}>
-                                    {proc.code}
+                                    {proc.name}
                                   </div>
-                                )}
-                              </div>
-
-                              {isSelected && (
-                                <div
-                                  onClick={(e) => e.stopPropagation()}
-                                  style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}
-                                >
+                                </div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
                                   <span style={{
                                     fontFamily: 'var(--font-body)', fontSize: 10,
                                     color: 'var(--muted-foreground)', whiteSpace: 'nowrap',
@@ -397,9 +555,9 @@ export function DemandTypeWizard({ open, onClose, siteId, onSaved, editId }: Dem
                                     step="0.1"
                                     min="0.01"
                                     value={ratio}
-                                    onChange={(e) => updateRatio(proc.id, Number(e.target.value) || 1)}
+                                    onChange={(e) => updateRatio(pid, Number(e.target.value) || 1)}
                                     style={{
-                                      width: 80,
+                                      width: 70,
                                       padding: '6px 8px',
                                       borderRadius: 'var(--radius-sm)',
                                       border: '1px solid var(--border)',
@@ -412,21 +570,18 @@ export function DemandTypeWizard({ open, onClose, siteId, onSaved, editId }: Dem
                                       boxSizing: 'border-box',
                                     }}
                                   />
+                                  <span style={{
+                                    fontFamily: 'var(--font-mono)', fontSize: 10,
+                                    color: 'var(--muted-foreground)',
+                                  }}>
+                                    {proc.unit_of_measure}
+                                  </span>
                                 </div>
-                              )}
-                            </motion.div>
-                          )
-                        })}
-                      </div>
-
-                      {!canStep2 && allProcesses.length > 0 && (
-                        <div style={{
-                          fontFamily: 'var(--font-body)', fontSize: 12,
-                          color: 'var(--muted-foreground)', fontStyle: 'italic',
-                        }}>
-                          Selecteer minimaal 1 proces om verder te gaan.
+                              </div>
+                            )
+                          })}
                         </div>
-                      )}
+                      </div>
                     </motion.div>
                   )}
 
@@ -506,7 +661,7 @@ export function DemandTypeWizard({ open, onClose, siteId, onSaved, editId }: Dem
                                   fontFamily: 'var(--font-mono)', fontSize: 12,
                                   color: 'var(--muted-foreground)',
                                 }}>
-                                  1:{ratio}
+                                  1:{ratio} {proc.unit_of_measure}
                                 </span>
                               </div>
                             )

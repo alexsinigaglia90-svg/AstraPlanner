@@ -11,6 +11,7 @@ import { trpc } from '@/lib/trpc/client'
 import { fadeInUp, containerStagger, scalePress, bouncy } from '@/lib/motion'
 import { AnimatedCounter } from '@/components/domain/animated-counter'
 import { useDemoStore } from '@/hooks/use-demo'
+import { useToast } from '@/components/domain/toast'
 import { demoSites } from '@/components/onboarding/demo-seed'
 import { ContextualTooltip } from '@/components/onboarding/contextual-tooltip'
 
@@ -390,6 +391,7 @@ type ViewMode = 'grid' | 'list'
 export default function SiteListPage() {
   const router = useRouter()
   const isDemo = useDemoStore((s) => s.isDemo)
+  const toast = useToast()
   const { data: liveSites, isLoading: liveLoading, error } = trpc.org.listSites.useQuery(
     undefined,
     { enabled: !isDemo },
@@ -571,7 +573,7 @@ export default function SiteListPage() {
             variants={scalePress}
             whileTap="press"
             onClick={() => {
-              if (isDemo) { window.alert('Dit is een demo — start je eigen omgeving om wijzigingen te maken'); return }
+              if (isDemo) { toast.showError('Dit is een demo — start je eigen omgeving om wijzigingen te maken'); return }
               setShowAddSite(true)
             }}
             style={{

@@ -125,12 +125,44 @@ export function FteDashboard({ siteId, weekRange }: FteDashboardProps) {
       if (shortage > maxShortage) maxShortage = shortage
     }
 
+    // Sparkline data: aggregate per week for each KPI
+    function getMonday(dateStr: string): string {
+      const d = new Date(dateStr)
+      const day = d.getUTCDay() || 7
+      d.setUTCDate(d.getUTCDate() - day + 1)
+      return d.toISOString().split('T')[0] ?? dateStr
+    }
+
+    const weeklyDemand = new Map<string, number>()
+    const weeklyFte = new Map<string, number>()
+    const weeklyShortage = new Map<string, number>()
+    const weeklyHours = new Map<string, number>()
+
+    for (const r of rows) {
+      const wk = getMonday(r.period_start)
+      weeklyDemand.set(wk, (weeklyDemand.get(wk) ?? 0) + n(r.demand_volume))
+      weeklyFte.set(wk, (weeklyFte.get(wk) ?? 0) + n(r.fte_assigned))
+      const sh = n(r.fte_needed) - n(r.fte_assigned)
+      weeklyShortage.set(wk, Math.max(weeklyShortage.get(wk) ?? 0, sh > 0 ? sh : 0))
+      weeklyHours.set(wk, (weeklyHours.get(wk) ?? 0) + n(r.hours_needed))
+    }
+
+    const sortedWeeks = Array.from(weeklyDemand.keys()).sort()
+    const demandSparkline = sortedWeeks.map((w) => weeklyDemand.get(w) ?? 0)
+    const fteSparkline = sortedWeeks.map((w) => weeklyFte.get(w) ?? 0)
+    const shortageSparkline = sortedWeeks.map((w) => weeklyShortage.get(w) ?? 0)
+    const hoursSparkline = sortedWeeks.map((w) => weeklyHours.get(w) ?? 0)
+
     return {
       totalDemand,
       totalHoursNeeded,
       totalHoursAvailable,
       totalFteAvailable,
       maxShortage,
+      demandSparkline,
+      fteSparkline,
+      shortageSparkline,
+      hoursSparkline,
     }
   }, [workloadData])
 
@@ -195,13 +227,20 @@ export function FteDashboard({ siteId, weekRange }: FteDashboardProps) {
 
     for (const g of grouped.values()) {
       weekSet.add(g.monday)
+      // Recompute coverage from aggregated totals (not averaging percentages)
+      const avgNeeded = g.count > 0 ? g.total_fte_needed / g.count : 0
+      const avgAvailable = g.count > 0 ? g.total_fte_available / g.count : 0
+      const computedCoverage = avgNeeded > 0
+        ? Math.round((avgAvailable / avgNeeded) * 100)
+        : (g.has_computed ? 100 : 0)
+
       cells.push({
         process_id: g.process_id,
         process_name: g.process_name,
         period_start: g.monday,
-        coverage_pct: g.count > 0 ? Math.round(g.total_coverage / g.count) : 0,
-        fte_needed: Math.round(g.total_fte_needed / g.count * 10) / 10,
-        fte_available: Math.round(g.total_fte_available / g.count * 10) / 10,
+        coverage_pct: computedCoverage,
+        fte_needed: Math.round(avgNeeded * 10) / 10,
+        fte_available: Math.round(avgAvailable * 10) / 10,
         status: g.has_computed ? 'computed' : 'no_norm',
       })
     }
@@ -284,34 +323,39 @@ export function FteDashboard({ siteId, weekRange }: FteDashboardProps) {
           label="Totale Demand"
           value={kpis.totalDemand}
           detail={`${weeks.length} weken`}
-          icon={<span style={{ fontSize: 18 }}>📊</span>}
+          icon={<span style={{ fontSize: 16 }}>📊</span>}
           gradientColors={['var(--primary)', '#818CF8']}
           delay={0}
+          sparkline={kpis.demandSparkline}
         />
         <KpiHeroCard
           label="Beschikbare FTE"
           value={Math.round(kpis.totalFteAvailable * 10) / 10}
           detail={`${Math.round(kpis.totalHoursAvailable)} uur beschikbaar`}
-          icon={<span style={{ fontSize: 18 }}>👥</span>}
+          icon={<span style={{ fontSize: 16 }}>👥</span>}
           gradientColors={['#10B981', '#34D399']}
           delay={0.05}
+          sparkline={kpis.fteSparkline}
         />
         <KpiHeroCard
           label="FTE Tekort"
           value={Math.round(kpis.maxShortage * 10) / 10}
           detail="max tekort (enkel week)"
-          icon={<span style={{ fontSize: 18 }}>⚠️</span>}
+          icon={<span style={{ fontSize: 16 }}>⚠️</span>}
           gradientColors={['#EF4444', '#F87171']}
           delay={0.1}
+          sparkline={kpis.shortageSparkline}
+          pulse={kpis.maxShortage > 0}
         />
         <KpiHeroCard
           label="Uren Nodig"
           value={Math.round(kpis.totalHoursNeeded)}
           detail={`vs ${Math.round(kpis.totalHoursAvailable)} beschikbaar`}
-          icon={<span style={{ fontSize: 18 }}>⏱️</span>}
+          icon={<span style={{ fontSize: 16 }}>⏱️</span>}
           gradientColors={['#F59E0B', '#FBBF24']}
           delay={0.15}
           suffix=" u"
+          sparkline={kpis.hoursSparkline}
         />
       </div>
 

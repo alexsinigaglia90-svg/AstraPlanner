@@ -79,11 +79,21 @@ export function computeWorkload(
         status = 'no_norm'
       }
 
+      // Scale available hours to match the period (day vs week)
+      const pStartAvail = new Date(demand.period_start)
+      const pEndAvail = new Date(demand.period_end)
+      const spanDaysAvail = Math.max(1, Math.round((pEndAvail.getTime() - pStartAvail.getTime()) / (24 * 60 * 60 * 1000)))
+      const effectiveHoursAvail = spanDaysAvail <= 1 ? (effectiveHoursPerWeek / 5) : effectiveHoursPerWeek
+
       const hoursAvailable = processEmployees.reduce(
-        (sum, emp) => sum + emp.available_hours * emp.productive_pct,
+        (sum, emp) => {
+          const weeklyHours = emp.available_hours * emp.productive_pct
+          // Scale weekly hours to period length
+          return sum + (spanDaysAvail <= 1 ? weeklyHours / 5 : weeklyHours)
+        },
         0,
       )
-      const fteAvailable = hoursAvailable / effectiveHoursPerWeek
+      const fteAvailable = hoursAvailable / effectiveHoursAvail
 
       const coveragePct =
         hoursNeeded && hoursNeeded > 0

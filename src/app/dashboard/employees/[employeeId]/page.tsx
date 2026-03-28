@@ -7,6 +7,7 @@ import { useRouter, useParams } from 'next/navigation'
 import { trpc } from '@/lib/trpc/client'
 import { fadeInUp, containerStagger, bouncy, scalePress } from '@/lib/motion'
 import { useDemoStore } from '@/hooks/use-demo'
+import { useToast } from '@/components/domain/toast'
 import { demoEmployees } from '@/components/onboarding/demo-seed'
 import { Avatar } from '@/components/domain/avatar'
 import { ProficiencyDots } from '@/components/domain/proficiency-dots'
@@ -134,6 +135,7 @@ export default function EmployeeDetailPage() {
   const params = useParams()
   const employeeId = params.employeeId as string
   const isDemo = useDemoStore((s) => s.isDemo)
+  const toast = useToast()
   const DEMO_MSG = 'Dit is een demo — start je eigen omgeving om wijzigingen te maken'
   const [editOpen, setEditOpen]         = useState(false)
   const [addSkillOpen, setAddSkillOpen] = useState(false)
@@ -143,10 +145,20 @@ export default function EmployeeDetailPage() {
     { id: employeeId },
     { enabled: !!employeeId && !isDemo },
   )
+  // Resolve department and site names
+  const { data: sitesData } = trpc.org.listSites.useQuery(undefined, { enabled: !isDemo })
+  const { data: deptsData } = trpc.org.listDepartments.useQuery(
+    { site_id: (liveEmp?.home_site_id ?? '') },
+    { enabled: !isDemo && !!liveEmp?.home_site_id },
+  )
   const emp = isDemo
     ? (demoEmployees.find((e) => e.id === employeeId) ?? demoEmployees[0]) as typeof liveEmp
     : liveEmp
   const isLoading = isDemo ? false : liveLoading
+
+  // Resolve names from UUIDs
+  const siteName = sitesData?.find((s: { id: string; name: string }) => s.id === emp?.home_site_id)?.name
+  const deptName = deptsData?.find((d: { id: string; name: string }) => d.id === emp?.department_id)?.name
 
   if (!employeeId) return null
 
@@ -305,7 +317,7 @@ export default function EmployeeDetailPage() {
         <motion.button
           variants={scalePress}
           whileTap="press"
-          onClick={() => { if (isDemo) { window.alert(DEMO_MSG); return }; setEditOpen(true) }}
+          onClick={() => { if (isDemo) { toast.showError(DEMO_MSG); return }; setEditOpen(true) }}
           style={{
             display: 'inline-flex',
             alignItems: 'center',
@@ -351,7 +363,7 @@ export default function EmployeeDetailPage() {
               </span>
             </InfoRow>
             <InfoRow label="Department">
-              {emp.department_id ?? '—'}
+              {emp.department_id ? (deptName ?? emp.department_id.slice(0, 8) + '…') : '—'}
             </InfoRow>
             <InfoRow label="Hourly Rate">
               <span style={{ fontFamily: 'var(--font-mono)', fontVariantNumeric: 'tabular-nums' }}>
@@ -402,9 +414,7 @@ export default function EmployeeDetailPage() {
               </span>
             </InfoRow>
             <InfoRow label="Home Site">
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: '12px' }}>
-                {emp.home_site_id.slice(0, 8)}…
-              </span>
+              {siteName ?? emp.home_site_id.slice(0, 8) + '…'}
             </InfoRow>
           </div>
         </SectionCard>
@@ -486,7 +496,7 @@ export default function EmployeeDetailPage() {
         <motion.button
           variants={scalePress}
           whileTap="press"
-          onClick={() => { if (isDemo) { window.alert(DEMO_MSG); return }; setAddSkillOpen(true) }}
+          onClick={() => { if (isDemo) { toast.showError(DEMO_MSG); return }; setAddSkillOpen(true) }}
           style={{
             alignSelf: 'flex-start',
             padding: '7px 14px',
@@ -592,7 +602,7 @@ export default function EmployeeDetailPage() {
         <motion.button
           variants={scalePress}
           whileTap="press"
-          onClick={() => { if (isDemo) { window.alert(DEMO_MSG); return }; setAbsenceOpen(true) }}
+          onClick={() => { if (isDemo) { toast.showError(DEMO_MSG); return }; setAbsenceOpen(true) }}
           style={{
             alignSelf: 'flex-start',
             padding: '7px 14px',

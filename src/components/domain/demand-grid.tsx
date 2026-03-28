@@ -10,6 +10,7 @@ import { SiteSelector } from './site-selector'
 import { DemandGridCell } from './demand-grid-cell'
 import { SmartIcon } from './smart-icon'
 import { useDemoStore } from '@/hooks/use-demo'
+import { useToast } from '@/components/domain/toast'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -181,6 +182,7 @@ export function DemandGrid({ siteId, weekRange, onWeekRangeChange }: DemandGridP
   const [expandedWeeks, setExpandedWeeks] = useState<Set<string>>(new Set())
   const pickerRef = useRef<HTMLDivElement>(null)
   const isDemo = useDemoStore((s) => s.isDemo)
+  const toast = useToast()
 
   const utils = trpc.useUtils()
 
@@ -234,7 +236,7 @@ export function DemandGrid({ siteId, weekRange, onWeekRangeChange }: DemandGridP
     },
     onError: (err) => {
       console.error('[DemandGrid] Day save failed:', err.message)
-      window.alert(`Opslaan mislukt: ${err.message}`)
+      toast.showError(`Opslaan mislukt: ${err.message}`)
     },
   })
 
@@ -245,7 +247,7 @@ export function DemandGrid({ siteId, weekRange, onWeekRangeChange }: DemandGridP
     },
     onError: (err) => {
       console.error('[DemandGrid] Week save failed:', err.message)
-      window.alert(`Opslaan mislukt: ${err.message}`)
+      toast.showError(`Opslaan mislukt: ${err.message}`)
     },
   })
 
