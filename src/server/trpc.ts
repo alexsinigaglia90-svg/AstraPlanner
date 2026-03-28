@@ -92,4 +92,11 @@ export function roleProcedure(minRole: AppRole) {
 export const adminProcedure = roleProcedure('tenant_admin')
 export const managerProcedure = roleProcedure('site_manager')
 export const plannerProcedure = roleProcedure('planner')
+/** Require at least supervisor role (supervisor=40) */
+export const supervisorProcedure = protectedProcedure.use(async ({ ctx, next }) => {
+  if (!hasMinRole(ctx.role, 'supervisor')) {
+    throw new TRPCError({ code: 'FORBIDDEN', message: 'Minimum role: supervisor' })
+  }
+  return next({ ctx })
+})
 export const viewerProcedure = roleProcedure('viewer')
