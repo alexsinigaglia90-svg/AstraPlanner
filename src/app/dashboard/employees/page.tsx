@@ -374,6 +374,55 @@ export default function EmployeesPage() {
   const [allEmployees, setAllEmployees] = useState<Employee[]>([])
   const [addOpen, setAddOpen] = useState(false)
   const [quickEditEmployee, setQuickEditEmployee] = useState<Employee | null>(null)
+  const utils = trpc.useUtils()
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [bulkDeleting, setBulkDeleting] = useState(false)
+
+  const deleteEmployee = trpc.workforce.deleteEmployee.useMutation()
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === allEmployees.length) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(allEmployees.map((e) => e.id)))
+    }
+  }
+
+  const handleBulkDelete = async () => {
+    if (isDemo) { window.alert('Dit is een demo — start je eigen omgeving om wijzigingen te maken'); return }
+    if (selectedIds.size === 0) return
+    if (!window.confirm(`Weet je zeker dat je ${selectedIds.size} medewerker(s) wilt verwijderen?`)) return
+
+    setBulkDeleting(true)
+    let deleted = 0
+    const errors: string[] = []
+
+    for (const id of selectedIds) {
+      try {
+        await deleteEmployee.mutateAsync({ id })
+        deleted++
+      } catch (err) {
+        errors.push(err instanceof Error ? err.message : 'Onbekende fout')
+      }
+    }
+
+    setBulkDeleting(false)
+    setSelectedIds(new Set())
+    utils.workforce.listEmployees.invalidate()
+
+    if (errors.length > 0) {
+      window.alert(`${deleted} verwijderd, ${errors.length} mislukt: ${errors[0]}`)
+    }
+  }
 
   const deptsQuery = trpc.org.listDepartments.useQuery(
     { site_id: activeSiteId! },
@@ -798,6 +847,44 @@ export default function EmployeesPage() {
       {/* Employee list */}
       {allEmployees.length > 0 && (
         <>
+        {/* Bulk actions toolbar */}
+        {selectedIds.size > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 12,
+              padding: '10px 16px', borderRadius: 'var(--radius-md)',
+              backgroundColor: 'rgba(99,102,241,0.06)',
+              border: '1px solid rgba(99,102,241,0.15)',
+              marginBottom: 10,
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={selectedIds.size === allEmployees.length}
+              onChange={toggleSelectAll}
+              style={{ width: 16, height: 16, accentColor: '#6366F1', cursor: 'pointer' }}
+            />
+            <span style={{ fontFamily: 'var(--font-body)', fontSize: 13, fontWeight: 600, color: 'var(--primary)' }}>
+              {selectedIds.size} geselecteerd
+            </span>
+            <div style={{ flex: 1 }} />
+            <button
+              onClick={handleBulkDelete}
+              disabled={bulkDeleting}
+              style={{
+                padding: '6px 14px', borderRadius: 'var(--radius-sm)',
+                border: '1px solid rgba(239,68,68,0.3)', background: 'rgba(239,68,68,0.06)',
+                color: '#DC2626', fontFamily: 'var(--font-body)', fontSize: 12,
+                fontWeight: 600, cursor: bulkDeleting ? 'not-allowed' : 'pointer',
+              }}
+            >
+              {bulkDeleting ? 'Verwijderen...' : `Verwijder (${selectedIds.size})`}
+            </button>
+          </motion.div>
+        )}
+
         <motion.div
           variants={containerStagger}
           initial="hidden"
@@ -805,15 +892,35 @@ export default function EmployeesPage() {
           style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}
         >
           {allEmployees.map((emp, idx) => (
-            <div key={emp.id} style={{ position: 'relative' }}>
-              <EmployeeCard
-                employee={emp}
-                onClick={() => router.push(`/dashboard/employees/${emp.id}`)}
-                onHoldEdit={() => setQuickEditEmployee(emp)}
-                deptName={emp.department_id ? deptMap.get(emp.department_id) : null}
-                roleName={emp.job_role_id ? roleMap.get(emp.job_role_id) : null}
-                skillNames={employeeSkillNames.get(emp.id) ?? []}
-              />
+            <div key={emp.id} style={{ position: 'relative', display: 'flex', alignItems: 'stretch', gap: 8 }}>
+              <div
+                onClick={(e) => { e.stopPropagation(); toggleSelect(emp.id) }}
+                style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  width: 32, flexShrink: 0, cursor: 'pointer',
+                  borderRadius: 'var(--radius-sm)',
+                  backgroundColor: selectedIds.has(emp.id) ? 'rgba(99,102,241,0.08)' : 'transparent',
+                  transition: 'background-color 0.15s',
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={selectedIds.has(emp.id)}
+                  onChange={() => toggleSelect(emp.id)}
+                  onClick={(e) => e.stopPropagation()}
+                  style={{ width: 15, height: 15, accentColor: '#6366F1', cursor: 'pointer' }}
+                />
+              </div>
+              <div style={{ flex: 1 }}>
+                <EmployeeCard
+                  employee={emp}
+                  onClick={() => router.push(`/dashboard/employees/${emp.id}`)}
+                  onHoldEdit={() => setQuickEditEmployee(emp)}
+                  deptName={emp.department_id ? deptMap.get(emp.department_id) : null}
+                  roleName={emp.job_role_id ? roleMap.get(emp.job_role_id) : null}
+                  skillNames={employeeSkillNames.get(emp.id) ?? []}
+                />
+              </div>
               {idx === 0 && <InteractionHint />}
             </div>
           ))}
