@@ -352,7 +352,8 @@ export const workloadRouter = router({
       })
     )
     .query(async ({ ctx, input }) => {
-      const { data, error } = await ctx.supabase
+      const admin = createAdminClient()
+      const { data, error } = await admin
         .from('workload_plan')
         .select(`
           id, process_id, period_start, period_end,
@@ -361,6 +362,7 @@ export const workloadRouter = router({
           hours_assigned, fte_assigned, coverage_pct, status,
           process:process_id(name, category, type)
         `)
+        .eq('organization_id', ctx.organizationId)
         .eq('site_id', input.site_id)
         .gte('period_start', input.period_start)
         .lte('period_end', input.period_end)
