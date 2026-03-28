@@ -56,12 +56,18 @@ export function computeWorkload(
       let fteNeeded: number | null = null
       let status: 'computed' | 'no_norm' = 'computed'
 
-      if (baseUph && processEmployees.length > 0) {
-        const totalUph = processEmployees.reduce((sum, emp) => {
-          const multiplier = PROFICIENCY_MULTIPLIERS[emp.proficiency_level] ?? 1.0
-          return sum + baseUph * multiplier
-        }, 0)
-        weightedUph = totalUph / processEmployees.length
+      if (baseUph && baseUph > 0) {
+        if (processEmployees.length > 0) {
+          // Weighted UPH from actual employee skill levels
+          const totalUph = processEmployees.reduce((sum, emp) => {
+            const multiplier = PROFICIENCY_MULTIPLIERS[emp.proficiency_level] ?? 1.0
+            return sum + baseUph * multiplier
+          }, 0)
+          weightedUph = totalUph / processEmployees.length
+        } else {
+          // No employees assigned yet — use base UPH (level 3)
+          weightedUph = baseUph
+        }
         hoursNeeded = processVolume / weightedUph
         fteNeeded = hoursNeeded / effectiveHoursPerWeek
       } else {
