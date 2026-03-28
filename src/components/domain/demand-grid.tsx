@@ -2,8 +2,8 @@
 
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { TrendingUp, Plus, ChevronDown } from 'lucide-react'
-import { containerStagger, fadeInUp, bouncy } from '@/lib/motion'
+import { TrendingUp, Plus, ChevronDown, ChevronRight } from 'lucide-react'
+import { containerStagger, fadeInUp, bouncy, snappy } from '@/lib/motion'
 import { trpc } from '@/lib/trpc/client'
 import { WeekRangePicker } from './week-range-picker'
 import { SiteSelector } from './site-selector'
@@ -18,6 +18,10 @@ interface DemandGridProps {
   weekRange: { start: string; end: string }
   onWeekRangeChange: (range: { start: string; end: string }) => void
 }
+
+// ── Dutch day names ──────────────────────────────────────────────────────────
+
+const DAY_NAMES = ['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo'] as const
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -46,11 +50,21 @@ function weekLabel(isoDate: string): string {
   return `Wk${getISOWeekNumber(d)}`
 }
 
-/** Compute period_end (Sunday) for a given Monday. */
-function periodEnd(monday: string): string {
+/** Get the 7 day ISO date strings for a given Monday. */
+function getWeekDays(monday: string): string[] {
+  const days: string[] = []
   const d = new Date(monday + 'T00:00:00Z')
-  d.setUTCDate(d.getUTCDate() + 6)
-  return d.toISOString().split('T')[0] as string
+  for (let i = 0; i < 7; i++) {
+    days.push(d.toISOString().split('T')[0] as string)
+    d.setUTCDate(d.getUTCDate() + 1)
+  }
+  return days
+}
+
+/** Format a date string as "30/3" */
+function shortDate(isoDate: string): string {
+  const d = new Date(isoDate + 'T00:00:00Z')
+  return `${d.getUTCDate()}/${d.getUTCMonth() + 1}`
 }
 
 /** Build a simple sparkline SVG polyline from numeric values. */
@@ -85,6 +99,45 @@ function Sparkline({ values }: { values: number[] }) {
         strokeLinecap="round"
         strokeLinejoin="round"
       />
+    </svg>
+  )
+}
+
+// ── MiniHeatmap ──────────────────────────────────────────────────────────────
+
+function MiniHeatmap({ values }: { values: number[] }) {
+  if (values.length !== 7) return null
+  const max = Math.max(...values)
+  if (max <= 0) return null
+
+  const barWidth = 5
+  const gap = 3
+  const svgWidth = 7 * barWidth + 6 * gap // 56
+  const svgHeight = 14
+
+  return (
+    <svg
+      width={svgWidth}
+      height={svgHeight}
+      viewBox={`0 0 ${svgWidth} ${svgHeight}`}
+      style={{ display: 'block', margin: '2px auto 0' }}
+    >
+      {values.map((v, i) => {
+        const ratio = max > 0 ? v / max : 0
+        const barHeight = Math.max(ratio * svgHeight, ratio > 0 ? 1 : 0)
+        const alpha = 0.3 + ratio * 0.5
+        return (
+          <rect
+            key={i}
+            x={i * (barWidth + gap)}
+            y={svgHeight - barHeight}
+            width={barWidth}
+            height={barHeight}
+            rx={1}
+            fill={`rgba(99,102,241,${alpha.toFixed(2)})`}
+          />
+        )
+      })}
     </svg>
   )
 }
@@ -125,6 +178,7 @@ export function DemandGrid({ siteId, weekRange, onWeekRangeChange }: DemandGridP
   const [lastSaved, setLastSaved] = useState(false)
   const [addedProcessIds, setAddedProcessIds] = useState<Set<string>>(new Set())
   const [showProcessPicker, setShowProcessPicker] = useState(false)
+  const [expandedWeeks, setExpandedWeeks] = useState<Set<string>>(new Set())
   const pickerRef = useRef<HTMLDivElement>(null)
   const isDemo = useDemoStore((s) => s.isDemo)
 
@@ -139,6 +193,20 @@ export function DemandGrid({ siteId, weekRange, onWeekRangeChange }: DemandGridP
     }
     document.addEventListener('mousedown', handleClick)
     return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
+
+  // ── Toggle week expand ────────────────────────────────────────────────
+
+  const toggleWeek = useCallback((monday: string) => {
+    setExpandedWeeks((prev) => {
+      const next = new Set(prev)
+      if (next.has(monday)) {
+        next.delete(monday)
+      } else {
+        next.add(monday)
+      }
+      return next
+    })
   }, [])
 
   // ── Data fetching ──────────────────────────────────────────────────────
@@ -159,14 +227,21 @@ export function DemandGrid({ siteId, weekRange, onWeekRangeChange }: DemandGridP
   )
   const forecasts = isDemo ? [] : liveForecasts
 
-  const upsertProcessForecast = trpc.demand.upsertProcessForecast.useMutation({
+  const upsertDayMutation = trpc.demand.upsertProcessForecast.useMutation({
     onSuccess: () => {
       setLastSaved(true)
       void utils.demand.listProcessDemand.invalidate()
     },
   })
 
-  const isSaving = upsertProcessForecast.isPending
+  const upsertWeekMutation = trpc.demand.upsertWeekForecast.useMutation({
+    onSuccess: () => {
+      setLastSaved(true)
+      void utils.demand.listProcessDemand.invalidate()
+    },
+  })
+
+  const isSaving = upsertDayMutation.isPending || upsertWeekMutation.isPending
 
   // ── Derived data ───────────────────────────────────────────────────────
 
@@ -196,33 +271,46 @@ export function DemandGrid({ siteId, weekRange, onWeekRangeChange }: DemandGridP
 
   const weeks = useMemo(() => buildWeekMondays(weekRange.start, weekRange.end), [weekRange])
 
-  /** Map: "processId:monday" -> forecast */
+  /** Map: "processId:date" -> forecast (day-level keying) */
   const forecastMap = useMemo(() => {
     const m = new Map<string, (typeof forecasts)[number]>()
     for (const f of forecasts) {
       if (f.process_id) {
-        const periodKey = typeof f.period_start === 'string'
+        const dateKey = typeof f.period_start === 'string'
           ? f.period_start.split('T')[0]
           : f.period_start
-        m.set(`${f.process_id}:${periodKey}`, f)
+        m.set(`${f.process_id}:${dateKey}`, f)
       }
     }
     return m
   }, [forecasts])
 
+  /** Get day volumes for a process+week (7 values, Mon-Sun). */
+  const getWeekDayVolumes = useCallback(
+    (processId: string, monday: string): number[] => {
+      const days = getWeekDays(monday)
+      return days.map((d) => {
+        const f = forecastMap.get(`${processId}:${d}`)
+        return f?.volume ? Number(f.volume) : 0
+      })
+    },
+    [forecastMap],
+  )
+
+  /** Get week total for a process+week. */
+  const getWeekTotal = useCallback(
+    (processId: string, monday: string): number => {
+      return getWeekDayVolumes(processId, monday).reduce((a, b) => a + b, 0)
+    },
+    [getWeekDayVolumes],
+  )
+
   // ── Handlers ───────────────────────────────────────────────────────────
 
-  const upsertWeekForecast = trpc.demand.upsertWeekForecast.useMutation({
-    onSuccess: () => {
-      setLastSaved(true)
-      void utils.demand.listProcessDemand.invalidate()
-    },
-  })
-
-  const handleCellChange = useCallback(
+  const handleWeekCellChange = useCallback(
     (processId: string, monday: string, volume: number, uom: string) => {
       if (isDemo) return
-      upsertWeekForecast.mutate({
+      upsertWeekMutation.mutate({
         site_id: siteId,
         process_id: processId,
         week_start: monday,
@@ -230,7 +318,47 @@ export function DemandGrid({ siteId, weekRange, onWeekRangeChange }: DemandGridP
         unit_of_measure: uom,
       })
     },
-    [siteId, upsertWeekForecast, isDemo],
+    [siteId, upsertWeekMutation, isDemo],
+  )
+
+  const handleDayCellChange = useCallback(
+    (processId: string, date: string, volume: number, uom: string) => {
+      if (isDemo) return
+      upsertDayMutation.mutate({
+        site_id: siteId,
+        process_id: processId,
+        date,
+        volume,
+        unit_of_measure: uom,
+      })
+    },
+    [siteId, upsertDayMutation, isDemo],
+  )
+
+  // ── Compute total hours per process ────────────────────────────────────
+
+  const getProcessTotalHours = useCallback(
+    (processId: string, normUph: number): number | null => {
+      if (normUph <= 0) return null
+      let totalVolume = 0
+      for (const w of weeks) {
+        totalVolume += getWeekTotal(processId, w)
+      }
+      return Math.round((totalVolume / normUph) * 10) / 10
+    },
+    [weeks, getWeekTotal],
+  )
+
+  const getHoursColor = useCallback(
+    (hours: number | null): string => {
+      if (hours === null) return 'var(--muted-foreground)'
+      const weekCount = weeks.length || 1
+      const avgPerWeek = hours / weekCount
+      if (avgPerWeek > 60) return '#EF4444'
+      if (avgPerWeek > 40) return '#F59E0B'
+      return '#10B981'
+    },
+    [weeks],
   )
 
   // ── Styles ─────────────────────────────────────────────────────────────
@@ -304,6 +432,239 @@ export function DemandGrid({ siteId, weekRange, onWeekRangeChange }: DemandGridP
     padding: '1px 5px',
     marginLeft: 4,
     whiteSpace: 'nowrap',
+  }
+
+  const weekPillStyle: React.CSSProperties = {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 4,
+    padding: '4px 10px',
+    borderRadius: 20,
+    border: 'none',
+    background: 'rgba(99,102,241,0.08)',
+    cursor: 'pointer',
+    fontFamily: 'var(--font-mono)',
+    fontSize: 11,
+    fontWeight: 600,
+    color: 'var(--primary)',
+    whiteSpace: 'nowrap',
+    transition: 'background 150ms',
+  }
+
+  const dayThStyle: React.CSSProperties = {
+    ...thStyle,
+    fontSize: 10,
+    padding: '4px 6px',
+    minWidth: 70,
+  }
+
+  const sumThStyle: React.CSSProperties = {
+    ...dayThStyle,
+    color: 'var(--muted-foreground)',
+    opacity: 0.7,
+  }
+
+  const weekendCellBg = 'rgba(99,102,241,0.03)'
+
+  const expandedBorderStyle: React.CSSProperties = {
+    borderLeft: '2px solid rgba(99,102,241,0.25)',
+  }
+
+  // ── Build header columns ───────────────────────────────────────────────
+
+  const renderHeaderCells = () => {
+    const cells: React.ReactNode[] = []
+
+    for (const w of weeks) {
+      const isExpanded = expandedWeeks.has(w)
+
+      if (isExpanded) {
+        const days = getWeekDays(w)
+        days.forEach((d, idx) => {
+          const isWeekend = idx >= 5
+          cells.push(
+            <th
+              key={`day-${d}`}
+              style={{
+                ...dayThStyle,
+                ...(idx === 0 ? expandedBorderStyle : {}),
+                background: isWeekend ? weekendCellBg : undefined,
+              }}
+            >
+              <div>{DAY_NAMES[idx]}</div>
+              <div style={{ fontSize: 9, fontWeight: 400, opacity: 0.7 }}>
+                {shortDate(d)}
+              </div>
+            </th>,
+          )
+        })
+        // Sum column
+        cells.push(
+          <th key={`sum-${w}`} style={sumThStyle}>
+            <div
+              style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 3 }}
+              onClick={() => toggleWeek(w)}
+            >
+              <motion.span
+                animate={{ rotate: 90 }}
+                transition={snappy}
+                style={{ display: 'inline-flex' }}
+              >
+                <ChevronRight size={11} />
+              </motion.span>
+              {'\u03A3'}
+            </div>
+          </th>,
+        )
+      } else {
+        cells.push(
+          <th key={`week-${w}`} style={thStyle}>
+            <motion.button
+              onClick={() => toggleWeek(w)}
+              style={weekPillStyle}
+              whileHover={{ background: 'rgba(99,102,241,0.14)' }}
+              whileTap={{ scale: 0.96 }}
+              transition={snappy}
+            >
+              <motion.span
+                animate={{ rotate: 0 }}
+                transition={snappy}
+                style={{ display: 'inline-flex' }}
+              >
+                <ChevronRight size={11} />
+              </motion.span>
+              {weekLabel(w)}
+            </motion.button>
+          </th>,
+        )
+      }
+    }
+
+    return cells
+  }
+
+  // ── Render row cells for a given process ───────────────────────────────
+
+  const renderRowCells = (proc: typeof processes[number]) => {
+    const normUph = proc.norm_uph ?? 0
+    const uom = proc.unit_of_measure ?? ''
+    const cells: React.ReactNode[] = []
+
+    for (const w of weeks) {
+      const isExpanded = expandedWeeks.has(w)
+      const dayVolumes = getWeekDayVolumes(proc.id, w)
+
+      if (isExpanded) {
+        const days = getWeekDays(w)
+        days.forEach((d, idx) => {
+          const isWeekend = idx >= 5
+          const f = forecastMap.get(`${proc.id}:${d}`)
+          const volume = f?.volume ? Number(f.volume) : null
+          const computedHours =
+            volume !== null && normUph > 0
+              ? Math.round((volume / normUph) * 10) / 10
+              : null
+
+          cells.push(
+            <td
+              key={`day-${proc.id}-${d}`}
+              style={{
+                verticalAlign: 'top',
+                padding: 2,
+                ...(idx === 0 ? expandedBorderStyle : {}),
+                background: isWeekend ? weekendCellBg : undefined,
+              }}
+            >
+              <DemandGridCell
+                value={volume}
+                computedHours={computedHours}
+                onChange={(vol) => handleDayCellChange(proc.id, d, vol, uom)}
+                isLoading={upsertDayMutation.isPending}
+              />
+            </td>,
+          )
+        })
+
+        // Sum column (non-editable)
+        const weekTotal = dayVolumes.reduce((a, b) => a + b, 0)
+        const sumHours =
+          weekTotal > 0 && normUph > 0
+            ? Math.round((weekTotal / normUph) * 10) / 10
+            : null
+
+        cells.push(
+          <td
+            key={`sum-${proc.id}-${w}`}
+            style={{ verticalAlign: 'top', padding: 2 }}
+          >
+            <div
+              style={{
+                padding: '4px 8px',
+                borderRadius: 8,
+                background: 'rgba(99,102,241,0.03)',
+                border: '1px solid rgba(99,102,241,0.08)',
+                minWidth: 70,
+                opacity: 0.7,
+              }}
+            >
+              <div
+                style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontVariantNumeric: 'tabular-nums',
+                  fontSize: 13,
+                  fontWeight: 500,
+                  textAlign: 'right',
+                  color: 'var(--muted-foreground)',
+                  lineHeight: 1.4,
+                }}
+              >
+                {weekTotal > 0 ? weekTotal.toLocaleString('nl-NL') : '\u2014'}
+              </div>
+              {sumHours !== null && (
+                <div
+                  style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 9,
+                    color: 'var(--muted-foreground)',
+                    textAlign: 'right',
+                    lineHeight: 1.2,
+                    marginTop: 1,
+                  }}
+                >
+                  {'\u2192'} {sumHours.toLocaleString('nl-NL')}h
+                </div>
+              )}
+            </div>
+          </td>,
+        )
+      } else {
+        // Collapsed week cell
+        const weekTotal = dayVolumes.reduce((a, b) => a + b, 0)
+        const computedHours =
+          weekTotal > 0 && normUph > 0
+            ? Math.round((weekTotal / normUph) * 10) / 10
+            : null
+
+        cells.push(
+          <td
+            key={`week-${proc.id}-${w}`}
+            style={{ verticalAlign: 'top', padding: 2 }}
+          >
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch' }}>
+              <DemandGridCell
+                value={weekTotal > 0 ? weekTotal : null}
+                computedHours={computedHours}
+                onChange={(vol) => handleWeekCellChange(proc.id, w, vol, uom)}
+                isLoading={upsertWeekMutation.isPending}
+              />
+              <MiniHeatmap values={dayVolumes} />
+            </div>
+          </td>,
+        )
+      }
+    }
+
+    return cells
   }
 
   // ── Render ─────────────────────────────────────────────────────────────
@@ -404,11 +765,8 @@ export function DemandGrid({ siteId, weekRange, onWeekRangeChange }: DemandGridP
             <tr>
               <th style={{ ...thStyle, textAlign: 'left', minWidth: 180 }}>Proces</th>
               <th style={{ ...thStyle, width: 80 }}>Trend</th>
-              {weeks.map((w) => (
-                <th key={w} style={thStyle}>
-                  {weekLabel(w)}
-                </th>
-              ))}
+              {renderHeaderCells()}
+              <th style={{ ...thStyle, width: 70 }}>Uren</th>
             </tr>
           </thead>
 
@@ -418,13 +776,14 @@ export function DemandGrid({ siteId, weekRange, onWeekRangeChange }: DemandGridP
               const normUph = proc.norm_uph ?? 0
               const uom = proc.unit_of_measure ?? ''
 
-              // Sparkline values
+              // Sparkline values (week totals for first 6 weeks)
               const sparklineValues = weeks
                 .slice(0, 6)
-                .map((w) => {
-                  const f = forecastMap.get(`${proc.id}:${w}`)
-                  return f?.volume ? Number(f.volume) : 0
-                })
+                .map((w) => getWeekTotal(proc.id, w))
+
+              // Total hours
+              const totalHours = getProcessTotalHours(proc.id, normUph)
+              const hoursColor = getHoursColor(totalHours)
 
               return (
                 <motion.tr key={proc.id} variants={fadeInUp}>
@@ -456,25 +815,33 @@ export function DemandGrid({ siteId, weekRange, onWeekRangeChange }: DemandGridP
                     <Sparkline values={sparklineValues} />
                   </td>
 
-                  {/* Week cells */}
-                  {weeks.map((w) => {
-                    const forecast = forecastMap.get(`${proc.id}:${w}`)
-                    const volume = forecast?.volume ? Number(forecast.volume) : null
-                    const computedHours = volume !== null && normUph > 0
-                      ? Math.round((volume / normUph) * 10) / 10
-                      : null
+                  {/* Week / day cells */}
+                  {renderRowCells(proc)}
 
-                    return (
-                      <td key={w} style={{ verticalAlign: 'top', padding: 2 }}>
-                        <DemandGridCell
-                          value={volume}
-                          computedHours={computedHours}
-                          onChange={(vol) => handleCellChange(proc.id, w, vol, uom)}
-                          isLoading={upsertProcessForecast.isPending}
-                        />
-                      </td>
-                    )
-                  })}
+                  {/* Total hours cell */}
+                  <td style={{ verticalAlign: 'top', padding: 2 }}>
+                    <div
+                      style={{
+                        padding: '6px 8px',
+                        borderRadius: 8,
+                        textAlign: 'right',
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontFamily: 'var(--font-mono)',
+                          fontVariantNumeric: 'tabular-nums',
+                          fontSize: 13,
+                          fontWeight: 600,
+                          color: hoursColor,
+                        }}
+                      >
+                        {totalHours !== null
+                          ? `${totalHours.toLocaleString('nl-NL')}h`
+                          : '\u2014'}
+                      </span>
+                    </div>
+                  </td>
                 </motion.tr>
               )
             })}
