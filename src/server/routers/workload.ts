@@ -76,7 +76,7 @@ export const workloadRouter = router({
           demand_forecast_id: f.id,
           demand_type_id: f.demand_type_id,
           demand_type_name: dt?.name ?? '',
-          volume: f.volume,
+          volume: Number(f.volume) || 0,
           period_start: f.period_start,
           period_end: f.period_end,
           process_mappings: ((dt?.process_mappings ?? []) as unknown[]).map((pm: unknown) => {
@@ -96,7 +96,7 @@ export const workloadRouter = router({
           demand_forecast_id: f.id,
           demand_type_id: null,
           demand_type_name: processNameMap[pid] ?? pid,
-          volume: f.volume,
+          volume: Number(f.volume) || 0,
           period_start: f.period_start,
           period_end: f.period_end,
           process_mappings: [{
@@ -145,7 +145,10 @@ export const workloadRouter = router({
           site_id: string
           skill_level: number
           units_per_hour: number
+          unit_of_measure: string
+          effective_date: string
           source: string
+          created_by: string
         }> = []
 
         for (const proc of processNorms ?? []) {
@@ -161,7 +164,10 @@ export const workloadRouter = router({
               site_id: input.site_id,
               skill_level: level,
               units_per_hour: uph,
+              unit_of_measure: 'units',
+              effective_date: new Date().toISOString().split('T')[0] ?? '',
               source: 'auto_seeded',
+              created_by: ctx.user?.id ?? '',
             })
             seededStandards.push({
               process_id: proc.id as string,
@@ -175,7 +181,7 @@ export const workloadRouter = router({
         if (seedRows.length > 0) {
           await admin
             .from('process_productivity_standard')
-            .upsert(seedRows, { onConflict: 'organization_id,process_id,site_id,skill_level' })
+            .upsert(seedRows, { onConflict: 'organization_id,process_id,site_id,skill_level,effective_date' })
         }
       }
 
