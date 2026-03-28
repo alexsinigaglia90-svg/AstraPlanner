@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Search, X, Upload, Plus } from 'lucide-react'
+import { Search, X, Upload, Plus, CheckSquare } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { trpc } from '@/lib/trpc/client'
@@ -375,6 +375,7 @@ export default function EmployeesPage() {
   const [addOpen, setAddOpen] = useState(false)
   const [quickEditEmployee, setQuickEditEmployee] = useState<Employee | null>(null)
   const utils = trpc.useUtils()
+  const [selectionMode, setSelectionMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkDeleting, setBulkDeleting] = useState(false)
 
@@ -387,6 +388,11 @@ export default function EmployeesPage() {
       else next.add(id)
       return next
     })
+  }
+
+  const exitSelectionMode = () => {
+    setSelectionMode(false)
+    setSelectedIds(new Set())
   }
 
   const toggleSelectAll = () => {
@@ -416,7 +422,7 @@ export default function EmployeesPage() {
     }
 
     setBulkDeleting(false)
-    setSelectedIds(new Set())
+    exitSelectionMode()
     utils.workforce.listEmployees.invalidate()
 
     if (errors.length > 0) {
@@ -646,6 +652,24 @@ export default function EmployeesPage() {
           </motion.button>
           </ContextualTooltip>
 
+          {/* Select mode toggle */}
+          {!selectionMode && allEmployees.length > 0 && (
+            <motion.button
+              variants={scalePress}
+              whileTap="press"
+              onClick={() => setSelectionMode(true)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '6px',
+                padding: '9px 14px', borderRadius: 'var(--radius-sm)',
+                border: '1px solid var(--border)', backgroundColor: 'var(--card)',
+                color: 'var(--muted-foreground)', fontFamily: 'var(--font-body)',
+                fontSize: '13px', fontWeight: 500, cursor: 'pointer', whiteSpace: 'nowrap',
+              }}
+            >
+              <CheckSquare size={14} />
+            </motion.button>
+          )}
+
           {/* Import button */}
           <Link href="/dashboard/employees/import" style={{ textDecoration: 'none' }}>
             <motion.button
@@ -847,84 +871,142 @@ export default function EmployeesPage() {
       {/* Employee list */}
       {allEmployees.length > 0 && (
         <>
-        {/* Bulk actions toolbar */}
-        {selectedIds.size > 0 && (
-          <motion.div
-            initial={{ opacity: 0, y: -8 }}
-            animate={{ opacity: 1, y: 0 }}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 12,
-              padding: '10px 16px', borderRadius: 'var(--radius-md)',
-              backgroundColor: 'rgba(99,102,241,0.06)',
-              border: '1px solid rgba(99,102,241,0.15)',
-              marginBottom: 10,
-            }}
-          >
-            <input
-              type="checkbox"
-              checked={selectedIds.size === allEmployees.length}
-              onChange={toggleSelectAll}
-              style={{ width: 16, height: 16, accentColor: '#6366F1', cursor: 'pointer' }}
-            />
-            <span style={{ fontFamily: 'var(--font-body)', fontSize: 13, fontWeight: 600, color: 'var(--primary)' }}>
-              {selectedIds.size} geselecteerd
-            </span>
-            <div style={{ flex: 1 }} />
-            <button
-              onClick={handleBulkDelete}
-              disabled={bulkDeleting}
-              style={{
-                padding: '6px 14px', borderRadius: 'var(--radius-sm)',
-                border: '1px solid rgba(239,68,68,0.3)', background: 'rgba(239,68,68,0.06)',
-                color: '#DC2626', fontFamily: 'var(--font-body)', fontSize: 12,
-                fontWeight: 600, cursor: bulkDeleting ? 'not-allowed' : 'pointer',
-              }}
-            >
-              {bulkDeleting ? 'Verwijderen...' : `Verwijder (${selectedIds.size})`}
-            </button>
-          </motion.div>
-        )}
-
         <motion.div
           variants={containerStagger}
           initial="hidden"
           animate="show"
           style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}
         >
-          {allEmployees.map((emp, idx) => (
-            <div key={emp.id} style={{ position: 'relative', display: 'flex', alignItems: 'stretch', gap: 8 }}>
-              <div
-                onClick={(e) => { e.stopPropagation(); toggleSelect(emp.id) }}
+          {allEmployees.map((emp, idx) => {
+            const isSelected = selectedIds.has(emp.id)
+            return (
+              <motion.div
+                key={emp.id}
+                style={{ position: 'relative', display: 'flex', alignItems: 'stretch', gap: 0 }}
+                animate={selectionMode ? { x: 0 } : { x: 0 }}
+              >
+                {/* Selection indicator — only in selection mode */}
+                <AnimatePresence>
+                  {selectionMode && (
+                    <motion.div
+                      initial={{ width: 0, opacity: 0 }}
+                      animate={{ width: 36, opacity: 1 }}
+                      exit={{ width: 0, opacity: 0 }}
+                      transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+                      onClick={() => toggleSelect(emp.id)}
+                      style={{
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        flexShrink: 0, cursor: 'pointer', overflow: 'hidden',
+                      }}
+                    >
+                      <motion.div
+                        animate={{
+                          backgroundColor: isSelected ? '#6366F1' : 'transparent',
+                          borderColor: isSelected ? '#6366F1' : 'rgba(99,102,241,0.3)',
+                        }}
+                        transition={{ duration: 0.15 }}
+                        style={{
+                          width: 22, height: 22, borderRadius: '50%',
+                          border: '2px solid rgba(99,102,241,0.3)',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        }}
+                      >
+                        {isSelected && (
+                          <motion.svg
+                            initial={{ scale: 0 }}
+                            animate={{ scale: 1 }}
+                            transition={{ type: 'spring', stiffness: 500, damping: 25 }}
+                            width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"
+                          >
+                            <path d="M20 6L9 17l-5-5" />
+                          </motion.svg>
+                        )}
+                      </motion.div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                <div style={{ flex: 1 }}>
+                  <EmployeeCard
+                    employee={emp}
+                    onClick={() => {
+                      if (selectionMode) { toggleSelect(emp.id); return }
+                      router.push(`/dashboard/employees/${emp.id}`)
+                    }}
+                    onHoldEdit={() => { if (!selectionMode) setQuickEditEmployee(emp) }}
+                    deptName={emp.department_id ? deptMap.get(emp.department_id) : null}
+                    roleName={emp.job_role_id ? roleMap.get(emp.job_role_id) : null}
+                    skillNames={employeeSkillNames.get(emp.id) ?? []}
+                  />
+                </div>
+                {idx === 0 && !selectionMode && <InteractionHint />}
+              </motion.div>
+            )
+          })}
+        </motion.div>
+
+        {/* Floating bulk action bar — slides up from bottom */}
+        <AnimatePresence>
+          {selectionMode && (
+            <motion.div
+              initial={{ y: 80, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 80, opacity: 0 }}
+              transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+              style={{
+                position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
+                zIndex: 50, display: 'flex', alignItems: 'center', gap: 12,
+                padding: '10px 20px', borderRadius: 'var(--radius-lg)',
+                background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(16px)',
+                WebkitBackdropFilter: 'blur(16px)',
+                border: '1px solid rgba(99,102,241,0.2)',
+                boxShadow: '0 8px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(99,102,241,0.1)',
+              }}
+            >
+              <button
+                onClick={toggleSelectAll}
                 style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  width: 32, flexShrink: 0, cursor: 'pointer',
-                  borderRadius: 'var(--radius-sm)',
-                  backgroundColor: selectedIds.has(emp.id) ? 'rgba(99,102,241,0.08)' : 'transparent',
-                  transition: 'background-color 0.15s',
+                  padding: '6px 12px', borderRadius: 'var(--radius-sm)',
+                  border: '1px solid var(--border)', background: 'var(--card)',
+                  fontFamily: 'var(--font-body)', fontSize: 12, fontWeight: 500,
+                  color: 'var(--foreground)', cursor: 'pointer',
                 }}
               >
-                <input
-                  type="checkbox"
-                  checked={selectedIds.has(emp.id)}
-                  onChange={() => toggleSelect(emp.id)}
-                  onClick={(e) => e.stopPropagation()}
-                  style={{ width: 15, height: 15, accentColor: '#6366F1', cursor: 'pointer' }}
-                />
-              </div>
-              <div style={{ flex: 1 }}>
-                <EmployeeCard
-                  employee={emp}
-                  onClick={() => router.push(`/dashboard/employees/${emp.id}`)}
-                  onHoldEdit={() => setQuickEditEmployee(emp)}
-                  deptName={emp.department_id ? deptMap.get(emp.department_id) : null}
-                  roleName={emp.job_role_id ? roleMap.get(emp.job_role_id) : null}
-                  skillNames={employeeSkillNames.get(emp.id) ?? []}
-                />
-              </div>
-              {idx === 0 && <InteractionHint />}
-            </div>
-          ))}
-        </motion.div>
+                {selectedIds.size === allEmployees.length ? 'Deselecteer' : 'Selecteer alles'}
+              </button>
+
+              <span style={{ fontFamily: 'var(--font-body)', fontSize: 13, fontWeight: 600, color: 'var(--primary)', minWidth: 80, textAlign: 'center' }}>
+                {selectedIds.size} geselecteerd
+              </span>
+
+              <button
+                onClick={handleBulkDelete}
+                disabled={bulkDeleting || selectedIds.size === 0}
+                style={{
+                  padding: '6px 16px', borderRadius: 'var(--radius-sm)',
+                  border: 'none', background: selectedIds.size > 0 ? 'linear-gradient(135deg, #EF4444, #DC2626)' : 'rgba(239,68,68,0.2)',
+                  color: '#fff', fontFamily: 'var(--font-body)', fontSize: 12,
+                  fontWeight: 600, cursor: selectedIds.size > 0 ? 'pointer' : 'not-allowed',
+                  boxShadow: selectedIds.size > 0 ? '0 2px 8px rgba(239,68,68,0.3)' : 'none',
+                }}
+              >
+                {bulkDeleting ? 'Verwijderen...' : 'Verwijder'}
+              </button>
+
+              <button
+                onClick={exitSelectionMode}
+                style={{
+                  padding: '6px 12px', borderRadius: 'var(--radius-sm)',
+                  border: '1px solid var(--border)', background: 'var(--card)',
+                  fontFamily: 'var(--font-body)', fontSize: 12, fontWeight: 500,
+                  color: 'var(--muted-foreground)', cursor: 'pointer',
+                }}
+              >
+                Annuleren
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         </>
       )}
