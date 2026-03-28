@@ -93,15 +93,17 @@ export function LeaveWizard({ open, onClose, siteId, onSaved, forSelf = false }:
     { enabled: open && !voorMezelf && siteId.length > 0 },
   )
 
-  // Step 4: impact + suggestions (only when employee known)
-  const employeeId = voorMezelf ? undefined : selectedEmployee?.id
+  // Step 4: impact + suggestions
+  // For "voor mezelf": skip impact/suggestions (no employee_id available client-side)
+  const employeeId = voorMezelf ? null : selectedEmployee?.id ?? null
+  const hasImpactContext = !!employeeId && !!selectedRange
   const impactQuery = trpc.absence.getImpact.useQuery(
     { employee_id: employeeId ?? '', site_id: siteId, period_start: selectedRange?.start ?? '', period_end: selectedRange?.end ?? '' },
-    { enabled: step === 4 && !!employeeId && !!selectedRange },
+    { enabled: step === 4 && hasImpactContext },
   )
   const suggestionsQuery = trpc.absence.getSuggestions.useQuery(
     { employee_id: employeeId ?? '', site_id: siteId, period_start: selectedRange?.start ?? '', period_end: selectedRange?.end ?? '' },
-    { enabled: step === 4 && !!employeeId && !!selectedRange },
+    { enabled: step === 4 && hasImpactContext },
   )
 
   // Reset on open
@@ -221,6 +223,8 @@ export function LeaveWizard({ open, onClose, siteId, onSaved, forSelf = false }:
               transition={bouncy}
               style={{
                 width: '100%', maxWidth: 560,
+                maxHeight: '90vh',
+                display: 'flex', flexDirection: 'column',
                 backgroundColor: 'var(--card)',
                 borderRadius: '16px',
                 boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
@@ -274,7 +278,7 @@ export function LeaveWizard({ open, onClose, siteId, onSaved, forSelf = false }:
               </div>
 
               {/* Body */}
-              <div style={{ padding: '24px', minHeight: 300, position: 'relative', overflow: 'hidden' }}>
+              <div style={{ padding: '24px', minHeight: 300, flex: 1, position: 'relative', overflowY: 'auto', overflowX: 'hidden' }}>
                 <AnimatePresence mode="wait" custom={direction}>
 
                   {/* ── Step 1: Medewerker ──────────────────────── */}
@@ -783,26 +787,21 @@ export function LeaveWizard({ open, onClose, siteId, onSaved, forSelf = false }:
                             </div>
                           </div>
 
-                          {/* Impact + Suggestions (only for non-self) */}
-                          {!voorMezelf && selectedEmployee && selectedRange && (
+                          {/* Impact + Suggestions (only for non-self requests) */}
+                          {hasImpactContext && (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 12, maxHeight: 260, overflowY: 'auto' }}>
-                              {(impactQuery.data || impactQuery.isLoading) && (
-                                <ImpactAlert
-                                  impact={impactQuery.data ?? {
-                                    affected_processes: [],
-                                    total_shifts_uncovered: 0,
-                                    overall_coverage_drop: 0,
-                                  }}
-                                  loading={impactQuery.isLoading}
-                                />
-                              )}
-
-                              {(suggestionsQuery.data || suggestionsQuery.isLoading) && (
-                                <ReplacementSuggestions
-                                  suggestions={suggestionsQuery.data ?? []}
-                                  loading={suggestionsQuery.isLoading}
-                                />
-                              )}
+                              <ImpactAlert
+                                impact={impactQuery.data ?? {
+                                  affected_processes: [],
+                                  total_shifts_uncovered: 0,
+                                  overall_coverage_drop: 0,
+                                }}
+                                loading={impactQuery.isLoading}
+                              />
+                              <ReplacementSuggestions
+                                suggestions={suggestionsQuery.data ?? []}
+                                loading={suggestionsQuery.isLoading}
+                              />
                             </div>
                           )}
 

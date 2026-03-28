@@ -226,6 +226,8 @@ export function AbsenceWizard({ open, onClose, siteId, onSaved }: AbsenceWizardP
               transition={bouncy}
               style={{
                 width: '100%', maxWidth: 560,
+                maxHeight: '90vh',
+                display: 'flex', flexDirection: 'column',
                 backgroundColor: 'var(--card)',
                 borderRadius: '16px',
                 boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
@@ -279,7 +281,7 @@ export function AbsenceWizard({ open, onClose, siteId, onSaved }: AbsenceWizardP
               </div>
 
               {/* Body */}
-              <div style={{ padding: '24px', minHeight: 300, position: 'relative', overflow: 'hidden' }}>
+              <div style={{ padding: '24px', minHeight: 300, flex: 1, position: 'relative', overflowY: 'auto', overflowX: 'hidden' }}>
                 <AnimatePresence mode="wait" custom={direction}>
 
                   {/* -- Step 1: Zoek Medewerker -- */}

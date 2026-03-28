@@ -21,6 +21,7 @@ interface EditEmployeeFormProps {
     department_id: string | null
     is_multi_site_eligible: boolean
     status: string
+    crew_id?: string | null
     job_role_id?: string | null
   }
   onClose: () => void
@@ -103,7 +104,7 @@ export function EditEmployeeForm({ employee, onClose, onDeleted, isNew }: EditEm
     hourly_rate: employee.hourly_rate,
     is_multi_site_eligible: employee.is_multi_site_eligible,
     status: employee.status,
-    crew_id: (employee as Record<string, unknown>).crew_id as string ?? '',
+    crew_id: employee.crew_id ?? '',
     job_role_id: employee.job_role_id ?? '',
   })
 

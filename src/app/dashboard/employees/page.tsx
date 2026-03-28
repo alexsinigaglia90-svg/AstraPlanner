@@ -1071,7 +1071,9 @@ export default function EmployeesPage() {
               weekly_hours_contracted: quickEditEmployee.weekly_hours_contracted,
               hourly_rate: 0,
               home_site_id: quickEditEmployee.home_site_id,
-              department_id: null,
+              department_id: quickEditEmployee.department_id,
+              crew_id: quickEditEmployee.crew_id,
+              job_role_id: quickEditEmployee.job_role_id,
               is_multi_site_eligible: quickEditEmployee.is_multi_site_eligible,
               status: quickEditEmployee.status,
             }}

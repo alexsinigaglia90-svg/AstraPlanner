@@ -197,15 +197,15 @@ export const absenceRouter = router({
       const admin = createAdminClient()
       const today = new Date().toISOString().slice(0, 10)
 
-      // Get the supervisor's own crew_id
-      const { data: supervisor, error: supervisorError } = await admin
+      // Get the supervisor's own crew_id (may not exist for admins/managers)
+      const { data: supervisorRows } = await admin
         .from('employee')
         .select('crew_id')
         .eq('id', ctx.user.id)
         .eq('organization_id', ctx.organizationId)
-        .single()
+        .limit(1)
 
-      assertNoError(supervisorError, 'listActive:supervisor')
+      const supervisor = supervisorRows?.[0] ?? null
 
       let query = admin
         .from('employee_availability_override')
