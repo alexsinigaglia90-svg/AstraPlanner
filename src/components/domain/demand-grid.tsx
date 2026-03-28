@@ -212,19 +212,25 @@ export function DemandGrid({ siteId, weekRange, onWeekRangeChange }: DemandGridP
 
   // ── Handlers ───────────────────────────────────────────────────────────
 
+  const upsertWeekForecast = trpc.demand.upsertWeekForecast.useMutation({
+    onSuccess: () => {
+      setLastSaved(true)
+      void utils.demand.listProcessDemand.invalidate()
+    },
+  })
+
   const handleCellChange = useCallback(
     (processId: string, monday: string, volume: number, uom: string) => {
       if (isDemo) return
-      upsertProcessForecast.mutate({
+      upsertWeekForecast.mutate({
         site_id: siteId,
         process_id: processId,
-        period_start: monday,
-        period_end: periodEnd(monday),
+        week_start: monday,
         volume,
         unit_of_measure: uom,
       })
     },
-    [siteId, upsertProcessForecast, isDemo],
+    [siteId, upsertWeekForecast, isDemo],
   )
 
   // ── Styles ─────────────────────────────────────────────────────────────

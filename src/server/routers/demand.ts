@@ -335,12 +335,12 @@ export const demandRouter = router({
       return data ?? []
     }),
 
+  /** Upsert a single day forecast */
   upsertProcessForecast: plannerProcedure
     .input(z.object({
       site_id: z.string().uuid(),
       process_id: z.string().uuid(),
-      period_start: z.string(),
-      period_end: z.string(),
+      date: z.string(), // ISO date, e.g. "2026-03-30"
       volume: z.number().min(0).max(999999),
       unit_of_measure: z.string(),
     }))
@@ -353,8 +353,8 @@ export const demandRouter = router({
           site_id: input.site_id,
           process_id: input.process_id,
           demand_type_id: null,
-          period_start: input.period_start,
-          period_end: input.period_end,
+          period_start: input.date,
+          period_end: input.date,
           volume: input.volume,
           unit_of_measure: input.unit_of_measure,
           source: 'manual_entry',
@@ -366,5 +366,73 @@ export const demandRouter = router({
         .single()
       assertNoError(error, 'upsertProcessForecast')
       return data!
+    }),
+
+  /** Upsert a week forecast — smart distributes over 7 days */
+  upsertWeekForecast: plannerProcedure
+    .input(z.object({
+      site_id: z.string().uuid(),
+      process_id: z.string().uuid(),
+      week_start: z.string(), // Monday ISO date
+      volume: z.number().min(0).max(9999999),
+      unit_of_measure: z.string(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const admin = createAdminClient()
+      const monday = new Date(input.week_start + 'T00:00:00Z')
+
+      // Look for previous week pattern for smart distribute
+      const prevMonday = new Date(monday)
+      prevMonday.setUTCDate(prevMonday.getUTCDate() - 7)
+
+      const { data: prevWeek } = await admin
+        .from('demand_forecast')
+        .select('period_start, volume')
+        .eq('organization_id', ctx.organizationId)
+        .eq('site_id', input.site_id)
+        .eq('process_id', input.process_id)
+        .gte('period_start', prevMonday.toISOString().split('T')[0]!)
+        .lt('period_start', input.week_start)
+        .order('period_start')
+
+      // Calculate distribution ratios
+      let ratios: number[]
+      const prevTotal = (prevWeek ?? []).reduce((s, r) => s + Number(r.volume), 0)
+
+      if (prevWeek && prevWeek.length === 7 && prevTotal > 0) {
+        // Smart distribute: use previous week's pattern
+        ratios = prevWeek.map((r) => Number(r.volume) / prevTotal)
+      } else {
+        // Default: even over Mon-Fri, 0 on Sat/Sun
+        ratios = [0.2, 0.2, 0.2, 0.2, 0.2, 0, 0]
+      }
+
+      // Build 7 day records
+      const rows = ratios.map((ratio, i) => {
+        const date = new Date(monday)
+        date.setUTCDate(date.getUTCDate() + i)
+        const dateStr = date.toISOString().split('T')[0]!
+        return {
+          organization_id: ctx.organizationId,
+          site_id: input.site_id,
+          process_id: input.process_id,
+          demand_type_id: null,
+          period_start: dateStr,
+          period_end: dateStr,
+          volume: Math.round(input.volume * ratio),
+          unit_of_measure: input.unit_of_measure,
+          source: 'manual_entry' as const,
+          plan_version_id: null,
+        }
+      })
+
+      const { error } = await admin
+        .from('demand_forecast')
+        .upsert(rows, {
+          onConflict: 'organization_id,site_id,process_id,period_start,plan_version_id',
+        })
+      assertNoError(error, 'upsertWeekForecast')
+
+      return { distributed: 7, total: input.volume }
     }),
 })
