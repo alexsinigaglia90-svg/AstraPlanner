@@ -187,7 +187,8 @@ export async function POST(req: Request) {
     addEmployee: tool({
       description: 'Voeg een nieuwe medewerker toe aan de organisatie.',
       inputSchema: z.object({
-        full_name: z.string().describe('Volledige naam van de medewerker'),
+        first_name: z.string().describe('Voornaam'),
+        last_name: z.string().describe('Achternaam'),
         email: z.string().email().optional().describe('Email adres (optioneel)'),
         department_id: z.string().optional().describe('Department UUID'),
         job_role_id: z.string().optional().describe('Job role UUID'),
@@ -195,7 +196,6 @@ export async function POST(req: Request) {
         weekly_hours_contracted: z.number().default(40),
       }),
       execute: async (input) => {
-        // Get first site for home_site_id
         const { data: sites } = await admin
           .from('site')
           .select('id')
@@ -205,7 +205,7 @@ export async function POST(req: Request) {
         const siteId = sites?.[0]?.id
         if (!siteId) return { error: 'Geen site gevonden. Maak eerst een site aan.' }
 
-        const code = input.full_name.toUpperCase().replace(/[^A-Z]/g, '').substring(0, 6) + '_' + Date.now().toString(36).slice(-3)
+        const empNumber = (input.first_name[0] + input.last_name).toUpperCase().replace(/[^A-Z]/g, '').substring(0, 8) + Date.now().toString(36).slice(-4)
 
         const { data, error } = await admin
           .from('employee')
@@ -214,15 +214,16 @@ export async function POST(req: Request) {
             home_site_id: siteId,
             department_id: input.department_id ?? null,
             job_role_id: input.job_role_id ?? null,
-            employee_code: code,
-            full_name: input.full_name,
+            employee_number: empNumber,
+            first_name: input.first_name,
+            last_name: input.last_name,
             email: input.email ?? null,
             contract_type: input.contract_type,
             weekly_hours_contracted: input.weekly_hours_contracted,
             hire_date: new Date().toISOString().split('T')[0],
             status: 'active',
           })
-          .select('id, full_name, employee_code')
+          .select('id, first_name, last_name, employee_number')
           .single()
 
         if (error) return { error: error.message }
@@ -236,14 +237,14 @@ export async function POST(req: Request) {
       execute: async () => {
         const { data, error } = await admin
           .from('employee')
-          .select('id, full_name, employee_code, contract_type, status')
+          .select('id, first_name, last_name, employee_number, contract_type, status')
           .eq('organization_id', orgId)
           .eq('status', 'active')
-          .order('full_name')
+          .order('last_name')
           .limit(50)
 
         if (error) return { error: error.message }
-        return { employees: data ?? [], count: data?.length ?? 0 }
+        return { employees: (data ?? []).map(e => ({ ...e, full_name: `${e.first_name} ${e.last_name}` })), count: data?.length ?? 0 }
       },
     }),
 
@@ -309,6 +310,339 @@ export async function POST(req: Request) {
 
         if (error) return { error: error.message }
         return { success: true, forecast_id: data?.id }
+      },
+    }),
+
+    // ── Tier 1: List tools ──────────────────────────────────────────────
+    listSites: tool({
+      description: 'Toon alle sites/vestigingen.',
+      inputSchema: z.object({}),
+      execute: async () => {
+        const { data } = await admin.from('site').select('id, name, code, city, timezone, status').eq('organization_id', orgId).order('name')
+        return { sites: data ?? [] }
+      },
+    }),
+
+    listShifts: tool({
+      description: 'Toon alle shifts/diensten.',
+      inputSchema: z.object({}),
+      execute: async () => {
+        const { data } = await admin.from('shift_pattern').select('id, name, code, start_time, end_time, duration_hours, shift_type').eq('organization_id', orgId).eq('is_active', true).order('start_time')
+        return { shifts: data ?? [] }
+      },
+    }),
+
+    listRoles: tool({
+      description: 'Toon alle job rollen.',
+      inputSchema: z.object({}),
+      execute: async () => {
+        const { data } = await admin.from('job_role').select('id, name, code, role_type, productive_pct').eq('organization_id', orgId).order('name')
+        return { roles: data ?? [] }
+      },
+    }),
+
+    listProcesses: tool({
+      description: 'Toon alle processen met norm UPH en eenheid.',
+      inputSchema: z.object({}),
+      execute: async () => {
+        const { data } = await admin.from('process').select('id, name, code, unit_of_measure, norm_uph, process_type, department_id').eq('organization_id', orgId).eq('is_active', true).order('name')
+        return { processes: data ?? [] }
+      },
+    }),
+
+    listDepartments: tool({
+      description: 'Toon alle afdelingen/departments.',
+      inputSchema: z.object({}),
+      execute: async () => {
+        const { data } = await admin.from('department').select('id, name, code, site_id').eq('organization_id', orgId).eq('status', 'active').order('name')
+        return { departments: data ?? [] }
+      },
+    }),
+
+    // ── Tier 1: Mutations ─────────────────────────────────────────────
+    assignSkill: tool({
+      description: 'Wijs een skill/vaardigheid toe aan een medewerker voor een proces (niveau 1-5).',
+      inputSchema: z.object({
+        employee_id: z.string().describe('Employee UUID'),
+        process_id: z.string().describe('Process UUID'),
+        proficiency_level: z.number().min(1).max(5).describe('Vaardigheidsniveau 1-5'),
+      }),
+      execute: async (input) => {
+        const { data, error } = await admin.from('employee_skill').upsert({
+          organization_id: orgId, employee_id: input.employee_id, process_id: input.process_id,
+          proficiency_level: input.proficiency_level, status: 'active',
+        }, { onConflict: 'organization_id,employee_id,process_id' }).select('id').single()
+        if (error) return { error: error.message }
+        return { success: true, skill_id: data?.id }
+      },
+    }),
+
+    assignCrew: tool({
+      description: 'Wijs een medewerker toe aan een ploeg/crew.',
+      inputSchema: z.object({
+        employee_id: z.string().describe('Employee UUID'),
+        crew_id: z.string().describe('Crew UUID'),
+      }),
+      execute: async (input) => {
+        const { error } = await admin.from('employee').update({ crew_id: input.crew_id }).eq('id', input.employee_id).eq('organization_id', orgId)
+        if (error) return { error: error.message }
+        return { success: true }
+      },
+    }),
+
+    bulkAddEmployees: tool({
+      description: 'Voeg meerdere medewerkers tegelijk toe. Geef een lijst van namen.',
+      inputSchema: z.object({
+        employees: z.array(z.object({
+          first_name: z.string(),
+          last_name: z.string(),
+          contract_type: z.enum(['full_time', 'part_time', 'temporary', 'seasonal', 'contractor']).default('full_time'),
+        })).min(1).max(50),
+      }),
+      execute: async (input) => {
+        const { data: sites } = await admin.from('site').select('id').eq('organization_id', orgId).limit(1)
+        const siteId = sites?.[0]?.id
+        if (!siteId) return { error: 'Geen site gevonden.' }
+
+        const rows = input.employees.map((e, i) => ({
+          organization_id: orgId, home_site_id: siteId,
+          employee_number: (e.first_name[0] + e.last_name).toUpperCase().replace(/[^A-Z]/g, '').substring(0, 8) + Date.now().toString(36).slice(-3) + i,
+          first_name: e.first_name, last_name: e.last_name,
+          contract_type: e.contract_type, weekly_hours_contracted: 40,
+          hire_date: new Date().toISOString().split('T')[0], status: 'active',
+        }))
+
+        const { data, error } = await admin.from('employee').insert(rows).select('id, first_name, last_name')
+        if (error) return { error: error.message }
+        return { success: true, added: data?.length ?? 0, employees: data }
+      },
+    }),
+
+    // ── Tier 2: Analysis ──────────────────────────────────────────────
+    analyzeCapacity: tool({
+      description: 'Analyseer de capaciteit: hoeveel FTE is nodig vs beschikbaar per proces.',
+      inputSchema: z.object({}),
+      execute: async () => {
+        const { data: wp } = await admin.from('workload_plan').select('process_id, demand_volume, hours_needed, fte_needed, hours_assigned, fte_assigned, coverage_pct').eq('organization_id', orgId)
+        if (!wp || wp.length === 0) return { message: 'Geen workload data. Klik eerst op "Herbereken" in het FTE Dashboard.' }
+
+        const byProcess = new Map<string, { demand: number; hours_needed: number; fte_needed: number; fte_available: number; coverage: number; count: number }>()
+        for (const r of wp) {
+          const pid = r.process_id as string
+          const existing = byProcess.get(pid) ?? { demand: 0, hours_needed: 0, fte_needed: 0, fte_available: 0, coverage: 0, count: 0 }
+          existing.demand += Number(r.demand_volume ?? 0)
+          existing.hours_needed += Number(r.hours_needed ?? 0)
+          existing.fte_needed += Number(r.fte_needed ?? 0)
+          existing.fte_available += Number(r.hours_assigned ?? 0) / 40
+          existing.coverage += Number(r.coverage_pct ?? 0)
+          existing.count++
+          byProcess.set(pid, existing)
+        }
+
+        const { data: procs } = await admin.from('process').select('id, name').eq('organization_id', orgId)
+        const procNames = Object.fromEntries((procs ?? []).map(p => [p.id, p.name]))
+
+        const analysis = [...byProcess.entries()].map(([pid, d]) => ({
+          process: procNames[pid] ?? pid,
+          total_demand: Math.round(d.demand),
+          total_hours_needed: Math.round(d.hours_needed),
+          fte_needed: Math.round(d.fte_needed * 10) / 10,
+          fte_available: Math.round(d.fte_available * 10) / 10,
+          gap: Math.round((d.fte_available - d.fte_needed) * 10) / 10,
+          avg_coverage: d.count > 0 ? Math.round(d.coverage / d.count) : 0,
+        }))
+
+        return { analysis, summary: `${analysis.length} processen geanalyseerd` }
+      },
+    }),
+
+    analyzeSkillGaps: tool({
+      description: 'Identificeer welke processen te weinig getrainde medewerkers hebben.',
+      inputSchema: z.object({}),
+      execute: async () => {
+        const { data: procs } = await admin.from('process').select('id, name, norm_uph').eq('organization_id', orgId).eq('is_active', true)
+        const { data: skills } = await admin.from('employee_skill').select('process_id, proficiency_level').eq('organization_id', orgId).eq('status', 'active')
+
+        const skillCountByProcess = new Map<string, number>()
+        for (const s of skills ?? []) {
+          const pid = s.process_id as string
+          skillCountByProcess.set(pid, (skillCountByProcess.get(pid) ?? 0) + 1)
+        }
+
+        const gaps = (procs ?? []).map(p => ({
+          process: p.name as string,
+          process_id: p.id as string,
+          skilled_employees: skillCountByProcess.get(p.id as string) ?? 0,
+          norm_uph: p.norm_uph as number,
+        })).sort((a, b) => a.skilled_employees - b.skilled_employees)
+
+        return { gaps, worst: gaps.filter(g => g.skilled_employees === 0).map(g => g.process) }
+      },
+    }),
+
+    whatIfScenario: tool({
+      description: 'Bereken het effect van extra medewerkers op een proces. "Wat als ik 2 extra pickers aanneem?"',
+      inputSchema: z.object({
+        process_id: z.string().describe('Process UUID'),
+        additional_employees: z.number().min(1).describe('Aantal extra medewerkers'),
+        skill_level: z.number().min(1).max(5).default(3).describe('Verwacht skill niveau'),
+      }),
+      execute: async (input) => {
+        const { data: proc } = await admin.from('process').select('name, norm_uph').eq('id', input.process_id).single()
+        const { data: wp } = await admin.from('workload_plan').select('fte_needed, fte_assigned, coverage_pct').eq('process_id', input.process_id).eq('organization_id', orgId)
+
+        const currentFteNeeded = (wp ?? []).reduce((s, r) => s + Number(r.fte_needed ?? 0), 0) / Math.max((wp ?? []).length, 1)
+        const currentFteAvail = (wp ?? []).reduce((s, r) => s + Number(r.fte_assigned ?? 0) / 40, 0) / Math.max((wp ?? []).length, 1)
+        const newFteAvail = currentFteAvail + input.additional_employees
+        const newCoverage = currentFteNeeded > 0 ? Math.round((newFteAvail / currentFteNeeded) * 100) : 100
+
+        return {
+          process: proc?.name ?? input.process_id,
+          current: { fte_needed: Math.round(currentFteNeeded * 10) / 10, fte_available: Math.round(currentFteAvail * 10) / 10, coverage: Math.round((currentFteAvail / Math.max(currentFteNeeded, 0.1)) * 100) },
+          after_adding: { fte_available: Math.round(newFteAvail * 10) / 10, coverage: newCoverage },
+          improvement: `+${input.additional_employees} medewerkers → coverage van ${Math.round((currentFteAvail / Math.max(currentFteNeeded, 0.1)) * 100)}% naar ${newCoverage}%`,
+        }
+      },
+    }),
+
+    // ── Tier 3: Actions ───────────────────────────────────────────────
+    generateWeekSummary: tool({
+      description: 'Genereer een samenvatting van de workload voor een bepaalde week.',
+      inputSchema: z.object({
+        week_start: z.string().optional().describe('Maandag ISO datum (bijv. 2026-03-23). Leeg = huidige week.'),
+      }),
+      execute: async (input) => {
+        const start = input.week_start ?? new Date().toISOString().split('T')[0]
+        const { data: wp } = await admin.from('workload_plan').select('process_id, demand_volume, hours_needed, fte_needed, hours_assigned, coverage_pct, status').eq('organization_id', orgId).gte('period_start', start)
+
+        if (!wp || wp.length === 0) return { message: 'Geen workload data voor deze periode. Voer eerst demand in en klik "Herbereken".' }
+
+        const { data: procs } = await admin.from('process').select('id, name').eq('organization_id', orgId)
+        const procNames = Object.fromEntries((procs ?? []).map(p => [p.id, p.name]))
+
+        const totalDemand = wp.reduce((s, r) => s + Number(r.demand_volume ?? 0), 0)
+        const totalHours = wp.reduce((s, r) => s + Number(r.hours_needed ?? 0), 0)
+        const totalFteNeeded = wp.reduce((s, r) => s + Number(r.fte_needed ?? 0), 0)
+
+        const issues = wp.filter(r => Number(r.coverage_pct ?? 0) < 70).map(r => ({
+          process: procNames[r.process_id as string] ?? 'Onbekend',
+          coverage: r.coverage_pct,
+        }))
+
+        return { period: start, total_demand: Math.round(totalDemand), total_hours: Math.round(totalHours), total_fte_needed: Math.round(totalFteNeeded * 10) / 10, records: wp.length, critical_issues: issues }
+      },
+    }),
+
+    suggestOptimization: tool({
+      description: 'Analyseer de huidige situatie en geef optimalisatieadvies.',
+      inputSchema: z.object({}),
+      execute: async () => {
+        const { data: wp } = await admin.from('workload_plan').select('process_id, fte_needed, hours_assigned, coverage_pct').eq('organization_id', orgId)
+        const { data: skills } = await admin.from('employee_skill').select('employee_id, process_id').eq('organization_id', orgId).eq('status', 'active')
+        const { data: emps } = await admin.from('employee').select('id').eq('organization_id', orgId).eq('status', 'active')
+        const { data: procs } = await admin.from('process').select('id, name').eq('organization_id', orgId).eq('is_active', true)
+        const procNames = Object.fromEntries((procs ?? []).map(p => [p.id, p.name]))
+
+        const recommendations: string[] = []
+
+        // Understaffed processes
+        const understaffed = (wp ?? []).filter(r => Number(r.coverage_pct ?? 0) < 80)
+        if (understaffed.length > 0) {
+          const processNames = [...new Set(understaffed.map(r => procNames[r.process_id as string] ?? 'Onbekend'))]
+          recommendations.push(`⚠️ ${processNames.join(', ')} ${processNames.length === 1 ? 'heeft' : 'hebben'} een dekkingstekort (<80%). Overweeg extra medewerkers of cross-training.`)
+        }
+
+        // Overstaffed processes
+        const overstaffed = (wp ?? []).filter(r => Number(r.coverage_pct ?? 0) > 120)
+        if (overstaffed.length > 0) {
+          const processNames = [...new Set(overstaffed.map(r => procNames[r.process_id as string] ?? 'Onbekend'))]
+          recommendations.push(`📈 ${processNames.join(', ')} ${processNames.length === 1 ? 'is' : 'zijn'} overstaffed (>120%). Je kunt medewerkers herplaatsen naar processen met een tekort.`)
+        }
+
+        // Single-skilled employees
+        const skillsPerEmployee = new Map<string, number>()
+        for (const s of skills ?? []) { skillsPerEmployee.set(s.employee_id as string, (skillsPerEmployee.get(s.employee_id as string) ?? 0) + 1) }
+        const singleSkilled = [...skillsPerEmployee.entries()].filter(([, count]) => count <= 1).length
+        const totalEmps = emps?.length ?? 0
+        if (singleSkilled > 0 && totalEmps > 0) {
+          recommendations.push(`🎯 ${singleSkilled} van ${totalEmps} medewerkers heeft slechts 1 skill. Cross-training verhoogt je flexibiliteit.`)
+        }
+
+        // No skills at all
+        const empsWithSkills = new Set([...(skills ?? []).map(s => s.employee_id)])
+        const empsWithout = totalEmps - empsWithSkills.size
+        if (empsWithout > 0) {
+          recommendations.push(`📋 ${empsWithout} medewerkers hebben nog geen skills toegewezen. Wijs skills toe voor betere planning.`)
+        }
+
+        if (recommendations.length === 0) {
+          recommendations.push('✅ Je planning ziet er goed uit! Alle processen hebben voldoende dekking.')
+        }
+
+        return { recommendations, total_employees: totalEmps, total_processes: procs?.length ?? 0 }
+      },
+    }),
+
+    crossTrainSuggestion: tool({
+      description: 'Geef suggesties voor cross-training: welke medewerkers moeten welke extra skills leren.',
+      inputSchema: z.object({}),
+      execute: async () => {
+        const { data: skills } = await admin.from('employee_skill').select('employee_id, process_id, proficiency_level').eq('organization_id', orgId).eq('status', 'active')
+        const { data: emps } = await admin.from('employee').select('id, first_name, last_name').eq('organization_id', orgId).eq('status', 'active')
+        const { data: procs } = await admin.from('process').select('id, name').eq('organization_id', orgId).eq('is_active', true)
+        const { data: wp } = await admin.from('workload_plan').select('process_id, coverage_pct').eq('organization_id', orgId)
+
+        const procNames = Object.fromEntries((procs ?? []).map(p => [p.id, p.name]))
+        const empNames = Object.fromEntries((emps ?? []).map(e => [e.id, `${e.first_name} ${e.last_name}`]))
+
+        // Find processes with lowest coverage (highest need)
+        const coverageByProcess = new Map<string, number[]>()
+        for (const r of wp ?? []) { const pid = r.process_id as string; const arr = coverageByProcess.get(pid) ?? []; arr.push(Number(r.coverage_pct ?? 0)); coverageByProcess.set(pid, arr) }
+        const avgCoverage = [...coverageByProcess.entries()].map(([pid, vals]) => ({ process_id: pid, avg: vals.reduce((a, b) => a + b, 0) / vals.length })).sort((a, b) => a.avg - b.avg)
+
+        // Find employees with fewest skills
+        const skillsPerEmp = new Map<string, Set<string>>()
+        for (const s of skills ?? []) { const set = skillsPerEmp.get(s.employee_id as string) ?? new Set(); set.add(s.process_id as string); skillsPerEmp.set(s.employee_id as string, set) }
+
+        const suggestions: Array<{ employee: string; learn_process: string; reason: string }> = []
+        for (const { process_id } of avgCoverage.slice(0, 3)) {
+          const needsTraining = [...skillsPerEmp.entries()]
+            .filter(([, procs]) => !procs.has(process_id))
+            .sort((a, b) => a[1].size - b[1].size)
+            .slice(0, 2)
+
+          for (const [empId] of needsTraining) {
+            suggestions.push({
+              employee: empNames[empId] ?? empId,
+              learn_process: procNames[process_id] ?? process_id,
+              reason: `Dit proces heeft de laagste dekking en deze medewerker heeft maar ${skillsPerEmp.get(empId)?.size ?? 0} skills.`,
+            })
+          }
+        }
+
+        return { suggestions: suggestions.slice(0, 5) }
+      },
+    }),
+
+    // ── Tier 4: Conversational ────────────────────────────────────────
+    explainMetric: tool({
+      description: 'Leg een metric of begrip uit: coverage, FTE, UPH, weighted UPH, proficiency, etc.',
+      inputSchema: z.object({
+        metric: z.string().describe('De metric om uit te leggen, bijv. "coverage", "FTE", "UPH"'),
+      }),
+      execute: async (input) => {
+        const explanations: Record<string, string> = {
+          coverage: 'Coverage (dekking) = beschikbare FTE ÷ benodigde FTE × 100%. >110% = overstaffed (blauw), 90-110% = goed (groen), 70-89% = krap (amber), <70% = tekort (rood).',
+          fte: 'FTE = Full Time Equivalent. 1 FTE = 40 uur per week. Als een proces 80 uur werk per week heeft, heb je 2 FTE nodig.',
+          uph: 'UPH = Units Per Hour. Het aantal eenheden dat een medewerker per uur kan verwerken. Bijv. 180 dozen/uur voor een orderpicker.',
+          'weighted uph': 'Weighted UPH = gewogen UPH op basis van skill levels. Medewerkers met level 5 (expert) halen 1.3x de standaard, level 1 (novice) slechts 0.6x.',
+          proficiency: 'Proficiency levels 1-5: 1=Novice (0.6x), 2=Basis (0.8x), 3=Competent (1.0x standaard), 4=Gevorderd (1.15x), 5=Expert (1.3x). Beïnvloedt UPH berekening.',
+          'norm uph': 'Norm UPH = de standaard UPH voor een proces (level 3). Wordt vermenigvuldigd met de proficiency multiplier per medewerker.',
+          demand: 'Demand = het verwachte werkvolume per dag/week. Wordt omgerekend naar uren en FTE via: uren = volume ÷ UPH, FTE = uren ÷ 40.',
+        }
+        const key = input.metric.toLowerCase().replace(/[^a-z ]/g, '')
+        const match = Object.entries(explanations).find(([k]) => key.includes(k))
+        return { explanation: match ? match[1] : `Geen specifieke uitleg beschikbaar voor "${input.metric}". Stel je vraag anders en ik probeer het uit te leggen.` }
       },
     }),
 
