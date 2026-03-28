@@ -340,32 +340,55 @@ export const demandRouter = router({
     .input(z.object({
       site_id: z.string().uuid(),
       process_id: z.string().uuid(),
-      date: z.string(), // ISO date, e.g. "2026-03-30"
+      date: z.string(),
       volume: z.number().min(0).max(999999),
       unit_of_measure: z.string(),
     }))
     .mutation(async ({ ctx, input }) => {
       const admin = createAdminClient()
-      const { data, error } = await admin
+
+      // Check if record exists
+      const { data: existing } = await admin
         .from('demand_forecast')
-        .upsert({
-          organization_id: ctx.organizationId,
-          site_id: input.site_id,
-          process_id: input.process_id,
-          demand_type_id: null,
-          period_start: input.date,
-          period_end: input.date,
-          volume: input.volume,
-          unit_of_measure: input.unit_of_measure,
-          source: 'manual_entry',
-          plan_version_id: null,
-        }, {
-          onConflict: 'organization_id,site_id,process_id,period_start,plan_version_id',
-        })
         .select('id')
-        .single()
-      assertNoError(error, 'upsertProcessForecast')
-      return data!
+        .eq('organization_id', ctx.organizationId)
+        .eq('site_id', input.site_id)
+        .eq('process_id', input.process_id)
+        .eq('period_start', input.date)
+        .is('plan_version_id', null)
+        .maybeSingle()
+
+      if (existing) {
+        // Update
+        const { data, error } = await admin
+          .from('demand_forecast')
+          .update({ volume: input.volume, unit_of_measure: input.unit_of_measure, source: 'manual_entry' })
+          .eq('id', existing.id)
+          .select('id')
+          .single()
+        assertNoError(error, 'upsertProcessForecast:update')
+        return data!
+      } else {
+        // Insert
+        const { data, error } = await admin
+          .from('demand_forecast')
+          .insert({
+            organization_id: ctx.organizationId,
+            site_id: input.site_id,
+            process_id: input.process_id,
+            demand_type_id: null,
+            period_start: input.date,
+            period_end: input.date,
+            volume: input.volume,
+            unit_of_measure: input.unit_of_measure,
+            source: 'manual_entry',
+            plan_version_id: null,
+          })
+          .select('id')
+          .single()
+        assertNoError(error, 'upsertProcessForecast:insert')
+        return data!
+      }
     }),
 
   /** Upsert a week forecast — smart distributes over 7 days */
@@ -407,31 +430,47 @@ export const demandRouter = router({
         ratios = [0.2, 0.2, 0.2, 0.2, 0.2, 0, 0]
       }
 
-      // Build 7 day records
-      const rows = ratios.map((ratio, i) => {
+      // Upsert 7 day records (select + update/insert pattern for NULL plan_version_id)
+      for (let i = 0; i < 7; i++) {
         const date = new Date(monday)
         date.setUTCDate(date.getUTCDate() + i)
         const dateStr = date.toISOString().split('T')[0]!
-        return {
-          organization_id: ctx.organizationId,
-          site_id: input.site_id,
-          process_id: input.process_id,
-          demand_type_id: null,
-          period_start: dateStr,
-          period_end: dateStr,
-          volume: Math.round(input.volume * ratio),
-          unit_of_measure: input.unit_of_measure,
-          source: 'manual_entry' as const,
-          plan_version_id: null,
-        }
-      })
+        const dayVolume = Math.round(input.volume * ratios[i]!)
 
-      const { error } = await admin
-        .from('demand_forecast')
-        .upsert(rows, {
-          onConflict: 'organization_id,site_id,process_id,period_start,plan_version_id',
-        })
-      assertNoError(error, 'upsertWeekForecast')
+        const { data: existing } = await admin
+          .from('demand_forecast')
+          .select('id')
+          .eq('organization_id', ctx.organizationId)
+          .eq('site_id', input.site_id)
+          .eq('process_id', input.process_id)
+          .eq('period_start', dateStr)
+          .is('plan_version_id', null)
+          .maybeSingle()
+
+        if (existing) {
+          const { error } = await admin
+            .from('demand_forecast')
+            .update({ volume: dayVolume, unit_of_measure: input.unit_of_measure, source: 'manual_entry' })
+            .eq('id', existing.id)
+          assertNoError(error, `upsertWeekForecast:update:${dateStr}`)
+        } else {
+          const { error } = await admin
+            .from('demand_forecast')
+            .insert({
+              organization_id: ctx.organizationId,
+              site_id: input.site_id,
+              process_id: input.process_id,
+              demand_type_id: null,
+              period_start: dateStr,
+              period_end: dateStr,
+              volume: dayVolume,
+              unit_of_measure: input.unit_of_measure,
+              source: 'manual_entry',
+              plan_version_id: null,
+            })
+          assertNoError(error, `upsertWeekForecast:insert:${dateStr}`)
+        }
+      }
 
       return { distributed: 7, total: input.volume }
     }),
