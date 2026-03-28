@@ -579,7 +579,7 @@ export function DemandGrid({ siteId, weekRange, onWeekRangeChange }: DemandGridP
                 value={volume}
                 computedHours={computedHours}
                 onChange={(vol) => handleDayCellChange(proc.id, d, vol, uom)}
-                isLoading={upsertDayMutation.isPending}
+                isLoading={false}
               />
             </td>,
           )
@@ -655,7 +655,7 @@ export function DemandGrid({ siteId, weekRange, onWeekRangeChange }: DemandGridP
                 value={weekTotal > 0 ? weekTotal : null}
                 computedHours={computedHours}
                 onChange={(vol) => handleWeekCellChange(proc.id, w, vol, uom)}
-                isLoading={upsertWeekMutation.isPending}
+                isLoading={false}
               />
               <MiniHeatmap values={dayVolumes} />
             </div>
