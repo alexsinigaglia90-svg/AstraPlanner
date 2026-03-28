@@ -9,7 +9,7 @@ import { trpc } from '@/lib/trpc/client'
 import { useSiteStore } from '@/stores/site-store'
 import { useDemoStore } from '@/hooks/use-demo'
 import { demoShifts, demoEmployees, demoProcesses } from '@/components/onboarding/demo-seed'
-import { matchShift, matchCrew } from '@/lib/shift-matcher'
+import { matchShift, matchCrew, matchRole } from '@/lib/shift-matcher'
 import * as XLSX from 'xlsx'
 
 // ── Dataloader column definitions ───────────────────────────────────────────
@@ -23,6 +23,7 @@ const TEMPLATE_COLUMNS = [
   { key: 'contract_type', label: 'Contract Type', example: 'full_time', required: true },
   { key: 'weekly_hours', label: 'Weekly Hours', example: '40', required: true },
   { key: 'hourly_rate', label: 'Hourly Rate (\u20AC)', example: '22.50', required: true },
+  { key: 'role', label: 'Role', example: 'Orderpicker', required: false },
   { key: 'shift', label: 'Shift', example: 'Day Shift', required: false },
   { key: 'crew', label: 'Crew', example: 'Team A', required: false },
 ]
@@ -245,6 +246,10 @@ export default function EmployeeImportPage() {
     { site_id: activeSiteId! },
     { enabled: !!activeSiteId && !isDemo },
   )
+  const rolesQuery = trpc.org.listRoles.useQuery(
+    { site_id: activeSiteId! },
+    { enabled: !!activeSiteId && !isDemo },
+  )
   const processesQuery = trpc.org.listProcesses.useQuery(
     { site_id: activeSiteId! },
     { enabled: !!activeSiteId && !isDemo },
@@ -371,10 +376,12 @@ export default function EmployeeImportPage() {
     try {
       const shifts = shiftsQuery.data ?? []
       const crews = crewsQuery.data ?? []
+      const roles = rolesQuery.data ?? []
 
       // Step 1: Import employees
       const employees = validation.valid.map((v) => {
         const d = v.data
+        const roleValue = String(d['Role'] ?? '').trim()
         const shiftValue = String(d['Shift'] ?? '').trim()
         const crewValue = String(d['Crew'] ?? '').trim()
 
@@ -387,6 +394,7 @@ export default function EmployeeImportPage() {
             'full_time' | 'part_time' | 'temporary' | 'seasonal' | 'contractor',
           weekly_hours_contracted: Number(d['Weekly Hours']),
           hourly_rate: Number(d['Hourly Rate (\u20AC)']),
+          job_role_id: roleValue ? matchRole(roleValue, roles) ?? undefined : undefined,
           shift_id: shiftValue ? matchShift(shiftValue, shifts) ?? undefined : undefined,
           crew_id: crewValue ? matchCrew(crewValue, crews) ?? undefined : undefined,
         }

@@ -299,6 +299,7 @@ export const workforceRouter = router({
               contract_type: ContractTypeSchema,
               weekly_hours_contracted: z.number().positive(),
               hourly_rate: z.number().nonnegative(),
+              job_role_id: z.string().uuid().optional(),
               shift_id: z.string().uuid().optional(),
               crew_id: z.string().uuid().optional(),
             }),
@@ -385,6 +386,7 @@ export const workforceRouter = router({
         department_id: e.department
           ? deptMap.get(e.department.trim().toLowerCase()) ?? null
           : null,
+        job_role_id: e.job_role_id ?? null,
         crew_id: e.crew_id ?? null,
         status: 'active' as const,
       }))

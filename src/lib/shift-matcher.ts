@@ -136,3 +136,39 @@ export function matchCrew(
 
   return null
 }
+
+/**
+ * Fuzzy match a role name against existing job roles.
+ * Strategy: exact name → code → partial name match. Deduplicates by name.
+ */
+export function matchRole(
+  value: string,
+  roles: { id: string; name: string; code: string }[],
+): string | null {
+  if (!value || !value.trim() || roles.length === 0) return null
+
+  const normalized = value.trim().toLowerCase()
+
+  // Deduplicate by name (roles can exist per department)
+  const seen = new Set<string>()
+  const unique = roles.filter((r) => {
+    if (seen.has(r.name.toLowerCase())) return false
+    seen.add(r.name.toLowerCase())
+    return true
+  })
+
+  const nameMatch = unique.find((r) => r.name.toLowerCase() === normalized)
+  if (nameMatch) return nameMatch.id
+
+  const codeMatch = unique.find((r) => r.code.toLowerCase() === normalized)
+  if (codeMatch) return codeMatch.id
+
+  const partialMatch = unique.find(
+    (r) =>
+      normalized.includes(r.name.toLowerCase()) ||
+      r.name.toLowerCase().includes(normalized),
+  )
+  if (partialMatch) return partialMatch.id
+
+  return null
+}
