@@ -184,6 +184,134 @@ export async function POST(req: Request) {
       },
     }),
 
+    addEmployee: tool({
+      description: 'Voeg een nieuwe medewerker toe aan de organisatie.',
+      inputSchema: z.object({
+        full_name: z.string().describe('Volledige naam van de medewerker'),
+        email: z.string().email().optional().describe('Email adres (optioneel)'),
+        department_id: z.string().optional().describe('Department UUID'),
+        job_role_id: z.string().optional().describe('Job role UUID'),
+        contract_type: z.enum(['full_time', 'part_time', 'temporary', 'seasonal', 'contractor']).default('full_time'),
+        weekly_hours_contracted: z.number().default(40),
+      }),
+      execute: async (input) => {
+        // Get first site for home_site_id
+        const { data: sites } = await admin
+          .from('site')
+          .select('id')
+          .eq('organization_id', orgId)
+          .limit(1)
+
+        const siteId = sites?.[0]?.id
+        if (!siteId) return { error: 'Geen site gevonden. Maak eerst een site aan.' }
+
+        const code = input.full_name.toUpperCase().replace(/[^A-Z]/g, '').substring(0, 6) + '_' + Date.now().toString(36).slice(-3)
+
+        const { data, error } = await admin
+          .from('employee')
+          .insert({
+            organization_id: orgId,
+            home_site_id: siteId,
+            department_id: input.department_id ?? null,
+            job_role_id: input.job_role_id ?? null,
+            employee_code: code,
+            full_name: input.full_name,
+            email: input.email ?? null,
+            contract_type: input.contract_type,
+            weekly_hours_contracted: input.weekly_hours_contracted,
+            hire_date: new Date().toISOString().split('T')[0],
+            status: 'active',
+          })
+          .select('id, full_name, employee_code')
+          .single()
+
+        if (error) return { error: error.message }
+        return { success: true, employee: data }
+      },
+    }),
+
+    listEmployees: tool({
+      description: 'Toon alle medewerkers van de organisatie.',
+      inputSchema: z.object({}),
+      execute: async () => {
+        const { data, error } = await admin
+          .from('employee')
+          .select('id, full_name, employee_code, contract_type, status')
+          .eq('organization_id', orgId)
+          .eq('status', 'active')
+          .order('full_name')
+          .limit(50)
+
+        if (error) return { error: error.message }
+        return { employees: data ?? [], count: data?.length ?? 0 }
+      },
+    }),
+
+    addDepartment: tool({
+      description: 'Maak een nieuw department/afdeling aan.',
+      inputSchema: z.object({
+        name: z.string().describe('Naam van het department, bijv. Inbound, Outbound'),
+        site_id: z.string().optional().describe('Site UUID (optioneel, pakt anders de eerste site)'),
+      }),
+      execute: async (input) => {
+        let siteId = input.site_id
+        if (!siteId) {
+          const { data: sites } = await admin.from('site').select('id').eq('organization_id', orgId).limit(1)
+          siteId = sites?.[0]?.id
+        }
+        if (!siteId) return { error: 'Geen site gevonden.' }
+
+        const code = input.name.toUpperCase().replace(/[^A-Z0-9]/g, '').substring(0, 20)
+
+        const { data, error } = await admin
+          .from('department')
+          .insert({
+            organization_id: orgId,
+            site_id: siteId,
+            name: input.name,
+            code,
+            status: 'active',
+          })
+          .select('id, name, code')
+          .single()
+
+        if (error) return { error: error.message }
+        return { success: true, department: data }
+      },
+    }),
+
+    addDemandForecast: tool({
+      description: 'Voeg demand/volume toe voor een proces voor een specifieke dag.',
+      inputSchema: z.object({
+        process_id: z.string().describe('Process UUID'),
+        date: z.string().describe('ISO datum, bijv. 2026-03-30'),
+        volume: z.number().describe('Verwacht volume'),
+      }),
+      execute: async (input) => {
+        const { data: proc } = await admin.from('process').select('unit_of_measure').eq('id', input.process_id).single()
+        const { data: sites } = await admin.from('site').select('id').eq('organization_id', orgId).limit(1)
+        const siteId = sites?.[0]?.id
+        if (!siteId) return { error: 'Geen site gevonden.' }
+
+        const nextDay = new Date(input.date + 'T00:00:00Z')
+        nextDay.setUTCDate(nextDay.getUTCDate() + 1)
+
+        const { data, error } = await admin.from('demand_forecast').insert({
+          organization_id: orgId,
+          site_id: siteId,
+          process_id: input.process_id,
+          period_start: input.date,
+          period_end: nextDay.toISOString().split('T')[0],
+          volume: input.volume,
+          unit_of_measure: proc?.unit_of_measure ?? 'units',
+          source: 'manual_entry',
+        }).select('id').single()
+
+        if (error) return { error: error.message }
+        return { success: true, forecast_id: data?.id }
+      },
+    }),
+
     getSetupProgress: tool({
       description:
         'Haal de voortgang van de setup op: welke stappen zijn ingevuld.',
@@ -241,11 +369,15 @@ export async function POST(req: Request) {
     model: anthropic('claude-sonnet-4-20250514'),
     system: `Je bent AstraAI, de onboarding assistent van AstraPlanner — een workforce planning platform voor logistiek.
 
-Je helpt de gebruiker stap voor stap hun omgeving in te richten:
+Je helpt de gebruiker met alles in AstraPlanner:
 1. Sites (vestigingen) aanmaken
 2. Shifts (diensten) configureren
-3. Rollen definiëren
+3. Departments (afdelingen) aanmaken
 4. Processen instellen
+5. Rollen definiëren
+6. Medewerkers toevoegen en beheren
+7. Demand/volume invoeren per proces
+8. Vragen beantwoorden over workforce planning
 
 Regels:
 - Antwoord altijd in het Nederlands
