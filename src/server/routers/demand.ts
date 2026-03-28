@@ -1,6 +1,13 @@
 import { z } from 'zod'
 import { TRPCError } from '@trpc/server'
 import { router, plannerProcedure, managerProcedure, viewerProcedure } from '../trpc'
+import { createAdminClient } from '@/lib/supabase/admin'
+
+function assertNoError(error: { message: string } | null, label: string): void {
+  if (error) {
+    throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: `${label}: ${error.message}` })
+  }
+}
 
 const sourceEnum = z.enum(['wms_import', 'oms_import', 'csv_upload', 'manual_entry', 'ai_forecast'])
 
@@ -59,6 +66,7 @@ export const demandRouter = router({
         .from('demand_type')
         .upsert({
           ...(input.id ? { id: input.id } : {}),
+          organization_id: ctx.organizationId,
           name: input.name,
           unit_of_measure: input.unit_of_measure,
         })
@@ -170,6 +178,7 @@ export const demandRouter = router({
         .from('demand_forecast')
         .upsert({
           ...(input.id ? { id: input.id } : {}),
+          organization_id: ctx.organizationId,
           site_id: input.site_id,
           demand_type_id: input.demand_type_id,
           period_start: input.period_start,
@@ -301,5 +310,61 @@ export const demandRouter = router({
       }
 
       return { deleted: count ?? 0 }
+    }),
+
+  // ── Process-based demand (direct entry, no demand types) ──────────────
+
+  listProcessDemand: plannerProcedure
+    .input(z.object({
+      site_id: z.string().uuid(),
+      period_start: z.string(),
+      period_end: z.string(),
+    }))
+    .query(async ({ ctx, input }) => {
+      const admin = createAdminClient()
+      const { data, error } = await admin
+        .from('demand_forecast')
+        .select('id, process_id, period_start, period_end, volume, unit_of_measure, source')
+        .eq('organization_id', ctx.organizationId)
+        .eq('site_id', input.site_id)
+        .not('process_id', 'is', null)
+        .gte('period_start', input.period_start)
+        .lte('period_start', input.period_end)
+        .order('period_start')
+      assertNoError(error, 'listProcessDemand')
+      return data ?? []
+    }),
+
+  upsertProcessForecast: plannerProcedure
+    .input(z.object({
+      site_id: z.string().uuid(),
+      process_id: z.string().uuid(),
+      period_start: z.string(),
+      period_end: z.string(),
+      volume: z.number().min(0).max(999999),
+      unit_of_measure: z.string(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const admin = createAdminClient()
+      const { data, error } = await admin
+        .from('demand_forecast')
+        .upsert({
+          organization_id: ctx.organizationId,
+          site_id: input.site_id,
+          process_id: input.process_id,
+          demand_type_id: null,
+          period_start: input.period_start,
+          period_end: input.period_end,
+          volume: input.volume,
+          unit_of_measure: input.unit_of_measure,
+          source: 'manual_entry',
+          plan_version_id: null,
+        }, {
+          onConflict: 'organization_id,site_id,process_id,period_start,plan_version_id',
+        })
+        .select('id')
+        .single()
+      assertNoError(error, 'upsertProcessForecast')
+      return data!
     }),
 })
