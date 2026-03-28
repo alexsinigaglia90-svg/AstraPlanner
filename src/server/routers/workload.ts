@@ -289,7 +289,8 @@ export const workloadRouter = router({
 
       const allResults = [...results, ...supportResults]
 
-      // ── 7. Upsert results into workload_plan ──────────────────────────
+      // ── 7. Write results into workload_plan ───────────────────────────
+      // Delete old computed results for this site/period, then insert new
       if (allResults.length > 0) {
         const rows = allResults
           .filter(r => r.hours_needed !== null)
@@ -305,8 +306,8 @@ export const workloadRouter = router({
             weighted_uph: r.weighted_uph,
             hours_needed: r.hours_needed,
             fte_needed: r.fte_needed,
-            hours_assigned: r.hours_available ?? 0,  // A4: write hours_available
-            fte_assigned: r.fte_available ?? 0,       // A4: write fte_available
+            hours_assigned: r.hours_available ?? 0,
+            fte_assigned: r.fte_available ?? 0,
             coverage_pct: r.coverage_pct,
             plan_version_id: input.plan_version_id,
             status: 'computed',
@@ -314,11 +315,22 @@ export const workloadRouter = router({
           }))
 
         if (rows.length > 0) {
-          const { error: upsertErr } = await admin
+          // Delete existing results for this site/period range
+          await admin
             .from('workload_plan')
-            .upsert(rows, { onConflict: 'organization_id,site_id,process_id,period_start,period_end,plan_version_id' })
+            .delete()
+            .eq('organization_id', ctx.organizationId)
+            .eq('site_id', input.site_id)
+            .gte('period_start', input.period_start)
+            .lte('period_start', input.period_end)
+            .is('plan_version_id', input.plan_version_id)
 
-          if (upsertErr) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: upsertErr.message })
+          // Insert fresh results
+          const { error: insertErr } = await admin
+            .from('workload_plan')
+            .insert(rows)
+
+          if (insertErr) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: insertErr.message })
         }
       }
 
