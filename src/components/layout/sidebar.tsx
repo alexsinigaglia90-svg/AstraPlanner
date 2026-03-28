@@ -11,6 +11,8 @@ import {
   ChevronRight,
   GitBranch,
   Zap,
+  HeartPulse,
+  CalendarOff,
 } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
@@ -20,12 +22,15 @@ interface NavItem {
   label: string
   href: string
   icon: React.ElementType
+  minRole?: string // if set, only show for this role and above
 }
 
 const navItems: NavItem[] = [
   { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { label: 'Planning', href: '/dashboard/planning', icon: Calendar },
   { label: 'Employees', href: '/dashboard/employees', icon: Users },
+  { label: 'Verzuim', href: '/dashboard/verzuim', icon: HeartPulse, minRole: 'supervisor' },
+  { label: 'Verlof', href: '/dashboard/verlof', icon: CalendarOff },
   { label: 'Processes', href: '/dashboard/processes', icon: GitBranch },
   { label: 'Skills', href: '/dashboard/skills', icon: Zap },
   { label: 'Demand', href: '/dashboard/demand', icon: TrendingUp },
@@ -78,6 +83,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
 
       {/* Nav items */}
       <nav className="flex-1 py-4 flex flex-col gap-1 px-2">
+        {/* TODO: filter by role — pass userRole prop and skip items where minRole is not satisfied */}
         {navItems.map(({ label, href, icon: Icon }) => {
           const isActive = pathname === href || pathname.startsWith(href + '/')
           return (
