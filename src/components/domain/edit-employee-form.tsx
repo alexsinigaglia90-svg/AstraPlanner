@@ -227,9 +227,17 @@ export function EditEmployeeForm({ employee, onClose, onDeleted, isNew }: EditEm
         placeholder="\u2014 No role \u2014"
         options={[
           { value: '', label: '\u2014 No role \u2014' },
-          ...(rolesQuery.data ?? [])
-            .filter((r) => !employee.department_id || r.department_id === employee.department_id)
-            .map((r) => ({ value: r.id, label: r.name })),
+          ...(() => {
+            const roles = rolesQuery.data ?? []
+            const seen = new Set<string>()
+            return roles
+              .filter((r) => {
+                if (seen.has(r.name)) return false
+                seen.add(r.name)
+                return true
+              })
+              .map((r) => ({ value: r.id, label: r.name }))
+          })(),
         ]}
       />
 
