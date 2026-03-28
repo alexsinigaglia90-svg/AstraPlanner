@@ -69,7 +69,12 @@ export function computeWorkload(
           weightedUph = baseUph
         }
         hoursNeeded = processVolume / weightedUph
-        fteNeeded = hoursNeeded / effectiveHoursPerWeek
+        // Determine if this is a day-record or week-record based on period span
+        const pStart = new Date(demand.period_start)
+        const pEnd = new Date(demand.period_end)
+        const spanDays = Math.max(1, Math.round((pEnd.getTime() - pStart.getTime()) / (24 * 60 * 60 * 1000)))
+        const effectiveHours = spanDays <= 1 ? (effectiveHoursPerWeek / 5) : effectiveHoursPerWeek // 8h/day or 40h/week
+        fteNeeded = hoursNeeded / effectiveHours
       } else {
         status = 'no_norm'
       }
