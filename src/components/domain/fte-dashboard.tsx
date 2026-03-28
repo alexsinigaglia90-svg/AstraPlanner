@@ -134,29 +134,75 @@ export function FteDashboard({ siteId, weekRange }: FteDashboardProps) {
     }
   }, [workloadData])
 
-  // ── Derived: Heatmap cells ───────────────────────────────────────────────
+  // ── Derived: Heatmap cells (aggregated day→week) ─────────────────────────
 
   const { heatmapCells, weeks } = useMemo(() => {
     const rows = workloadData ?? []
-    const weekSet = new Set<string>()
-    const cells: HeatmapCell[] = []
+
+    // Helper: get Monday of the week for a given date
+    function getMonday(dateStr: string): string {
+      const d = new Date(dateStr)
+      const day = d.getUTCDay() || 7 // Mon=1..Sun=7
+      d.setUTCDate(d.getUTCDate() - day + 1)
+      return d.toISOString().split('T')[0] ?? dateStr
+    }
+
+    // Group by (process_id, monday) and aggregate
+    const grouped = new Map<string, {
+      process_id: string
+      process_name: string
+      monday: string
+      total_coverage: number
+      total_fte_needed: number
+      total_fte_available: number
+      count: number
+      has_computed: boolean
+    }>()
 
     for (const r of rows) {
-      weekSet.add(r.period_start)
       const proc = r.process as unknown as {
         name: string
         category: string | null
         process_type: string | null
       } | null
 
+      const monday = getMonday(r.period_start)
+      const key = `${r.process_id}:${monday}`
+      const existing = grouped.get(key)
+
+      if (existing) {
+        existing.total_coverage += Number(r.coverage_pct) || 0
+        existing.total_fte_needed += Number(r.fte_needed) || 0
+        existing.total_fte_available += Number(r.fte_assigned) || 0
+        existing.count++
+        if (r.status === 'computed') existing.has_computed = true
+      } else {
+        grouped.set(key, {
+          process_id: r.process_id,
+          process_name: proc?.name ?? r.process_id,
+          monday,
+          total_coverage: Number(r.coverage_pct) || 0,
+          total_fte_needed: Number(r.fte_needed) || 0,
+          total_fte_available: Number(r.fte_assigned) || 0,
+          count: 1,
+          has_computed: r.status === 'computed',
+        })
+      }
+    }
+
+    const weekSet = new Set<string>()
+    const cells: HeatmapCell[] = []
+
+    for (const g of grouped.values()) {
+      weekSet.add(g.monday)
       cells.push({
-        process_id: r.process_id,
-        process_name: proc?.name ?? r.process_id,
-        period_start: r.period_start,
-        coverage_pct: Number(r.coverage_pct) || 0,
-        fte_needed: r.fte_needed !== null ? Number(r.fte_needed) : null,
-        fte_available: Number(r.fte_assigned) || 0,
-        status: r.status as 'computed' | 'no_norm',
+        process_id: g.process_id,
+        process_name: g.process_name,
+        period_start: g.monday,
+        coverage_pct: g.count > 0 ? Math.round(g.total_coverage / g.count) : 0,
+        fte_needed: Math.round(g.total_fte_needed / g.count * 10) / 10,
+        fte_available: Math.round(g.total_fte_available / g.count * 10) / 10,
+        status: g.has_computed ? 'computed' : 'no_norm',
       })
     }
 
