@@ -6,7 +6,7 @@ export interface WorkloadInput {
 
 export interface DemandRow {
   demand_forecast_id: string
-  demand_type_id: string
+  demand_type_id: string | null
   demand_type_name: string
   process_mappings: ProcessMapping[]
   volume: number
