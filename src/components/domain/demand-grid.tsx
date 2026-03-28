@@ -232,12 +232,20 @@ export function DemandGrid({ siteId, weekRange, onWeekRangeChange }: DemandGridP
       setLastSaved(true)
       void utils.demand.listProcessDemand.invalidate()
     },
+    onError: (err) => {
+      console.error('[DemandGrid] Day save failed:', err.message)
+      window.alert(`Opslaan mislukt: ${err.message}`)
+    },
   })
 
   const upsertWeekMutation = trpc.demand.upsertWeekForecast.useMutation({
     onSuccess: () => {
       setLastSaved(true)
       void utils.demand.listProcessDemand.invalidate()
+    },
+    onError: (err) => {
+      console.error('[DemandGrid] Week save failed:', err.message)
+      window.alert(`Opslaan mislukt: ${err.message}`)
     },
   })
 
