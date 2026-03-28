@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useMemo, useCallback } from 'react'
-import { motion } from 'framer-motion'
-import { TrendingUp } from 'lucide-react'
+import { useState, useMemo, useCallback, useRef, useEffect } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { TrendingUp, Plus, ChevronDown } from 'lucide-react'
 import { containerStagger, fadeInUp, bouncy } from '@/lib/motion'
 import { trpc } from '@/lib/trpc/client'
 import { WeekRangePicker } from './week-range-picker'
@@ -123,17 +123,31 @@ function SaveIndicator({ isSaving, lastSaved }: { isSaving: boolean; lastSaved: 
 
 export function DemandGrid({ siteId, weekRange, onWeekRangeChange }: DemandGridProps) {
   const [lastSaved, setLastSaved] = useState(false)
+  const [addedProcessIds, setAddedProcessIds] = useState<Set<string>>(new Set())
+  const [showProcessPicker, setShowProcessPicker] = useState(false)
+  const pickerRef = useRef<HTMLDivElement>(null)
   const isDemo = useDemoStore((s) => s.isDemo)
 
   const utils = trpc.useUtils()
 
+  // Close picker on click outside
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
+        setShowProcessPicker(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
+
   // ── Data fetching ──────────────────────────────────────────────────────
 
-  const { data: liveProcesses = [] } = trpc.org.listProcesses.useQuery(
+  const { data: liveAllProcesses = [] } = trpc.org.listProcesses.useQuery(
     { site_id: siteId },
     { enabled: !isDemo && !!siteId },
   )
-  const processes = isDemo ? [] : liveProcesses
+  const allProcesses = isDemo ? [] : liveAllProcesses
 
   const { data: liveForecasts = [] } = trpc.demand.listProcessDemand.useQuery(
     {
@@ -155,6 +169,30 @@ export function DemandGrid({ siteId, weekRange, onWeekRangeChange }: DemandGridP
   const isSaving = upsertProcessForecast.isPending
 
   // ── Derived data ───────────────────────────────────────────────────────
+
+  // Processes with existing forecasts are always shown
+  const processIdsWithForecasts = useMemo(() => {
+    const ids = new Set<string>()
+    for (const f of forecasts) {
+      if (f.process_id) ids.add(f.process_id)
+    }
+    return ids
+  }, [forecasts])
+
+  // Active processes = those with forecasts + manually added
+  const activeProcessIds = useMemo(() => {
+    return new Set([...processIdsWithForecasts, ...addedProcessIds])
+  }, [processIdsWithForecasts, addedProcessIds])
+
+  // Only show active processes in the grid
+  const processes = useMemo(() => {
+    return allProcesses.filter((p) => activeProcessIds.has(p.id))
+  }, [allProcesses, activeProcessIds])
+
+  // Available processes to add (not yet in grid)
+  const availableProcesses = useMemo(() => {
+    return allProcesses.filter((p) => !activeProcessIds.has(p.id))
+  }, [allProcesses, activeProcessIds])
 
   const weeks = useMemo(() => buildWeekMondays(weekRange.start, weekRange.end), [weekRange])
 
@@ -277,6 +315,73 @@ export function DemandGrid({ siteId, weekRange, onWeekRangeChange }: DemandGridP
       <div style={toolbarStyle}>
         <SiteSelector />
         <WeekRangePicker value={weekRange} onChange={onWeekRangeChange} />
+        {/* Add process button */}
+        {availableProcesses.length > 0 && (
+          <div ref={pickerRef} style={{ position: 'relative' }}>
+            <motion.button
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
+              onClick={() => setShowProcessPicker((v) => !v)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 5,
+                padding: '6px 14px', borderRadius: 'var(--radius-sm)',
+                border: 'none', background: 'linear-gradient(135deg, var(--primary), #8B5CF6)',
+                color: '#FFFFFF', fontFamily: 'var(--font-body)', fontSize: 12,
+                fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap',
+              }}
+            >
+              <Plus size={14} />
+              Proces
+              <ChevronDown size={12} style={{ opacity: 0.7 }} />
+            </motion.button>
+
+            <AnimatePresence>
+              {showProcessPicker && (
+                <motion.div
+                  initial={{ opacity: 0, y: -4, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -4, scale: 0.98 }}
+                  transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+                  style={{
+                    position: 'absolute', top: 'calc(100% + 6px)', right: 0,
+                    width: 260, maxHeight: 300, overflowY: 'auto',
+                    backgroundColor: 'var(--card)', border: '1px solid var(--border)',
+                    borderRadius: 'var(--radius-md)', boxShadow: 'var(--elevation-3)',
+                    zIndex: 20, padding: '4px 0',
+                  }}
+                >
+                  {availableProcesses.map((proc) => (
+                    <button
+                      key={proc.id}
+                      onClick={() => {
+                        setAddedProcessIds((prev) => new Set([...prev, proc.id]))
+                        setShowProcessPicker(false)
+                      }}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 8,
+                        width: '100%', padding: '8px 12px', border: 'none',
+                        background: 'transparent', cursor: 'pointer', textAlign: 'left',
+                      }}
+                      onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--muted)' }}
+                      onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent' }}
+                    >
+                      <SmartIcon name={proc.name} type="process" color="var(--primary)" size={16} />
+                      <div>
+                        <div style={{ fontFamily: 'var(--font-body)', fontSize: 12, fontWeight: 600, color: 'var(--foreground)' }}>
+                          {proc.name}
+                        </div>
+                        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--muted-foreground)' }}>
+                          {proc.unit_of_measure} · {proc.norm_uph}/hr
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        )}
+
         <SaveIndicator isSaving={isSaving} lastSaved={lastSaved} />
       </div>
 
@@ -394,13 +499,15 @@ export function DemandGrid({ siteId, weekRange, onWeekRangeChange }: DemandGridP
               fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 700,
               color: 'var(--foreground)',
             }}>
-              Geen processen gevonden
+              {allProcesses.length === 0 ? 'Geen processen gevonden' : 'Voeg processen toe aan het grid'}
             </div>
             <div style={{
               fontFamily: 'var(--font-body)', fontSize: 13,
               color: 'var(--muted-foreground)', maxWidth: 300,
             }}>
-              Maak eerst processen aan via het Processen scherm.
+              {allProcesses.length === 0
+                ? 'Maak eerst processen aan via het Processen scherm.'
+                : 'Klik op "+ Proces" hierboven om demand-driven processen toe te voegen.'}
             </div>
           </motion.div>
         )}
