@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Plus, Clock, X, Pencil, Trash2, Check } from 'lucide-react'
+import { Plus, Clock, X, Pencil, Trash2, Check, Users } from 'lucide-react'
 import { GlassDropdown } from '@/components/domain/glass-dropdown'
 import { trpc } from '@/lib/trpc/client'
 import { useSiteStore } from '@/stores/site-store'
@@ -727,66 +727,103 @@ function CrewModal({
     ? AVAILABLE_COLORS
     : AVAILABLE_COLORS.filter((c) => !usedColors.includes(c) || c === form.color)
 
+  const selectedColor = getDeptColor(form.color)
+
   return (
     <Modal open={open} onClose={onClose}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-        <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700, color: 'var(--foreground)', margin: 0 }}>
-          {initial ? 'Edit Crew' : 'Add Crew'}
-        </h3>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
+        {/* Header with color preview */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          <motion.div
+            animate={{ backgroundColor: selectedColor.main }}
+            transition={{ duration: 0.2 }}
+            style={{
+              width: 44, height: 44, borderRadius: 12,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              boxShadow: `0 4px 14px ${selectedColor.main}40`,
+            }}
+          >
+            <Users size={20} color="#fff" />
+          </motion.div>
+          <div>
+            <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700, color: 'var(--foreground)', margin: 0 }}>
+              {initial ? 'Ploeg bewerken' : 'Nieuwe ploeg'}
+            </h3>
+            <p style={{ fontFamily: 'var(--font-body)', fontSize: 12, color: 'var(--muted-foreground)', margin: 0 }}>
+              {initial ? 'Pas naam of kleur aan' : 'Maak een nieuwe ploeg aan'}
+            </p>
+          </div>
+        </div>
 
-        {/* Color picker */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+        {/* Name input */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           <label style={{ fontFamily: 'var(--font-body)', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--muted-foreground)' }}>
-            Color
+            Naam
           </label>
-          <div style={{ display: 'flex', gap: 8 }}>
+          <input
+            autoFocus
+            value={form.name}
+            onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
+            placeholder="Bijv. Ploeg Alpha"
+            style={{
+              ...inputStyle,
+              height: 44,
+              borderRadius: 12,
+              border: `2px solid ${form.name.trim() ? selectedColor.main + '40' : 'var(--border)'}`,
+              transition: 'border-color 0.2s',
+            }}
+          />
+        </div>
+
+        {/* Color picker — compact grid */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <label style={{ fontFamily: 'var(--font-body)', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--muted-foreground)' }}>
+            Kleur
+          </label>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
             {availableForPicker.map((colorKey) => {
               const c = getDeptColor(colorKey)
               const active = form.color === colorKey
               return (
-                <button
+                <motion.button
                   key={colorKey}
                   type="button"
+                  whileHover={{ scale: 1.15 }}
+                  whileTap={{ scale: 0.9 }}
                   onClick={() => setForm((p) => ({ ...p, color: colorKey }))}
                   style={{
-                    width: 32, height: 32, borderRadius: '50%',
-                    backgroundColor: c.main, border: active ? '3px solid var(--foreground)' : '3px solid transparent',
-                    cursor: 'pointer', transition: 'border 0.15s',
+                    width: 28, height: 28, borderRadius: 8,
+                    backgroundColor: c.main,
+                    border: active ? '2.5px solid var(--foreground)' : '2.5px solid transparent',
+                    cursor: 'pointer', transition: 'border-color 0.15s',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    boxShadow: active ? `0 0 0 3px ${c.main}30` : 'none',
                   }}
                 >
-                  {active && <Check size={14} color="#fff" />}
-                </button>
+                  {active && <Check size={12} color="#fff" strokeWidth={3} />}
+                </motion.button>
               )
             })}
           </div>
         </div>
 
-        {/* Name */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-          <label style={{ fontFamily: 'var(--font-body)', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--muted-foreground)' }}>
-            Name <span style={{ color: 'var(--destructive)' }}>*</span>
-          </label>
-          <input
-            autoFocus
-            style={inputStyle}
-            value={form.name}
-            onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
-            placeholder="e.g. Crew Alpha"
-          />
-        </div>
-
         {/* Footer */}
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 8 }}>
-          <button type="button" onClick={onClose} style={btnSecondary}>Cancel</button>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 4 }}>
+          <button type="button" onClick={onClose} style={btnSecondary}>Annuleren</button>
           <motion.button
             variants={scalePress}
             whileTap="press"
             disabled={saving || !form.name.trim()}
             onClick={() => onSave(form)}
-            style={{ ...btnPrimary, opacity: saving ? 0.7 : 1, cursor: saving ? 'not-allowed' : 'pointer' }}
+            style={{
+              ...btnPrimary,
+              opacity: (saving || !form.name.trim()) ? 0.5 : 1,
+              cursor: (saving || !form.name.trim()) ? 'not-allowed' : 'pointer',
+              background: `linear-gradient(135deg, ${selectedColor.main}, ${selectedColor.main}dd)`,
+              boxShadow: `0 4px 14px ${selectedColor.main}35`,
+            }}
           >
-            {saving ? 'Saving...' : 'Save'}
+            {saving ? 'Opslaan...' : initial ? 'Opslaan' : 'Ploeg aanmaken'}
           </motion.button>
         </div>
       </div>
