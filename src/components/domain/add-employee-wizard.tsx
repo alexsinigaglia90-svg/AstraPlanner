@@ -195,10 +195,10 @@ export function AddEmployeeWizard({ open, onClose, siteId, onSaved }: AddEmploye
             }}>
               <div>
                 <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 800, color: 'var(--foreground)', margin: 0 }}>
-                  New Employee
+                  Nieuwe medewerker
                 </h3>
                 <p style={{ fontFamily: 'var(--font-body)', fontSize: 12, color: 'var(--muted-foreground)', margin: '2px 0 0' }}>
-                  {step === 1 ? 'Personal details' : 'Assignment'}
+                  {step === 1 ? 'Persoonlijke gegevens' : 'Toewijzing'}
                 </p>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -243,13 +243,13 @@ export function AddEmployeeWizard({ open, onClose, siteId, onSaved }: AddEmploye
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                         <label style={{ fontFamily: 'var(--font-body)', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--muted-foreground)' }}>
-                          First Name <span style={{ color: 'var(--destructive)' }}>*</span>
+                          Voornaam <span style={{ color: 'var(--destructive)' }}>*</span>
                         </label>
                         <input autoFocus style={inputStyle} value={form.first_name} onChange={(e) => update('first_name', e.target.value)} />
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                         <label style={{ fontFamily: 'var(--font-body)', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--muted-foreground)' }}>
-                          Last Name <span style={{ color: 'var(--destructive)' }}>*</span>
+                          Achternaam <span style={{ color: 'var(--destructive)' }}>*</span>
                         </label>
                         <input style={inputStyle} value={form.last_name} onChange={(e) => update('last_name', e.target.value)} />
                       </div>
@@ -258,7 +258,7 @@ export function AddEmployeeWizard({ open, onClose, siteId, onSaved }: AddEmploye
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                         <label style={{ fontFamily: 'var(--font-body)', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--muted-foreground)' }}>
-                          Employee # <span style={{ color: 'var(--destructive)' }}>*</span>
+                          Personeelsnr. <span style={{ color: 'var(--destructive)' }}>*</span>
                         </label>
                         <input style={inputStyle} value={form.employee_number} onChange={(e) => update('employee_number', e.target.value)} placeholder="EMP-001" />
                       </div>
@@ -313,37 +313,43 @@ export function AddEmployeeWizard({ open, onClose, siteId, onSaved }: AddEmploye
                     </div>
 
                     <GlassSelect
-                      label="Department"
+                      label="Afdeling"
                       value={form.department_id}
                       onChange={(val) => { update('department_id', val); update('job_role_id', '') }}
-                      placeholder="\u2014 No department \u2014"
+                      placeholder="\u2014 Geen afdeling \u2014"
                       options={[
-                        { value: '', label: '\u2014 No department \u2014' },
+                        { value: '', label: '\u2014 Geen afdeling \u2014' },
                         ...(depts.data ?? []).map((d) => ({ value: d.id, label: d.name })),
                       ]}
                     />
 
                     <GlassSelect
-                      label="Crew"
+                      label="Ploeg"
                       value={form.crew_id}
                       onChange={(val) => update('crew_id', val)}
-                      placeholder="\u2014 No crew \u2014"
+                      placeholder="\u2014 Geen ploeg \u2014"
                       options={[
-                        { value: '', label: '\u2014 No crew \u2014' },
+                        { value: '', label: '\u2014 Geen ploeg \u2014' },
                         ...(crews.data ?? []).map((c) => ({ value: c.id, label: c.name })),
                       ]}
                     />
 
                     <GlassSelect
-                      label="Role"
+                      label="Rol"
                       value={form.job_role_id}
                       onChange={(val) => update('job_role_id', val)}
-                      placeholder="\u2014 No role \u2014"
+                      placeholder="\u2014 Geen rol \u2014"
                       options={[
-                        { value: '', label: '\u2014 No role \u2014' },
-                        ...(roles.data ?? [])
-                          .filter((r) => !form.department_id || r.department_id === form.department_id)
-                          .map((r) => ({ value: r.id, label: r.name })),
+                        { value: '', label: '\u2014 Geen rol \u2014' },
+                        ...(() => {
+                          const allRoles = roles.data ?? []
+                          const seen = new Set<string>()
+                          return allRoles.filter((r) => {
+                            if (seen.has(r.name)) return false
+                            seen.add(r.name)
+                            return true
+                          }).map((r) => ({ value: r.id, label: r.name }))
+                        })(),
                       ]}
                     />
 
@@ -382,7 +388,7 @@ export function AddEmployeeWizard({ open, onClose, siteId, onSaved }: AddEmploye
                     color: 'var(--muted-foreground)', fontFamily: 'var(--font-body)',
                     fontSize: 13, cursor: 'pointer',
                   }}>
-                    Cancel
+                    Annuleren
                   </button>
                   <motion.button
                     variants={scalePress} whileTap="press"
@@ -397,7 +403,7 @@ export function AddEmployeeWizard({ open, onClose, siteId, onSaved }: AddEmploye
                       cursor: canStep1 ? 'pointer' : 'not-allowed',
                     }}
                   >
-                    Next →
+                    Volgende →
                   </motion.button>
                 </>
               ) : (
@@ -408,7 +414,7 @@ export function AddEmployeeWizard({ open, onClose, siteId, onSaved }: AddEmploye
                     color: 'var(--muted-foreground)', fontFamily: 'var(--font-body)',
                     fontSize: 13, cursor: 'pointer',
                   }}>
-                    ← Back
+                    ← Terug
                   </button>
                   <motion.button
                     variants={scalePress} whileTap="press"
@@ -425,7 +431,7 @@ export function AddEmployeeWizard({ open, onClose, siteId, onSaved }: AddEmploye
                       boxShadow: '0 4px 14px rgba(16,185,129,0.3)',
                     }}
                   >
-                    {saving ? 'Creating...' : 'Create Employee ✓'}
+                    {saving ? 'Opslaan...' : 'Medewerker aanmaken ✓'}
                   </motion.button>
                 </>
               )}
