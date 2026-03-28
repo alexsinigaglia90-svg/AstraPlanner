@@ -281,13 +281,13 @@ export function AddEmployeeWizard({ open, onClose, siteId, onSaved }: AddEmploye
                         <label style={{ fontFamily: 'var(--font-body)', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--muted-foreground)' }}>
                           Hours/week
                         </label>
-                        <input style={{ ...inputStyle, fontFamily: 'var(--font-mono)' }} type="number" step="0.5" min="0" value={form.weekly_hours_contracted} onChange={(e) => update('weekly_hours_contracted', Number(e.target.value))} />
+                        <input style={{ ...inputStyle, fontFamily: 'var(--font-mono)' }} type="text" inputMode="decimal" value={form.weekly_hours_contracted || ''} onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*[.,]?\d?$/.test(v)) update('weekly_hours_contracted', v === '' ? 0 : Number(v.replace(',', '.'))) }} placeholder="40" />
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                         <label style={{ fontFamily: 'var(--font-body)', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--muted-foreground)' }}>
                           Rate (€/hr)
                         </label>
-                        <input style={{ ...inputStyle, fontFamily: 'var(--font-mono)' }} type="number" step="0.01" min="0" value={form.hourly_rate} onChange={(e) => update('hourly_rate', Number(e.target.value))} />
+                        <input style={{ ...inputStyle, fontFamily: 'var(--font-mono)' }} type="text" inputMode="decimal" value={form.hourly_rate || ''} onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*[.,]?\d{0,2}$/.test(v)) update('hourly_rate', v === '' ? 0 : Number(v.replace(',', '.'))) }} placeholder="0.00" />
                       </div>
                     </div>
                   </motion.div>
