@@ -99,12 +99,12 @@ export default function VerzuimPage() {
 
   const activeQuery = trpc.absence.listActive.useQuery(
     { site_id: activeSiteId!, type: 'absence' },
-    { enabled: !!activeSiteId && !isDemo },
+    { enabled: !!activeSiteId && !isDemo, retry: false },
   )
 
   const historyQuery = trpc.absence.listHistory.useQuery(
     { site_id: activeSiteId!, type: 'absence', limit: 20 },
-    { enabled: !!activeSiteId && !isDemo },
+    { enabled: !!activeSiteId && !isDemo, retry: false },
   )
 
   const recover = trpc.absence.reportRecovered.useMutation({
@@ -118,7 +118,22 @@ export default function VerzuimPage() {
   // ── Derived data ─────────────────────────────────────────────────────────
 
   const activeItems = (activeQuery.data ?? []) as AbsenceRow[]
-  const historyItems = (historyQuery.data ?? []) as AbsenceRow[]
+  const historyItems = (!historyQuery.error ? (historyQuery.data ?? []) : []) as AbsenceRow[]
+
+  // If listActive fails (e.g., role too low), show access denied
+  if (activeQuery.error) {
+    return (
+      <div style={{ padding: '80px 40px', textAlign: 'center', fontFamily: 'var(--font-body)' }}>
+        <HeartPulse size={40} style={{ color: 'var(--muted-foreground)', opacity: 0.3, marginBottom: 12 }} />
+        <h2 style={{ fontSize: 20, fontWeight: 700, color: 'var(--foreground)', margin: '0 0 8px' }}>
+          Geen toegang
+        </h2>
+        <p style={{ fontSize: 14, color: 'var(--muted-foreground)', margin: 0 }}>
+          Je hebt minimaal de rol &lsquo;supervisor&rsquo; nodig om verzuim te beheren.
+        </p>
+      </div>
+    )
+  }
 
   const sickToday = activeItems.length
 

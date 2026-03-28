@@ -312,6 +312,30 @@ export const absenceRouter = router({
       })
     }),
 
+  /** Any authenticated user can see their own leave requests */
+  listMyLeave: protectedProcedure
+    .input(z.object({ site_id: z.string().uuid().optional() }))
+    .query(async ({ ctx }) => {
+      const admin = createAdminClient()
+      const { data, error } = await admin
+        .from('employee_availability_override')
+        .select('id, employee_id, start_date, end_date, override_type, status, reason, created_at')
+        .eq('organization_id', ctx.organizationId)
+        .eq('employee_id', ctx.user.id)
+        .eq('override_type', 'leave')
+        .order('start_date', { ascending: false })
+        .limit(50)
+
+      assertNoError(error, 'listMyLeave')
+
+      return (data ?? []).map((row) => ({
+        ...row,
+        employee_name: null,
+        department_id: null,
+        crew_id: null,
+      }))
+    }),
+
   /** Get the impact of an employee absence on process coverage */
   getImpact: supervisorProcedure
     .input(

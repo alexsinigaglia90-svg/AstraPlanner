@@ -80,10 +80,17 @@ export default function VerlofPage() {
   const [calMonth, setCalMonth] = useState(() => new Date())
 
   // ── Data fetching ───────────────────────────────────────────────────────
+  // Supervisors+ see all leave; employees see only their own
   const activeQuery = trpc.absence.listActive.useQuery(
     { site_id: activeSiteId!, type: 'leave' },
-    { enabled: !!activeSiteId && !isDemo },
+    { enabled: !!activeSiteId && !isDemo, retry: false },
   )
+  const myLeaveQuery = trpc.absence.listMyLeave.useQuery(
+    { site_id: activeSiteId! },
+    { enabled: !!activeSiteId && !isDemo && !!activeQuery.error },
+  )
+  // Use team data if available, otherwise fall back to own data
+  const leaveData = activeQuery.data ?? myLeaveQuery.data ?? []
 
   const approve = trpc.absence.approveLeave.useMutation({
     onSuccess: () => {
@@ -99,7 +106,7 @@ export default function VerlofPage() {
     },
   })
 
-  const items = isDemo ? DEMO_LEAVE : (activeQuery.data ?? [])
+  const items = isDemo ? DEMO_LEAVE : leaveData
 
   // ── KPI calculations ───────────────────────────────────────────────────
   const kpis = useMemo(() => {
