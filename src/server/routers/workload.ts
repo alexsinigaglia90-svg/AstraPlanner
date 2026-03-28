@@ -360,7 +360,7 @@ export const workloadRouter = router({
           demand_volume, conversion_ratio, process_volume,
           weighted_uph, hours_needed, fte_needed,
           hours_assigned, fte_assigned, coverage_pct, status,
-          process:process_id(name, category, type)
+          process:process_id(name, category, process_type)
         `)
         .eq('organization_id', ctx.organizationId)
         .eq('site_id', input.site_id)

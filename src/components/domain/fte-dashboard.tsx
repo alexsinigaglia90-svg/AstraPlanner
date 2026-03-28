@@ -94,31 +94,33 @@ export function FteDashboard({ siteId, weekRange }: FteDashboardProps) {
   const kpis = useMemo(() => {
     const rows = workloadData ?? []
 
+    const n = (v: unknown) => Number(v) || 0
+
     const totalDemand = rows.reduce(
-      (sum, r) => sum + (r.demand_volume ?? 0),
+      (sum, r) => sum + n(r.demand_volume),
       0,
     )
 
     const totalHoursNeeded = rows.reduce(
-      (sum, r) => sum + (r.hours_needed ?? 0),
+      (sum, r) => sum + n(r.hours_needed),
       0,
     )
 
     const totalHoursAvailable = rows.reduce(
-      (sum, r) => sum + (r.hours_assigned ?? 0),
+      (sum, r) => sum + n(r.hours_assigned),
       0,
     )
 
     const totalFteAvailable = rows.reduce(
-      (sum, r) => sum + (r.fte_assigned ?? 0),
+      (sum, r) => sum + n(r.fte_assigned),
       0,
     )
 
     // Max shortage across all rows (single worst week/process)
     let maxShortage = 0
     for (const r of rows) {
-      const needed = r.fte_needed ?? 0
-      const available = r.fte_assigned ?? 0
+      const needed = n(r.fte_needed)
+      const available = n(r.fte_assigned)
       const shortage = needed - available
       if (shortage > maxShortage) maxShortage = shortage
     }
@@ -144,16 +146,16 @@ export function FteDashboard({ siteId, weekRange }: FteDashboardProps) {
       const proc = r.process as unknown as {
         name: string
         category: string | null
-        type: string | null
+        process_type: string | null
       } | null
 
       cells.push({
         process_id: r.process_id,
         process_name: proc?.name ?? r.process_id,
         period_start: r.period_start,
-        coverage_pct: r.coverage_pct ?? 0,
-        fte_needed: r.fte_needed,
-        fte_available: r.fte_assigned ?? 0,
+        coverage_pct: Number(r.coverage_pct) || 0,
+        fte_needed: r.fte_needed !== null ? Number(r.fte_needed) : null,
+        fte_available: Number(r.fte_assigned) || 0,
         status: r.status as 'computed' | 'no_norm',
       })
     }
@@ -177,7 +179,7 @@ export function FteDashboard({ siteId, weekRange }: FteDashboardProps) {
     const proc = record.process as unknown as {
       name: string
       category: string | null
-      type: string | null
+      process_type: string | null
     } | null
 
     return {
@@ -185,10 +187,10 @@ export function FteDashboard({ siteId, weekRange }: FteDashboardProps) {
       processId: record.process_id,
       weekLabel: `Wk ${getWeekNumber(record.period_start)}`,
       periodStart: record.period_start,
-      demandVolume: record.demand_volume ?? 0,
-      hoursNeeded: record.hours_needed,
-      fteNeeded: record.fte_needed,
-      hoursAvailable: record.hours_assigned ?? 0,
+      demandVolume: Number(record.demand_volume) || 0,
+      hoursNeeded: Number(record.hours_needed) || 0,
+      fteNeeded: Number(record.fte_needed) || 0,
+      hoursAvailable: Number(record.hours_assigned) || 0,
       fteAvailable: record.fte_assigned ?? 0,
       weightedUph: record.weighted_uph,
       coveragePct: record.coverage_pct ?? 0,
