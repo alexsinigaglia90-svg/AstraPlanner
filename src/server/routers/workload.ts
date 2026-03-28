@@ -208,6 +208,20 @@ export const workloadRouter = router({
         `)
         .eq('status', 'active')
 
+      // ── 5b. Fetch active absence/leave overrides for the period ────────
+      const { data: activeOverrides } = await admin
+        .from('employee_availability_override')
+        .select('employee_id, start_date, end_date, override_type, status')
+        .eq('organization_id', ctx.organizationId)
+        .in('override_type', ['absence', 'leave'])
+        .in('status', ['planned', 'confirmed'])
+        .lte('start_date', input.period_end)
+        .gte('end_date', input.period_start)
+
+      const absentEmployeeIds = new Set(
+        (activeOverrides ?? []).map((o) => o.employee_id),
+      )
+
       // ── A7: Employee availability (fallback to contracted hours) ───────
       // Full rotation-based availability is deferred to Phase 5.
       // For now, use weekly_hours_contracted as available_hours.
@@ -221,7 +235,9 @@ export const workloadRouter = router({
           employee_id: es.employee_id,
           process_id: es.process_id,
           proficiency_level: es.proficiency_level,
-          available_hours: Number(emp?.weekly_hours_contracted) || DEFAULT_WEEKLY_HOURS,
+          available_hours: absentEmployeeIds.has(es.employee_id)
+            ? 0
+            : (Number(emp?.weekly_hours_contracted) || DEFAULT_WEEKLY_HOURS),
           productive_pct: Number(emp?.job_role?.productive_pct) || 0.95,
         }
       })
