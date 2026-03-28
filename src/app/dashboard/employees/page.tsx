@@ -403,11 +403,16 @@ export default function EmployeesPage() {
     }
   }
 
-  const handleBulkDelete = async () => {
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+
+  const handleBulkDeleteRequest = () => {
     if (isDemo) { window.alert('Dit is een demo — start je eigen omgeving om wijzigingen te maken'); return }
     if (selectedIds.size === 0) return
-    if (!window.confirm(`Weet je zeker dat je ${selectedIds.size} medewerker(s) wilt verwijderen?`)) return
+    setShowDeleteConfirm(true)
+  }
 
+  const handleBulkDelete = async () => {
+    setShowDeleteConfirm(false)
     setBulkDeleting(true)
     let deleted = 0
     const errors: string[] = []
@@ -980,7 +985,7 @@ export default function EmployeesPage() {
               </span>
 
               <button
-                onClick={handleBulkDelete}
+                onClick={handleBulkDeleteRequest}
                 disabled={bulkDeleting || selectedIds.size === 0}
                 style={{
                   padding: '6px 16px', borderRadius: 'var(--radius-sm)',
@@ -1085,6 +1090,90 @@ export default function EmployeesPage() {
           }}
         />
       )}
+
+      {/* Delete confirmation modal */}
+      <AnimatePresence>
+        {showDeleteConfirm && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setShowDeleteConfirm(false)}
+            style={{
+              position: 'fixed', inset: 0, zIndex: 60,
+              background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.92, y: 12 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.92, y: 12 }}
+              transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                width: 380, background: 'var(--card)', borderRadius: 'var(--radius-lg)',
+                border: '1px solid var(--border)', boxShadow: 'var(--elevation-4)',
+                padding: '28px', textAlign: 'center',
+              }}
+            >
+              {/* Warning icon */}
+              <motion.div
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ type: 'spring', stiffness: 500, damping: 20, delay: 0.05 }}
+                style={{
+                  width: 56, height: 56, borderRadius: 16, margin: '0 auto 16px',
+                  background: 'rgba(239,68,68,0.08)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}
+              >
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#EF4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 6h18" /><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                  <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                </svg>
+              </motion.div>
+
+              <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700, color: 'var(--foreground)', margin: '0 0 6px' }}>
+                {selectedIds.size} medewerker{selectedIds.size !== 1 ? 's' : ''} verwijderen?
+              </h3>
+              <p style={{ fontFamily: 'var(--font-body)', fontSize: 13, color: 'var(--muted-foreground)', margin: '0 0 24px', lineHeight: 1.5 }}>
+                Dit kan niet ongedaan worden gemaakt. Alle gekoppelde data (skills, beschikbaarheid) wordt ook verwijderd.
+              </p>
+
+              <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+                <motion.button
+                  whileHover={{ scale: 1.03 }}
+                  whileTap={{ scale: 0.97 }}
+                  onClick={() => setShowDeleteConfirm(false)}
+                  style={{
+                    padding: '10px 24px', borderRadius: 'var(--radius-md)',
+                    border: '1px solid var(--border)', background: 'var(--card)',
+                    fontFamily: 'var(--font-body)', fontSize: 14, fontWeight: 500,
+                    color: 'var(--foreground)', cursor: 'pointer',
+                  }}
+                >
+                  Annuleren
+                </motion.button>
+                <motion.button
+                  whileHover={{ scale: 1.03 }}
+                  whileTap={{ scale: 0.97 }}
+                  onClick={handleBulkDelete}
+                  style={{
+                    padding: '10px 24px', borderRadius: 'var(--radius-md)',
+                    border: 'none', background: 'linear-gradient(135deg, #EF4444, #DC2626)',
+                    fontFamily: 'var(--font-body)', fontSize: 14, fontWeight: 600,
+                    color: '#fff', cursor: 'pointer',
+                    boxShadow: '0 4px 14px rgba(239,68,68,0.3)',
+                  }}
+                >
+                  Verwijder definitief
+                </motion.button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   )
 }
