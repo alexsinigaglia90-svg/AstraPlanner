@@ -113,7 +113,7 @@ export function AbsenceWizard({ open, onClose, siteId, onSaved }: AbsenceWizardP
 
   // -- Derived ---------------------------------------------------------------
 
-  const allEmployees = (employees.data ?? []) as Employee[]
+  const allEmployees = (employees.data?.items ?? []) as Employee[]
 
   const filteredEmployees = useMemo(() => {
     const q = search.toLowerCase().trim()
