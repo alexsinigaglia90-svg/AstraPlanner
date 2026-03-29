@@ -814,6 +814,18 @@ export function ExpandingCard({
         }}
       />
 
+      {/* Centering wrapper */}
+      <div
+        style={{
+          position: 'fixed',
+          inset: 0,
+          zIndex: 9991,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          pointerEvents: 'none',
+        }}
+      >
       {/* Card */}
       <motion.div
         initial={{ opacity: 0, scale: 0.92, y: 24 }}
@@ -821,14 +833,11 @@ export function ExpandingCard({
         exit={{ opacity: 0, scale: 0.95, y: 16 }}
         transition={bouncy}
         style={{
-          position: 'fixed',
-          top: '50%',
-          left: '50%',
-          transform: 'translate(-50%, -50%)',
           width: 440,
           maxWidth: 'calc(100vw - 32px)',
           maxHeight: 'calc(100vh - 64px)',
           overflowY: 'auto',
+          pointerEvents: 'auto',
           background: 'rgba(255,255,255,0.95)',
           backdropFilter: 'blur(20px) saturate(1.8)',
           WebkitBackdropFilter: 'blur(20px) saturate(1.8)',
@@ -836,7 +845,6 @@ export function ExpandingCard({
           borderRadius: 24,
           boxShadow: '0 24px 80px rgba(30,27,75,0.18), 0 4px 16px rgba(30,27,75,0.06)',
           padding: '24px 24px 20px',
-          zIndex: 9991,
         }}
       >
         {/* ── Header ─────────────────────────────────────────── */}
@@ -1027,6 +1035,7 @@ export function ExpandingCard({
           </motion.div>
         </AnimatePresence>
       </motion.div>
+      </div>
     </AnimatePresence>
   )
 }
