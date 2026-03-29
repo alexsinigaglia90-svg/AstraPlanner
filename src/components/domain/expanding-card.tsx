@@ -431,10 +431,20 @@ function SkillsTab({
 
   const handleAddSkill = useCallback(
     (processId: string) => {
-      updateSkill.mutate({ employee_id: employeeId, process_id: processId, proficiency_level: 1 })
       setAddingSkill(false)
+      updateSkill.mutate(
+        { employee_id: employeeId, process_id: processId, proficiency_level: 1 },
+        {
+          onSuccess: () => {
+            toast.showSuccess('Skill toegevoegd')
+            utils.workforce.getEmployee.invalidate({ id: employeeId })
+            utils.workforce.listSkillMatrix.invalidate()
+          },
+          onError: (err) => toast.showError(`Skill toevoegen mislukt: ${err.message}`),
+        },
+      )
     },
-    [updateSkill, employeeId],
+    [updateSkill, employeeId, toast, utils],
   )
 
   const handleHoldStart = useCallback(
