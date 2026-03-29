@@ -618,37 +618,21 @@ export function AbsenceWizard({ open, onClose, siteId, onSaved }: AbsenceWizardP
                             </div>
                           </div>
 
-                          {/* Impact alert */}
-                          {impact.data && (
-                            <ImpactAlert
-                              impact={impact.data}
-                              loading={impact.isLoading}
-                            />
-                          )}
-                          {impact.isLoading && !impact.data && (
-                            <ImpactAlert
-                              impact={{
-                                affected_processes: [],
-                                total_shifts_uncovered: 0,
-                                overall_coverage_drop: 0,
-                              }}
-                              loading
-                            />
-                          )}
+                          {/* Impact alert — always show on step 3 */}
+                          <ImpactAlert
+                            impact={impact.data ?? {
+                              affected_processes: [],
+                              total_shifts_uncovered: 0,
+                              overall_coverage_drop: 0,
+                            }}
+                            loading={impact.isLoading}
+                          />
 
-                          {/* Replacement suggestions */}
-                          {suggestions.data && (
-                            <ReplacementSuggestions
-                              suggestions={suggestions.data}
-                              loading={suggestions.isLoading}
-                            />
-                          )}
-                          {suggestions.isLoading && !suggestions.data && (
-                            <ReplacementSuggestions
-                              suggestions={[]}
-                              loading
-                            />
-                          )}
+                          {/* Replacement suggestions — always show on step 3 */}
+                          <ReplacementSuggestions
+                            suggestions={Array.isArray(suggestions.data) ? suggestions.data : []}
+                            loading={suggestions.isLoading}
+                          />
                         </>
                       )}
                     </motion.div>

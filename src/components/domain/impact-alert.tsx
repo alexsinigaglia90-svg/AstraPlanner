@@ -197,6 +197,16 @@ export function ImpactAlert({ impact, loading = false }: ImpactAlertProps) {
       {/* ── Loading / Content ─────────────────────────── */}
       {loading ? (
         <LoadingSkeleton />
+      ) : impact.affected_processes.length === 0 ? (
+        <div style={{
+          padding: '12px 0',
+          textAlign: 'center',
+          fontFamily: 'var(--font-body, "DM Sans", sans-serif)',
+          fontSize: 13,
+          color: 'var(--muted-foreground)',
+        }}>
+          Geen directe impact — medewerker heeft nog geen skills toegewezen.
+        </div>
       ) : (
         <motion.div
           variants={containerStagger}
