@@ -200,16 +200,19 @@ export function ProcessWizard({
     setStep((s) => Math.max(s - 1, 1))
   }
 
+  const [saveError, setSaveError] = useState<string | null>(null)
+
   const handleSave = async () => {
     setSaving(true)
+    setSaveError(null)
     try {
       const equipmentData = equipmentEnabled && selectedEquipment.size > 0
         ? Array.from(selectedEquipment).map((equipment_id) => ({ equipment_id }))
         : undefined
       await onSave({ ...form, id: initialValues?.id, equipment: equipmentData })
       onClose()
-    } catch {
-      // parent handles error
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Opslaan mislukt')
     } finally {
       setSaving(false)
     }
@@ -2226,6 +2229,20 @@ export function ProcessWizard({
                 </motion.div>
               </AnimatePresence>
             </div>
+
+            {/* Error banner */}
+            {saveError && (
+              <div style={{
+                padding: '10px 24px',
+                background: 'rgba(239,68,68,0.06)',
+                borderTop: '1px solid rgba(239,68,68,0.15)',
+                fontFamily: 'var(--font-body)',
+                fontSize: 13,
+                color: '#EF4444',
+              }}>
+                {saveError}
+              </div>
+            )}
 
             {/* Footer */}
             <div
