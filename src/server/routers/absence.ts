@@ -83,9 +83,13 @@ export const absenceRouter = router({
         })
       }
 
+      // Set end_date to recovery_date and mark as cancelled so it moves to history
       const { data, error } = await admin
         .from('employee_availability_override')
-        .update({ end_date: input.recovery_date })
+        .update({
+          end_date: input.recovery_date,
+          status: 'cancelled',
+        })
         .eq('id', input.override_id)
         .eq('organization_id', ctx.organizationId)
         .select()

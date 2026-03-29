@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { motion } from 'framer-motion'
 import { HeartPulse, Plus } from 'lucide-react'
 import { trpc } from '@/lib/trpc/client'
@@ -9,6 +9,93 @@ import { useDemoStore } from '@/hooks/use-demo'
 import { useToast } from '@/components/domain/toast'
 import { bouncy } from '@/lib/motion'
 import { AbsenceWizard } from '@/components/domain/absence-wizard'
+
+// ── Hold-to-Confirm Button ───────────────────────────────────────────────────
+
+function HoldToConfirmButton({
+  label,
+  holdDuration = 1200,
+  onConfirm,
+}: {
+  label: string
+  holdDuration?: number
+  onConfirm: () => void
+}) {
+  const [progress, setProgress] = useState(0)
+  const [holding, setHolding] = useState(false)
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const confirmedRef = useRef(false)
+
+  const startHold = () => {
+    confirmedRef.current = false
+    setHolding(true)
+    setProgress(0)
+    const step = 16 // ~60fps
+    let elapsed = 0
+    intervalRef.current = setInterval(() => {
+      elapsed += step
+      const pct = Math.min(elapsed / holdDuration, 1)
+      setProgress(pct)
+      if (pct >= 1 && !confirmedRef.current) {
+        confirmedRef.current = true
+        clearInterval(intervalRef.current!)
+        setHolding(false)
+        setProgress(0)
+        onConfirm()
+      }
+    }, step)
+  }
+
+  const cancelHold = () => {
+    if (intervalRef.current) clearInterval(intervalRef.current)
+    setHolding(false)
+    setProgress(0)
+  }
+
+  return (
+    <motion.button
+      onMouseDown={startHold}
+      onMouseUp={cancelHold}
+      onMouseLeave={cancelHold}
+      onTouchStart={startHold}
+      onTouchEnd={cancelHold}
+      whileHover={{ scale: 1.03 }}
+      style={{
+        position: 'relative',
+        padding: '6px 14px',
+        borderRadius: 8,
+        border: '1px solid rgba(16,185,129,0.2)',
+        background: 'rgba(16,185,129,0.08)',
+        color: '#10B981',
+        fontSize: 11,
+        fontWeight: 600,
+        cursor: 'pointer',
+        fontFamily: 'var(--font-body)',
+        overflow: 'hidden',
+        userSelect: 'none',
+      }}
+    >
+      {/* Progress fill */}
+      <motion.div
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          bottom: 0,
+          width: `${progress * 100}%`,
+          background: 'rgba(16,185,129,0.15)',
+          borderRadius: 8,
+          transition: holding ? 'none' : 'width 0.2s ease',
+        }}
+      />
+      <span style={{ position: 'relative', zIndex: 1 }}>
+        {holding ? 'Houd vast...' : label}
+      </span>
+    </motion.button>
+  )
+}
+
+// ── Component ────────────────────────────────────────────────────────────────
 
 export default function VerzuimPage() {
   const { activeSiteId } = useSiteStore()
@@ -173,18 +260,11 @@ export default function VerzuimPage() {
                 }}>
                   {days} {days === 1 ? 'dag' : 'dagen'}
                 </div>
-                <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  onClick={() => recover.mutate({ override_id: item.id, recovery_date: new Date().toISOString().slice(0, 10) })}
-                  style={{
-                    padding: '6px 12px', borderRadius: 8, border: '1px solid rgba(16,185,129,0.2)',
-                    background: 'rgba(16,185,129,0.08)', color: '#10B981',
-                    fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'var(--font-body)',
-                  }}
-                >
-                  Hersteld
-                </motion.button>
+                <HoldToConfirmButton
+                  label="Hersteld"
+                  holdDuration={1200}
+                  onConfirm={() => recover.mutate({ override_id: item.id, recovery_date: new Date().toISOString().slice(0, 10) })}
+                />
               </motion.div>
             )
           })}
