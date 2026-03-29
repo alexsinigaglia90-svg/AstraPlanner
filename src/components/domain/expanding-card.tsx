@@ -406,23 +406,29 @@ function SkillsTab({
   const holdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [holdingId, setHoldingId] = useState<string | null>(null)
 
-  const { data: empData, isLoading } = trpc.workforce.getEmployee.useQuery({ id: employeeId })
-  const skills = empData?.skills ?? []
+  const empQuery = trpc.workforce.getEmployee.useQuery({ id: employeeId })
+  const skills = empQuery.data?.skills ?? []
+  const isLoading = empQuery.isLoading
+
+  const refetchSkills = () => {
+    void empQuery.refetch()
+    void utils.workforce.listSkillMatrix.invalidate()
+  }
 
   const updateSkill = trpc.workforce.updateSkill.useMutation({
     onSuccess: () => {
-      utils.workforce.getEmployee.invalidate({ id: employeeId })
+      refetchSkills()
       toast.showSuccess('Skill bijgewerkt')
     },
-    onError: (err) => toast.showError(err.message),
+    onError: (err) => toast.showError(`Fout: ${err.message}`),
   })
 
   const deleteSkill = trpc.workforce.deleteSkill.useMutation({
     onSuccess: () => {
-      utils.workforce.getEmployee.invalidate({ id: employeeId })
+      refetchSkills()
       toast.showSuccess('Skill verwijderd')
     },
-    onError: (err) => toast.showError(err.message),
+    onError: (err) => toast.showError(`Fout: ${err.message}`),
   })
 
   const processMap = new Map(processes.map((p) => [p.id, p.name]))
@@ -437,14 +443,13 @@ function SkillsTab({
         {
           onSuccess: () => {
             toast.showSuccess('Skill toegevoegd')
-            utils.workforce.getEmployee.invalidate({ id: employeeId })
-            utils.workforce.listSkillMatrix.invalidate()
+            refetchSkills()
           },
           onError: (err) => toast.showError(`Skill toevoegen mislukt: ${err.message}`),
         },
       )
     },
-    [updateSkill, employeeId, toast, utils],
+    [updateSkill, employeeId, toast, refetchSkills],
   )
 
   const handleHoldStart = useCallback(
