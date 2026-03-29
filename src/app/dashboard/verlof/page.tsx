@@ -90,7 +90,7 @@ export default function VerlofPage() {
     { enabled: !!activeSiteId && !isDemo && !!activeQuery.error },
   )
   // Use team data if available, otherwise fall back to own data
-  const leaveData = activeQuery.data ?? myLeaveQuery.data ?? []
+  const leaveData = Array.isArray(activeQuery.data) ? activeQuery.data : (Array.isArray(myLeaveQuery.data) ? myLeaveQuery.data : [])
 
   const approve = trpc.absence.approveLeave.useMutation({
     onSuccess: () => {

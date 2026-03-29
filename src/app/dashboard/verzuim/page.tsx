@@ -117,8 +117,8 @@ export default function VerzuimPage() {
 
   // ── Derived data ─────────────────────────────────────────────────────────
 
-  const activeItems = (activeQuery.data ?? []) as AbsenceRow[]
-  const historyItems = (!historyQuery.error ? (historyQuery.data ?? []) : []) as AbsenceRow[]
+  const activeItems = (Array.isArray(activeQuery.data) ? activeQuery.data : []) as AbsenceRow[]
+  const historyItems = (Array.isArray(historyQuery.data) ? historyQuery.data : []) as AbsenceRow[]
 
   // If listActive fails (e.g., role too low), show access denied
   if (activeQuery.error) {

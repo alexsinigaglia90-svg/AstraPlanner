@@ -251,7 +251,14 @@ export const absenceRouter = router({
       return (data ?? []).map((row) => {
         const emp = (row.employee as unknown) as { first_name: string; last_name: string; department_id: string; crew_id: string | null } | null
         return {
-          ...row,
+          id: row.id,
+          employee_id: row.employee_id,
+          start_date: row.start_date,
+          end_date: row.end_date,
+          override_type: row.override_type,
+          status: row.status,
+          reason: (row as Record<string, unknown>).reason as string | null ?? null,
+          created_at: row.created_at,
           employee_name: emp ? `${emp.first_name} ${emp.last_name}` : null,
           department_id: emp?.department_id ?? null,
           crew_id: emp?.crew_id ?? null,
@@ -304,7 +311,14 @@ export const absenceRouter = router({
       return (data ?? []).map((row) => {
         const emp = (row.employee as unknown) as { first_name: string; last_name: string; department_id: string; crew_id: string | null } | null
         return {
-          ...row,
+          id: row.id,
+          employee_id: row.employee_id,
+          start_date: row.start_date,
+          end_date: row.end_date,
+          override_type: row.override_type,
+          status: row.status,
+          reason: (row as Record<string, unknown>).reason as string | null ?? null,
+          created_at: row.created_at,
           employee_name: emp ? `${emp.first_name} ${emp.last_name}` : null,
           department_id: emp?.department_id ?? null,
           crew_id: emp?.crew_id ?? null,
