@@ -86,6 +86,15 @@ export function AbsenceWizard({ open, onClose, siteId, onSaved }: AbsenceWizardP
     { site_id: siteId, limit: 200 },
     { enabled: open && siteId.length > 0 },
   )
+  const departments = trpc.org.listDepartments.useQuery(
+    { site_id: siteId },
+    { enabled: open && siteId.length > 0 },
+  )
+  const deptMap = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const d of departments.data ?? []) m.set(d.id, d.name)
+    return m
+  }, [departments.data])
   const reportSick = trpc.absence.reportSick.useMutation()
 
   const [step, setStep] = useState(1)
@@ -396,7 +405,7 @@ export function AbsenceWizard({ open, onClose, siteId, onSaved }: AbsenceWizardP
                                   fontFamily: 'var(--font-mono)', fontSize: 10,
                                   color: 'var(--muted-foreground)',
                                 }}>
-                                  {emp.department_id ? `Dept ${emp.department_id.slice(0, 8)}` : 'Geen afdeling'}
+                                  {emp.department_id ? (deptMap.get(emp.department_id) ?? 'Afdeling') : 'Geen afdeling'}
                                 </div>
                               </div>
 
