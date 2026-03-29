@@ -11,8 +11,7 @@ import { fadeInUp, containerStagger, bouncy, scalePress } from '@/lib/motion'
 import { AnimatedCounter } from '@/components/domain/animated-counter'
 import { Avatar } from '@/components/domain/avatar'
 import { AddEmployeeWizard } from '@/components/domain/add-employee-wizard'
-import { SlideOver } from '@/components/domain/slide-over'
-import { EditEmployeeForm } from '@/components/domain/edit-employee-form'
+import { ExpandingCard } from '@/components/domain/expanding-card'
 import { useDemoStore } from '@/hooks/use-demo'
 import { useToast } from '@/components/domain/toast'
 import { demoEmployees, demoDepartments, demoRoles, demoProcesses } from '@/components/onboarding/demo-seed'
@@ -450,6 +449,10 @@ export default function EmployeesPage() {
     { site_id: activeSiteId! },
     { enabled: !!activeSiteId && !isDemo },
   )
+  const crewsQuery = trpc.org.listCrews.useQuery(
+    { site_id: activeSiteId! },
+    { enabled: !!activeSiteId && !isDemo },
+  )
   const skillsQuery = trpc.workforce.listSkillMatrix.useQuery(
     { site_id: activeSiteId! },
     { enabled: !!activeSiteId && !isDemo },
@@ -474,6 +477,11 @@ export default function EmployeesPage() {
     for (const p of procMapData) m.set(p.id, p.name)
     return m
   }, [procMapData])
+  const crewMap = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const c of crewsQuery.data ?? []) m.set(c.id, c.name)
+    return m
+  }, [crewsQuery.data])
   // Map employee_id → list of process names
   const employeeSkillNames = useMemo(() => {
     const m = new Map<string, string[]>()
@@ -1053,35 +1061,22 @@ export default function EmployeesPage() {
         </motion.div>
       )}
 
-      {/* Quick Edit SlideOver */}
-      <SlideOver
-        open={!!quickEditEmployee}
-        onClose={() => setQuickEditEmployee(null)}
-        title="Quick Edit"
-      >
-        {quickEditEmployee && (
-          <EditEmployeeForm
-            employee={{
-              id: quickEditEmployee.id,
-              employee_number: quickEditEmployee.employee_number,
-              first_name: quickEditEmployee.first_name,
-              last_name: quickEditEmployee.last_name,
-              email: null,
-              contract_type: quickEditEmployee.contract_type,
-              weekly_hours_contracted: quickEditEmployee.weekly_hours_contracted,
-              hourly_rate: 0,
-              home_site_id: quickEditEmployee.home_site_id,
-              department_id: quickEditEmployee.department_id,
-              crew_id: quickEditEmployee.crew_id,
-              job_role_id: quickEditEmployee.job_role_id,
-              is_multi_site_eligible: quickEditEmployee.is_multi_site_eligible,
-              status: quickEditEmployee.status,
-            }}
-            onClose={() => setQuickEditEmployee(null)}
-            onDeleted={() => { setQuickEditEmployee(null); setAllEmployees([]); setCursor(undefined) }}
-          />
-        )}
-      </SlideOver>
+      {/* Quick Edit ExpandingCard */}
+      {quickEditEmployee && (
+        <ExpandingCard
+          employee={quickEditEmployee}
+          deptMap={deptMap}
+          roleMap={roleMap}
+          crewMap={crewMap}
+          departments={deptMapData.map((d: { id: string; name: string }) => ({ id: d.id, name: d.name }))}
+          roles={roleMapData.map((r: { id: string; name: string }) => ({ id: r.id, name: r.name }))}
+          crews={crewsQuery.data?.map((c) => ({ id: c.id, name: c.name })) ?? []}
+          processes={procMapData.map((p: { id: string; name: string }) => ({ id: p.id, name: p.name }))}
+          siteId={activeSiteId!}
+          onClose={() => setQuickEditEmployee(null)}
+          onDeleted={() => { setQuickEditEmployee(null); setAllEmployees([]); setCursor(undefined) }}
+        />
+      )}
 
       {/* Add Employee Wizard */}
       {activeSiteId && (
