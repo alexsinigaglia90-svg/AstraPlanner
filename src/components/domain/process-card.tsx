@@ -48,7 +48,7 @@ export function ProcessCard({ process, color, onEdit, onDelete }: ProcessCardPro
   return (
     <motion.div
       variants={fadeInUp}
-      whileHover={{ y: -2, boxShadow: 'var(--elevation-2)' }}
+      whileHover={{ y: -2, boxShadow: 'var(--elevation-2)', zIndex: 50 }}
       transition={bouncy}
       style={{
         backgroundColor: 'var(--card)',
@@ -57,6 +57,7 @@ export function ProcessCard({ process, color, onEdit, onDelete }: ProcessCardPro
         boxShadow: 'var(--elevation-1)',
         padding: '12px 14px',
         position: 'relative',
+        zIndex: 1,
       }}
     >
       {/* Top row: icon + name + priority dot + menu */}

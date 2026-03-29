@@ -78,6 +78,7 @@ export function AddSkillForm({ employeeId, onClose }: AddSkillFormProps) {
   const { mutate: saveSkill, isPending, error } = trpc.workforce.updateSkill.useMutation({
     onSuccess: () => {
       utils.workforce.getEmployee.invalidate({ id: employeeId })
+      utils.workforce.listSkillMatrix.invalidate()
       onClose()
     },
   })

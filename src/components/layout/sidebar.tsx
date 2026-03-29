@@ -16,7 +16,25 @@ import {
 } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { useEffect, useState } from 'react'
+import { createClient } from '@/lib/supabase/client'
 import { gentle, scalePress } from '@/lib/motion'
+
+// Mirror of server-side ROLE_HIERARCHY — must stay in sync with src/server/middleware/auth.ts
+const ROLE_HIERARCHY: Record<string, number> = {
+  super_admin: 100,
+  tenant_admin: 90,
+  site_manager: 70,
+  planner: 50,
+  supervisor: 40,
+  employee: 20,
+  viewer: 10,
+}
+
+function hasMinRole(userRole: string | null, requiredRole: string): boolean {
+  if (!userRole) return false
+  return (ROLE_HIERARCHY[userRole] ?? 0) >= (ROLE_HIERARCHY[requiredRole] ?? 0)
+}
 
 interface NavItem {
   label: string
@@ -44,6 +62,19 @@ interface SidebarProps {
 
 export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const pathname = usePathname()
+  const [userRole, setUserRole] = useState<string | null>(null)
+
+  useEffect(() => {
+    const supabase = createClient()
+    supabase.auth.getUser().then(({ data }) => {
+      const role = (data.user?.app_metadata?.role as string) ?? null
+      setUserRole(role)
+    })
+  }, [])
+
+  const visibleNavItems = navItems.filter(
+    (item) => !item.minRole || hasMinRole(userRole, item.minRole),
+  )
 
   return (
     <motion.aside
@@ -83,8 +114,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
 
       {/* Nav items */}
       <nav className="flex-1 py-4 flex flex-col gap-1 px-2">
-        {/* TODO: filter by role — pass userRole prop and skip items where minRole is not satisfied */}
-        {navItems.map(({ label, href, icon: Icon }) => {
+        {visibleNavItems.map(({ label, href, icon: Icon }) => {
           const isActive = pathname === href || pathname.startsWith(href + '/')
           return (
             <motion.div key={href} variants={scalePress} whileTap="press">
