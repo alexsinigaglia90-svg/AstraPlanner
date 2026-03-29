@@ -8,7 +8,7 @@ import { useSiteStore } from '@/stores/site-store'
 import { useDemoStore } from '@/hooks/use-demo'
 import { useToast } from '@/components/domain/toast'
 import { bouncy } from '@/lib/motion'
-import { AbsenceWizard } from '@/components/domain/absence-wizard'
+// import { AbsenceWizard } from '@/components/domain/absence-wizard'
 
 export default function VerzuimPage() {
   const { activeSiteId } = useSiteStore()
@@ -191,15 +191,7 @@ export default function VerzuimPage() {
         </div>
       )}
 
-      {/* Wizard */}
-      {activeSiteId && (
-        <AbsenceWizard
-          open={wizardOpen}
-          onClose={() => setWizardOpen(false)}
-          siteId={activeSiteId}
-          onSaved={() => void activeQuery.refetch()}
-        />
-      )}
+      {/* Wizard — temporarily disabled for debugging */}
     </div>
   )
 }
