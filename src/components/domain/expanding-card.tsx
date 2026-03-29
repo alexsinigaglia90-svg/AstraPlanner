@@ -836,7 +836,7 @@ export function ExpandingCard({
           width: 440,
           maxWidth: 'calc(100vw - 32px)',
           maxHeight: 'calc(100vh - 64px)',
-          overflowY: 'auto',
+          overflow: 'visible',
           pointerEvents: 'auto',
           background: 'rgba(255,255,255,0.95)',
           backdropFilter: 'blur(20px) saturate(1.8)',
