@@ -33,6 +33,7 @@ interface RoleData {
   custom_days: number[] | null
   min_per_shift: number | null
   department_id: string | null
+  hourly_rate?: number | null
   employee_count: number
 }
 
@@ -49,6 +50,7 @@ interface RoleFormState {
   min_per_shift: number
   min_per_shift_enabled: boolean
   department_id: string
+  hourly_rate: number
 }
 
 interface DeptData {
@@ -76,6 +78,7 @@ function defaultForm(departmentId?: string): RoleFormState {
     min_per_shift: 1,
     min_per_shift_enabled: false,
     department_id: departmentId ?? '',
+    hourly_rate: 0,
   }
 }
 
@@ -430,6 +433,7 @@ function RoleWizard({
         custom_days: !form.follows_shifts ? form.custom_days : null,
         min_per_shift: form.role_type === 'leadership' && form.min_per_shift_enabled ? form.min_per_shift : null,
         department_id: form.department_id || null,
+        hourly_rate: form.hourly_rate > 0 ? form.hourly_rate : null,
       }
 
       // Create for the primary department
@@ -743,6 +747,27 @@ function RoleWizard({
                             fontFamily: 'var(--font-mono)',
                             opacity: form.role_type === 'overhead' ? 0.5 : 1,
                             cursor: form.role_type === 'overhead' ? 'not-allowed' : undefined,
+                          }}
+                        />
+                      </div>
+
+                      {/* Hourly rate */}
+                      <div>
+                        <label style={{
+                          fontFamily: 'var(--font-body)', fontSize: 10, fontWeight: 700,
+                          textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--muted-foreground)',
+                        }}>
+                          Uurloon (&euro;)
+                        </label>
+                        <input
+                          type="number"
+                          min={0} step={0.5}
+                          value={form.hourly_rate || ''}
+                          onChange={(e) => update('hourly_rate', Number(e.target.value) || 0)}
+                          placeholder="bijv. 14.50"
+                          style={{
+                            ...inputStyle,
+                            fontFamily: 'var(--font-mono)',
                           }}
                         />
                       </div>
@@ -1257,6 +1282,7 @@ export default function RolesSettingsPage() {
       min_per_shift: role.min_per_shift ?? 1,
       min_per_shift_enabled: role.min_per_shift != null && role.min_per_shift > 0,
       department_id: role.department_id ?? '',
+      hourly_rate: Number(role.hourly_rate) || 0,
     })
     setWizardDeptId(role.department_id ?? undefined)
     setWizardOpen(true)

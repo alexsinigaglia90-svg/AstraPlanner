@@ -856,7 +856,7 @@ export const orgRouter = router({
       const admin = createAdminClient()
       const { data, error } = await admin
         .from('job_role')
-        .select('id, name, code, parent_role_id, role_type, productive_pct, follows_shifts, custom_start_time, custom_end_time, custom_days, min_per_shift, department_id')
+        .select('id, name, code, parent_role_id, role_type, productive_pct, follows_shifts, custom_start_time, custom_end_time, custom_days, min_per_shift, department_id, hourly_rate')
         .eq('site_id', input.site_id)
         .eq('organization_id', ctx.organizationId)
         .eq('is_active', true)
@@ -910,6 +910,7 @@ export const orgRouter = router({
       custom_days: z.array(z.number()).nullable().optional(),
       min_per_shift: z.number().nullable().optional(),
       department_id: z.string().uuid().nullable().optional(),
+      hourly_rate: z.number().nonnegative().nullable().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const admin = createAdminClient()
@@ -937,6 +938,7 @@ export const orgRouter = router({
         custom_days: input.custom_days ?? null,
         min_per_shift: input.min_per_shift ?? null,
         department_id: input.department_id ?? null,
+        hourly_rate: input.hourly_rate ?? null,
       }
       const { data, error } = await admin.from('job_role').upsert(row, { onConflict: 'id' })
         .select('id, name, code, role_type, productive_pct')
