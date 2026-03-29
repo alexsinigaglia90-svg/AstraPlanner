@@ -581,13 +581,67 @@ function SkillsTab({
 
       {/* Add skill */}
       {addingSkill ? (
-        <motion.div variants={fadeInUp}>
-          <GlassSelect
-            value=""
-            onChange={handleAddSkill}
-            options={available.map((p) => ({ value: p.id, label: p.name }))}
-            placeholder="Kies een proces..."
-          />
+        <motion.div
+          variants={fadeInUp}
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 4,
+            maxHeight: 180,
+            overflowY: 'auto',
+            borderRadius: 12,
+            border: '1px solid var(--border)',
+            background: 'rgba(255,255,255,0.8)',
+            padding: 4,
+          }}
+        >
+          {available.length === 0 ? (
+            <div style={{ padding: '12px 14px', fontSize: 12, color: 'var(--muted-foreground)', textAlign: 'center' }}>
+              Alle processen zijn al toegewezen
+            </div>
+          ) : (
+            available.map((p) => (
+              <motion.button
+                key={p.id}
+                whileHover={{ background: 'rgba(99,102,241,0.08)' }}
+                whileTap={{ scale: 0.97 }}
+                onClick={() => handleAddSkill(p.id)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  padding: '8px 12px',
+                  borderRadius: 8,
+                  border: 'none',
+                  background: 'transparent',
+                  cursor: 'pointer',
+                  fontFamily: 'var(--font-body)',
+                  fontSize: 13,
+                  fontWeight: 500,
+                  color: 'var(--foreground)',
+                  textAlign: 'left',
+                  width: '100%',
+                }}
+              >
+                <div style={{
+                  width: 6, height: 6, borderRadius: '50%',
+                  background: 'var(--primary, #6366F1)', flexShrink: 0,
+                }} />
+                {p.name}
+              </motion.button>
+            ))
+          )}
+          <motion.button
+            whileTap={{ scale: 0.97 }}
+            onClick={() => setAddingSkill(false)}
+            style={{
+              padding: '6px 12px', borderRadius: 8, border: 'none',
+              background: 'transparent', cursor: 'pointer',
+              fontFamily: 'var(--font-body)', fontSize: 11, color: 'var(--muted-foreground)',
+            }}
+          >
+            Annuleren
+          </motion.button>
         </motion.div>
       ) : (
         <motion.button
