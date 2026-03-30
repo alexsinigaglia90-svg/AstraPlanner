@@ -43,9 +43,64 @@ export const adminRouter = router({
       })
     )
     .query(async ({ ctx, input }) => {
-      void input
-      // TODO: query auth.users joined with user_profile — requires admin Supabase client
-      return { items: [], next_cursor: null, total_count: 0 }
+      const adminClient = createAdminClient()
+
+      // Supabase admin listUsers returns up to 1000 per page; we post-filter by org
+      // because there is no server-side filter on app_metadata via the REST API.
+      const { data, error } = await adminClient.auth.admin.listUsers({
+        page: 1,
+        perPage: 1000,
+      })
+
+      if (error) {
+        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: error.message })
+      }
+
+      // Filter to users belonging to this organization
+      let users = (data?.users ?? []).filter(
+        (u) => u.app_metadata?.organization_id === ctx.organizationId,
+      )
+
+      // Optional role filter
+      if (input.role) {
+        users = users.filter((u) => u.app_metadata?.role === input.role)
+      }
+
+      // Optional site filter — site_ids is an array in app_metadata
+      if (input.site_id) {
+        users = users.filter((u) => {
+          const siteIds: string[] = u.app_metadata?.site_ids ?? []
+          return siteIds.includes(input.site_id!)
+        })
+      }
+
+      // Stable sort by email
+      users.sort((a, b) => (a.email ?? '').localeCompare(b.email ?? ''))
+
+      const total_count = users.length
+      // Apply cursor-based pagination (cursor = last user id)
+      const startIdx = input.cursor
+        ? users.findIndex((u) => u.id === input.cursor) + 1
+        : 0
+      const page = users.slice(startIdx, startIdx + input.limit)
+      const lastUser = page[page.length - 1]
+
+      const items = page.map((u) => ({
+        user_id: u.id,
+        email: u.email ?? null,
+        full_name: (u.user_metadata?.full_name as string | undefined) ?? null,
+        role: (u.app_metadata?.role as string | undefined) ?? null,
+        site_ids: (u.app_metadata?.site_ids as string[] | undefined) ?? [],
+        created_at: u.created_at,
+        last_sign_in_at: u.last_sign_in_at ?? null,
+        is_deactivated: (u.app_metadata?.deactivated as boolean | undefined) ?? false,
+      }))
+
+      return {
+        items,
+        next_cursor: page.length === input.limit && lastUser ? lastUser.id : null,
+        total_count,
+      }
     }),
 
   inviteUser: adminProcedure

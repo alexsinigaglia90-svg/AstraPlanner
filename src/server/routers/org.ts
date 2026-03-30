@@ -1123,4 +1123,80 @@ export const orgRouter = router({
       }
       return { saved: true }
     }),
+
+  // ---------------------------------------------------------------------------
+  // listSiteStats — employee / department / process counts per site
+  // ---------------------------------------------------------------------------
+  listSiteStats: viewerProcedure.query(async ({ ctx }) => {
+    const admin = createAdminClient()
+
+    // Run three count queries in parallel
+    const [empResult, deptResult, procResult] = await Promise.all([
+      admin
+        .from('employee')
+        .select('home_site_id')
+        .eq('organization_id', ctx.organizationId)
+        .eq('status', 'active'),
+      admin
+        .from('department')
+        .select('id, site_id')
+        .eq('organization_id', ctx.organizationId)
+        .eq('status', 'active'),
+      admin
+        .from('process')
+        .select('department_id')
+        .eq('organization_id', ctx.organizationId)
+        .eq('is_active', true),
+    ])
+
+    assertNoError(empResult.error, 'listSiteStats:employees')
+    assertNoError(deptResult.error, 'listSiteStats:departments')
+    assertNoError(procResult.error, 'listSiteStats:processes')
+
+    // Build employee counts per site
+    const employeesBySite: Record<string, number> = {}
+    for (const row of empResult.data ?? []) {
+      const siteId = (row as Record<string, unknown>).home_site_id as string
+      if (siteId) employeesBySite[siteId] = (employeesBySite[siteId] ?? 0) + 1
+    }
+
+    // Build department counts per site + dept→site mapping for process counts
+    const departmentsBySite: Record<string, number> = {}
+    const deptSiteMap: Record<string, string> = {}
+    for (const row of deptResult.data ?? []) {
+      const r = row as Record<string, unknown>
+      const siteId = r.site_id as string
+      const deptId = r.id as string
+      if (siteId && deptId) {
+        departmentsBySite[siteId] = (departmentsBySite[siteId] ?? 0) + 1
+        deptSiteMap[deptId] = siteId
+      }
+    }
+
+    const processesBySite: Record<string, number> = {}
+    for (const row of procResult.data ?? []) {
+      const r = row as Record<string, unknown>
+      const deptId = r.department_id as string
+      const siteId = deptSiteMap[deptId]
+      if (siteId) processesBySite[siteId] = (processesBySite[siteId] ?? 0) + 1
+    }
+
+    // Merge into a single map keyed by site_id
+    const allSiteIds = new Set([
+      ...Object.keys(employeesBySite),
+      ...Object.keys(departmentsBySite),
+      ...Object.keys(processesBySite),
+    ])
+
+    const stats: Record<string, { employees: number; departments: number; processes: number }> = {}
+    for (const siteId of allSiteIds) {
+      stats[siteId] = {
+        employees: employeesBySite[siteId] ?? 0,
+        departments: departmentsBySite[siteId] ?? 0,
+        processes: processesBySite[siteId] ?? 0,
+      }
+    }
+
+    return stats
+  }),
 })

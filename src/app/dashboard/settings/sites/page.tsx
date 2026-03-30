@@ -15,11 +15,12 @@ import { useToast } from '@/components/domain/toast'
 import { demoSites } from '@/components/onboarding/demo-seed'
 import { ContextualTooltip } from '@/components/onboarding/contextual-tooltip'
 
-// ── Placeholder site stats (wire later) ──────────────────────────────────────
-const SITE_STATS: Record<string, { employees: number; processes: number; departments: number }> = {}
-
-function getSiteStats(id: string) {
-  return SITE_STATS[id] ?? { employees: 0, processes: 0, departments: 0 }
+// getSiteStats is called per-card; stats map is passed down from the page
+function getSiteStats(
+  stats: Record<string, { employees: number; departments: number; processes: number }> | undefined,
+  id: string,
+) {
+  return stats?.[id] ?? { employees: 0, processes: 0, departments: 0 }
 }
 
 // ── Skeleton ──────────────────────────────────────────────────────────────────
@@ -132,11 +133,12 @@ interface SiteCardProps {
     timezone: string
     settings_json?: Record<string, unknown>
   }
+  siteStats?: Record<string, { employees: number; departments: number; processes: number }>
   onClick: () => void
 }
 
-function SiteCard({ site, onClick }: SiteCardProps) {
-  const stats = getSiteStats(site.id)
+function SiteCard({ site, siteStats, onClick }: SiteCardProps) {
+  const stats = getSiteStats(siteStats, site.id)
   const siteSettings = site.settings_json as Record<string, string> | undefined
 
   return (
@@ -268,7 +270,7 @@ function SiteCard({ site, onClick }: SiteCardProps) {
 }
 
 // ── Site row (list view) ───────────────────────────────────────────────────────
-function SiteRow({ site, onClick }: SiteCardProps) {
+function SiteRow({ site, onClick }: Omit<SiteCardProps, 'siteStats'>) {
   return (
     <motion.div
       variants={fadeInUp}
@@ -396,7 +398,12 @@ export default function SiteListPage() {
     undefined,
     { enabled: !isDemo },
   )
+  const { data: liveSiteStats } = trpc.org.listSiteStats.useQuery(
+    undefined,
+    { enabled: !isDemo },
+  )
   const sites = isDemo ? (demoSites as typeof liveSites) : liveSites
+  const siteStats = isDemo ? undefined : liveSiteStats
   const isLoading = isDemo ? false : liveLoading
   const [view, setView] = useState<ViewMode>('grid')
   const [search, setSearch] = useState('')
@@ -634,6 +641,7 @@ export default function SiteListPage() {
               <SiteCard
                 key={site.id}
                 site={site}
+                siteStats={siteStats}
                 onClick={() => router.push(`/dashboard/settings/sites/${site.id}`)}
               />
             ))}
