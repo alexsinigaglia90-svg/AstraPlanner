@@ -288,7 +288,12 @@ function validateSkillsData(
   }
 }
 
-// ── Main page ───────────────────────────────────────────────────────────────
+// ── Main page — 3-step wizard ────────────────────────────────────────────────
+// Step 1: Upload employees → validate (not saved yet)
+// Step 2: Upload skills → validate (not saved yet)
+// Step 3: Review + "Import All" → saves employees + skills together
+
+type WizardStep = 'employees' | 'skills' | 'importing' | 'done'
 
 export default function EmployeeImportPage() {
   const router = useRouter()
@@ -315,196 +320,103 @@ export default function EmployeeImportPage() {
     { enabled: !!activeSiteId && !isDemo },
   )
 
-  // ── Combined import state ──────────────────────────────────────────────────
   const fileRef = useRef<HTMLInputElement>(null)
-  const [importMode, setImportMode] = useState<'employees' | 'skills'>('employees')
-  const [state, setState] = useState<ImportState>('ready')
+  const [step, setStep] = useState<WizardStep>('employees')
   const [dragOver, setDragOver] = useState(false)
-  const [fileName, setFileName] = useState('')
+  const [empFileName, setEmpFileName] = useState('')
+  const [skillsFileName, setSkillsFileName] = useState('')
   const [validation, setValidation] = useState<ValidationResult | null>(null)
   const [skillsValidation, setSkillsValidation] = useState<SkillsValidationResult | null>(null)
   const [showErrors, setShowErrors] = useState(false)
   const [showSkillsErrors, setShowSkillsErrors] = useState(false)
   const [importError, setImportError] = useState<string | null>(null)
-  const [importResult, setImportResult] = useState<{ employees: number; skills: number; employeeNames: string[] } | null>(null)
+  const [importResult, setImportResult] = useState<{ employees: number; skills: number } | null>(null)
 
-  // ── Combined file processing ───────────────────────────────────────────────
-  const processFile = useCallback(async (file: File) => {
-    setFileName(file.name)
-    setState('validating')
+  // Employee names extracted from the uploaded file (for skills template + matching)
+  const employeeNames = validation?.valid.map((v) => {
+    const first = String(v.data['First Name'] ?? '').trim()
+    const last = String(v.data['Last Name'] ?? '').trim()
+    return `${first} ${last}`
+  }) ?? []
+
+  const hasProcesses = (processesQuery.data ?? []).length > 0
+
+  // ── Read file as ArrayBuffer ───────────────────────────────────────────────
+  const readFile = (file: File) => new Promise<ArrayBuffer>((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result as ArrayBuffer)
+    reader.onerror = () => reject(new Error('Failed to read file'))
+    reader.readAsArrayBuffer(file)
+  })
+
+  // ── Process employees file ─────────────────────────────────────────────────
+  const processEmployeesFile = useCallback(async (file: File) => {
+    setEmpFileName(file.name)
     setValidation(null)
-    setSkillsValidation(null)
-    setImportError(null)
-    setImportResult(null)
     setShowErrors(false)
-    setShowSkillsErrors(false)
+    setImportError(null)
 
     try {
-      const buffer = await new Promise<ArrayBuffer>((resolve, reject) => {
-        const reader = new FileReader()
-        reader.onload = () => resolve(reader.result as ArrayBuffer)
-        reader.onerror = () => reject(new Error('Failed to read file'))
-        reader.readAsArrayBuffer(file)
-      })
-
+      const buffer = await readFile(file)
       const wb = XLSX.read(new Uint8Array(buffer), { type: 'array' })
-
-      // ── Process Sheet 1: Employees ──────────────────────────────────────
       const empSheet = wb.Sheets['Employees'] ?? wb.Sheets[wb.SheetNames[0]!]
       if (!empSheet) throw new Error('No Employees sheet found')
 
       const empRows = XLSX.utils.sheet_to_json<Record<string, string>>(empSheet, { defval: '' })
       const dataRows = empRows.filter((r) => {
-        const vals = Object.values(r)
-        const first = vals[0]?.toString().toLowerCase() ?? ''
+        const first = Object.values(r)[0]?.toString().toLowerCase() ?? ''
         return first !== 'required' && first !== 'optional'
       })
 
       if (dataRows.length === 0) {
-        setValidation({ valid: [], errors: [{ row: 0, field: 'File', message: 'No data rows found in Employees sheet. Fill in the template and try again.' }] })
-        setState('error')
+        setValidation({ valid: [], errors: [{ row: 0, field: 'File', message: 'No data rows found. Fill in the template and try again.' }] })
         return
       }
 
-      const empResult = validateData(dataRows)
-      setValidation(empResult)
-
-      // ── Process Sheet 2: Skills (if present) ───────────────────────────
-      const skillSheet = wb.Sheets['Skills']
-      if (skillSheet) {
-        const employees = (employeesQuery.data?.items ?? []) as { id: string; employee_number: string; first_name: string; last_name: string }[]
-        const processes = (processesQuery.data ?? []) as { id: string; name: string }[]
-
-        if (employees.length === 0 && processes.length === 0) {
-          // No employees/processes yet — skills will be imported after employees
-          setSkillsValidation({
-            matched: [],
-            employeesMatched: 0,
-            processesMatched: 0,
-            errors: [{ row: 0, message: 'Skills sheet found but no employees/processes exist yet. Skills will be skipped — import employees first, then re-upload to import skills.' }],
-          })
-        } else if (processes.length === 0) {
-          setSkillsValidation({
-            matched: [],
-            employeesMatched: 0,
-            processesMatched: 0,
-            errors: [{ row: 0, message: 'No processes found for this site. Add processes first to import skills.' }],
-          })
-        } else {
-          const rawData = XLSX.utils.sheet_to_json<Record<string, string>>(skillSheet, { defval: '' })
-          if (rawData.length > 0) {
-            const headers = Object.keys(rawData[0]!)
-            // Pass employee names from the Employees sheet so pending imports are not flagged as errors
-            const pendingEmpNames = empResult.valid.map((v) => {
-              const first = String(v.data['First Name'] ?? '').trim()
-              const last = String(v.data['Last Name'] ?? '').trim()
-              return `${first} ${last}`
-            }).filter((n) => n.trim().length > 0)
-            const skillResult = validateSkillsData(rawData, headers, employees, processes, pendingEmpNames)
-            setSkillsValidation(skillResult)
-          }
-        }
-      }
-
-      setState(empResult.valid.length > 0 ? 'ready' : 'error')
+      setValidation(validateData(dataRows))
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Could not read file'
-      setValidation({ valid: [], errors: [{ row: 0, field: 'File', message: msg }] })
-      setState('error')
+      setValidation({ valid: [], errors: [{ row: 0, field: 'File', message: err instanceof Error ? err.message : 'Could not read file' }] })
     }
-  }, [employeesQuery.data, processesQuery.data])
+  }, [])
 
-  // ── Skills-only file processing ─────────────────────────────────────────────
+  // ── Process skills file ────────────────────────────────────────────────────
   const processSkillsFile = useCallback(async (file: File) => {
-    setFileName(file.name)
-    setState('validating')
-    setValidation(null)
+    setSkillsFileName(file.name)
     setSkillsValidation(null)
-    setImportError(null)
-    setImportResult(null)
-    setShowErrors(false)
     setShowSkillsErrors(false)
+    setImportError(null)
 
     try {
-      const buffer = await new Promise<ArrayBuffer>((resolve, reject) => {
-        const reader = new FileReader()
-        reader.onload = () => resolve(reader.result as ArrayBuffer)
-        reader.onerror = () => reject(new Error('Failed to read file'))
-        reader.readAsArrayBuffer(file)
-      })
-
+      const buffer = await readFile(file)
       const wb = XLSX.read(new Uint8Array(buffer), { type: 'array' })
       const skillSheet = wb.Sheets['Skills'] ?? wb.Sheets[wb.SheetNames[0]!]
       if (!skillSheet) throw new Error('No Skills sheet found')
 
-      const employees = (employeesQuery.data?.items ?? []) as { id: string; employee_number: string; first_name: string; last_name: string }[]
       const processes = (processesQuery.data ?? []) as { id: string; name: string }[]
-
       if (processes.length === 0) {
-        setSkillsValidation({
-          matched: [], employeesMatched: 0, processesMatched: 0,
-          errors: [{ row: 0, message: 'No processes found for this site. Add processes first.' }],
-        })
-        setState('error')
+        setSkillsValidation({ matched: [], employeesMatched: 0, processesMatched: 0, errors: [{ row: 0, message: 'No processes found. Add processes first.' }] })
         return
       }
 
       const rawData = XLSX.utils.sheet_to_json<Record<string, string>>(skillSheet, { defval: '' })
       if (rawData.length === 0) {
-        setSkillsValidation({
-          matched: [], employeesMatched: 0, processesMatched: 0,
-          errors: [{ row: 0, message: 'No data rows found in Skills sheet.' }],
-        })
-        setState('error')
+        setSkillsValidation({ matched: [], employeesMatched: 0, processesMatched: 0, errors: [{ row: 0, message: 'No data rows found in Skills sheet.' }] })
         return
       }
 
       const headers = Object.keys(rawData[0]!)
-      const skillResult = validateSkillsData(rawData, headers, employees, processes)
-      setSkillsValidation(skillResult)
-      setState(skillResult.matched.length > 0 ? 'ready' : 'error')
+      const existingEmployees = (employeesQuery.data?.items ?? []) as { id: string; employee_number: string; first_name: string; last_name: string }[]
+      setSkillsValidation(validateSkillsData(rawData, headers, existingEmployees, processes, employeeNames))
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Could not read file'
-      setSkillsValidation({
-        matched: [], employeesMatched: 0, processesMatched: 0,
-        errors: [{ row: 0, message: msg }],
-      })
-      setState('error')
+      setSkillsValidation({ matched: [], employeesMatched: 0, processesMatched: 0, errors: [{ row: 0, message: err instanceof Error ? err.message : 'Could not read file' }] })
     }
-  }, [employeesQuery.data, processesQuery.data])
+  }, [employeesQuery.data, processesQuery.data, employeeNames])
 
-  // ── Skills-only import ──────────────────────────────────────────────────────
-  const handleSkillsImport = async () => {
-    if (isDemo) { toast.showError('Dit is een demo — start je eigen omgeving om wijzigingen te maken'); return }
-    if (!skillsValidation || !activeSiteId) return
-    setState('importing')
-    setImportError(null)
-
-    try {
-      const skills = skillsValidation.matched.filter((s) => !s.employee_id.startsWith('pending:'))
-      if (skills.length === 0) {
-        setImportError('No valid skills to import — check that employee names match.')
-        setState('error')
-        return
-      }
-
-      await bulkImportSkills.mutateAsync({ skills })
-      setImportResult({ employees: 0, skills: skills.length, employeeNames: [] })
-      setState('done')
-      toast.showSuccess(`${skills.length} skills geïmporteerd`)
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Import failed'
-      setImportError(msg)
-      setState('error')
-    }
-  }
-
-  // ── Drag/drop handlers ─────────────────────────────────────────────────────
-  const activeProcessor = importMode === 'skills' ? processSkillsFile : processFile
+  // ── File handlers (route to correct processor based on step) ───────────────
+  const activeProcessor = step === 'skills' ? processSkillsFile : processEmployeesFile
 
   const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-    setDragOver(false)
+    e.preventDefault(); setDragOver(false)
     const file = e.dataTransfer.files[0]
     if (file) activeProcessor(file)
   }, [activeProcessor])
@@ -512,13 +424,14 @@ export default function EmployeeImportPage() {
   const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file) activeProcessor(file)
+    if (e.target) e.target.value = '' // allow re-selecting same file
   }, [activeProcessor])
 
-  // ── Combined import ────────────────────────────────────────────────────────
-  const handleImport = async () => {
+  // ── Import all (employees + skills) ────────────────────────────────────────
+  const handleImportAll = async () => {
     if (isDemo) { toast.showError('Dit is een demo — start je eigen omgeving om wijzigingen te maken'); return }
     if (!validation || !activeSiteId) return
-    setState('importing')
+    setStep('importing')
     setImportError(null)
 
     try {
@@ -528,14 +441,11 @@ export default function EmployeeImportPage() {
       // Step 1: Import employees
       const employees = validation.valid.map((v) => {
         const d = v.data
-        const firstName = String(d['First Name'] ?? '').trim()
-        const lastName = String(d['Last Name'] ?? '').trim()
         const roleValue = String(d['Role'] ?? '').trim()
         const crewValue = String(d['Crew'] ?? '').trim()
-
         return {
-          first_name: firstName,
-          last_name: lastName,
+          first_name: String(d['First Name'] ?? '').trim(),
+          last_name: String(d['Last Name'] ?? '').trim(),
           department: String(d['Department'] ?? '').trim() || undefined,
           weekly_hours_contracted: Number(d['Weekly Hours']),
           job_role_id: roleValue ? matchRole(roleValue, roles) ?? undefined : undefined,
@@ -546,22 +456,19 @@ export default function EmployeeImportPage() {
       await bulkImport.mutateAsync({ site_id: activeSiteId, employees })
       let skillCount = 0
 
-      // Step 2: Import skills (if any) — resolve pending employee IDs first
+      // Step 2: Import skills (if any)
       if (skillsValidation && skillsValidation.matched.length > 0) {
-        // Fetch fresh employee list to get IDs for newly created employees
         const freshEmployees = await utils.workforce.listEmployees.fetch({ site_id: activeSiteId, limit: 1000 })
         const freshEmpMap = new Map(
           ((freshEmployees?.items ?? []) as { id: string; first_name: string; last_name: string }[])
             .map((e) => [`${e.first_name} ${e.last_name}`.toLowerCase(), e.id])
         )
 
-        // Resolve pending names to actual IDs
         const resolvedSkills = skillsValidation.matched
           .map((s) => {
             let empId = s.employee_id
             if (empId.startsWith('pending:')) {
-              const empName = empId.replace('pending:', '').toLowerCase()
-              empId = freshEmpMap.get(empName) ?? ''
+              empId = freshEmpMap.get(empId.replace('pending:', '').toLowerCase()) ?? ''
             }
             return empId ? { employee_id: empId, process_id: s.process_id, proficiency_level: s.proficiency_level } : null
           })
@@ -573,526 +480,297 @@ export default function EmployeeImportPage() {
         }
       }
 
-      const importedNames = validation.valid.map((v) => {
-        const first = String(v.data['First Name'] ?? '').trim()
-        const last = String(v.data['Last Name'] ?? '').trim()
-        return `${first} ${last}`
-      })
-      setImportResult({ employees: validation.valid.length, skills: skillCount, employeeNames: importedNames })
-      setState('done')
+      setImportResult({ employees: validation.valid.length, skills: skillCount })
+      setStep('done')
+      utils.workforce.listEmployees.invalidate()
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Import failed'
-      setImportError(msg)
-      setState('error')
+      setImportError(err instanceof Error ? err.message : 'Import failed')
+      setStep('skills') // go back so they can retry
     }
   }
 
-  return (
-    <div className="fixed inset-0 flex items-center justify-center"
-      style={{ zIndex: 'var(--z-modal)', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(4px)' }}
+  // ── Step indicator ─────────────────────────────────────────────────────────
+  const steps = [
+    { id: 'employees' as const, label: 'Employees', done: !!validation && validation.valid.length > 0 },
+    { id: 'skills' as const, label: 'Skills', done: !!skillsValidation && skillsValidation.matched.length > 0 },
+  ]
+
+  // ── Upload zone (reused for both steps) ────────────────────────────────────
+  const fileName = step === 'skills' ? skillsFileName : empFileName
+  const UploadZone = (
+    <motion.div
+      animate={dragOver ? { scale: 1.01 } : { scale: 1 }}
+      transition={snappy}
+      onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
+      onDragLeave={() => setDragOver(false)}
+      onDrop={handleDrop}
+      onClick={() => fileRef.current?.click()}
+      style={{
+        border: `2px dashed ${dragOver ? 'var(--primary)' : 'rgba(99,102,241,0.15)'}`,
+        borderRadius: 'var(--radius-lg)', padding: '28px 20px', textAlign: 'center', cursor: 'pointer',
+        background: dragOver ? 'rgba(99,102,241,0.04)' : 'rgba(99,102,241,0.01)', transition: 'all 0.25s',
+      }}
     >
+      <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleFileSelect} style={{ display: 'none' }} />
+      <Upload size={22} style={{ color: 'var(--primary)', margin: '0 auto 10px', display: 'block' }} />
+      {fileName ? (
+        <>
+          <p style={{ fontFamily: 'var(--font-body)', fontSize: '14px', fontWeight: 600, color: 'var(--foreground)', margin: 0 }}>{fileName}</p>
+          <p style={{ fontFamily: 'var(--font-body)', fontSize: '11px', color: 'var(--primary)', marginTop: 4, fontWeight: 500 }}>Click to replace</p>
+        </>
+      ) : (
+        <>
+          <p style={{ fontFamily: 'var(--font-body)', fontSize: '14px', fontWeight: 500, color: 'var(--foreground)', margin: 0 }}>Drop your Excel file here</p>
+          <p style={{ fontFamily: 'var(--font-body)', fontSize: '12px', color: 'var(--muted-foreground)', marginTop: 4 }}>or click to browse &middot; .xlsx, .xls</p>
+        </>
+      )}
+    </motion.div>
+  )
+
+  // ── Validation summary component ───────────────────────────────────────────
+  const ValidationSummary = ({ v, sv }: { v: ValidationResult | null; sv: SkillsValidationResult | null }) => (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      {v && v.valid.length > 0 && (
+        <div className="flex items-center gap-1.5">
+          <Check size={14} style={{ color: 'var(--success)' }} />
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '13px', fontWeight: 600, color: 'var(--success)' }}>
+            {v.valid.length} employees valid
+          </span>
+        </div>
+      )}
+      {v && v.errors.length > 0 && (
+        <button onClick={() => setShowErrors(!showErrors)} className="flex items-center gap-1.5" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+          <AlertCircle size={14} style={{ color: 'var(--destructive)' }} />
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '13px', fontWeight: 600, color: 'var(--destructive)' }}>{v.errors.length} employee errors</span>
+        </button>
+      )}
+      {showErrors && v && v.errors.length > 0 && (
+        <div style={{ maxHeight: 100, overflowY: 'auto', backgroundColor: 'rgba(239,68,68,0.04)', border: '1px solid rgba(239,68,68,0.1)', borderRadius: 'var(--radius-sm)', padding: '6px 10px' }}>
+          {v.errors.slice(0, 20).map((err, i) => (
+            <div key={i} style={{ fontFamily: 'var(--font-body)', fontSize: '11px', color: 'var(--destructive)', padding: '2px 0' }}>Row {err.row}: {err.field} — {err.message}</div>
+          ))}
+        </div>
+      )}
+      {sv && sv.matched.length > 0 && (
+        <div className="flex items-center gap-1.5">
+          <Check size={14} style={{ color: 'var(--success)' }} />
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '13px', fontWeight: 600, color: 'var(--success)' }}>
+            {sv.matched.length} skills voor {sv.employeesMatched} medewerkers
+          </span>
+        </div>
+      )}
+      {sv && sv.errors.length > 0 && (
+        <button onClick={() => setShowSkillsErrors(!showSkillsErrors)} className="flex items-center gap-1.5" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+          <AlertCircle size={14} style={{ color: 'var(--destructive)' }} />
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '13px', fontWeight: 600, color: 'var(--destructive)' }}>{sv.errors.length} skill errors</span>
+        </button>
+      )}
+      {showSkillsErrors && sv && sv.errors.length > 0 && (
+        <div style={{ maxHeight: 100, overflowY: 'auto', backgroundColor: 'rgba(239,68,68,0.04)', border: '1px solid rgba(239,68,68,0.1)', borderRadius: 'var(--radius-sm)', padding: '6px 10px' }}>
+          {sv.errors.slice(0, 20).map((err, i) => (
+            <div key={i} style={{ fontFamily: 'var(--font-body)', fontSize: '11px', color: 'var(--destructive)', padding: '2px 0' }}>Row {err.row}: {err.message}</div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+
+  const btnStyle = (primary: boolean, disabled?: boolean) => ({
+    padding: '10px 24px', borderRadius: 'var(--radius-sm)', fontFamily: 'var(--font-body)' as const,
+    fontSize: '14px', fontWeight: 600 as const, cursor: disabled ? 'not-allowed' as const : 'pointer' as const,
+    border: primary ? 'none' : '1px solid var(--border)',
+    background: primary ? (disabled ? 'var(--muted)' : 'linear-gradient(135deg, var(--primary), #8B5CF6)') : 'var(--card)',
+    color: primary ? (disabled ? 'var(--muted-foreground)' : '#fff') : 'var(--foreground)',
+    opacity: disabled ? 0.6 : 1,
+  })
+
+  return (
+    <div className="fixed inset-0 flex items-center justify-center" style={{ zIndex: 'var(--z-modal)', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(4px)' }}>
       <motion.div
         initial={{ opacity: 0, scale: 0.97, y: 10 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         transition={bouncy}
-        style={{
-          width: '100%', maxWidth: 640,
-          backgroundColor: 'var(--card)', borderRadius: 'var(--radius-xl)',
-          boxShadow: 'var(--elevation-4)', overflow: 'hidden',
-        }}
+        style={{ width: '100%', maxWidth: 640, backgroundColor: 'var(--card)', borderRadius: 'var(--radius-xl)', boxShadow: 'var(--elevation-4)', overflow: 'hidden' }}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4"
-          style={{ borderBottom: '1px solid var(--border)' }}
-        >
+        <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: '1px solid var(--border)' }}>
           <div className="flex items-center gap-3">
-            <div style={{
-              width: 36, height: 36, borderRadius: 'var(--radius-sm)',
-              backgroundColor: 'rgba(99,102,241,0.1)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>
+            <div style={{ width: 36, height: 36, borderRadius: 'var(--radius-sm)', backgroundColor: 'rgba(99,102,241,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <FileSpreadsheet size={18} style={{ color: 'var(--primary)' }} />
             </div>
             <div>
-              <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '18px', fontWeight: 700, color: 'var(--foreground)', margin: 0 }}>
-                {importMode === 'skills' ? 'Import Skills' : 'Import Employees'}
-              </h2>
+              <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '18px', fontWeight: 700, color: 'var(--foreground)', margin: 0 }}>Import Employees</h2>
               <p style={{ fontFamily: 'var(--font-body)', fontSize: '12px', color: 'var(--muted-foreground)', margin: 0 }}>
-                {importMode === 'skills' ? 'Upload your filled skills template' : 'Download template, fill in your data, upload'}
+                {step === 'employees' && 'Stap 1 van 2 — Upload medewerkers'}
+                {step === 'skills' && 'Stap 2 van 2 — Upload skills'}
+                {step === 'importing' && 'Importeren...'}
+                {step === 'done' && 'Klaar!'}
               </p>
             </div>
           </div>
-          <button onClick={() => router.push('/dashboard/employees')}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: 'var(--muted-foreground)' }}
-          >
+          <button onClick={() => router.push('/dashboard/employees')} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: 'var(--muted-foreground)' }}>
             <X size={18} />
           </button>
         </div>
 
+        {/* Step indicator */}
+        {step !== 'done' && step !== 'importing' && (
+          <div className="flex items-center px-6 pt-4 gap-0">
+            {steps.map((s, idx) => (
+              <div key={s.id} style={{ display: 'flex', alignItems: 'center', flex: idx < steps.length - 1 ? 1 : undefined }}>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                  <div style={{
+                    width: 28, height: 28, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    border: '2px solid', transition: 'all 0.3s',
+                    borderColor: s.done ? 'var(--success)' : s.id === step ? 'var(--primary)' : 'var(--border)',
+                    backgroundColor: s.done ? 'var(--success)' : s.id === step ? 'var(--primary)' : 'transparent',
+                  }}>
+                    {s.done ? <Check size={13} color="white" /> : (
+                      <span style={{ fontFamily: 'var(--font-body)', fontSize: 11, fontWeight: 700, color: s.id === step ? 'white' : 'var(--muted-foreground)' }}>{idx + 1}</span>
+                    )}
+                  </div>
+                  <span style={{ fontFamily: 'var(--font-body)', fontSize: 11, fontWeight: s.id === step ? 700 : 500, color: s.id === step ? 'var(--primary)' : s.done ? 'var(--success)' : 'var(--muted-foreground)' }}>{s.label}</span>
+                </div>
+                {idx < steps.length - 1 && <div style={{ flex: 1, height: 2, margin: '0 10px', marginBottom: 18, backgroundColor: s.done ? 'var(--success)' : 'var(--border)', transition: 'all 0.3s' }} />}
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* Content */}
-        <div className="px-6 py-5" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          {state === 'done' ? (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={wobbly}
-              className="text-center py-8"
-            >
-              <motion.div
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                transition={{ ...wobbly, delay: 0.15 }}
-                style={{
-                  width: 64, height: 64, borderRadius: 'var(--radius-lg)',
-                  backgroundColor: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.2)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  margin: '0 auto 16px',
+        <div className="px-6 py-5" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+          {/* ── STEP: EMPLOYEES ────────────────────────────────────────── */}
+          {step === 'employees' && (
+            <>
+              {/* Download template */}
+              <motion.button
+                variants={scalePress} whileTap="press" whileHover={{ y: -1 }} transition={snappy}
+                onClick={() => {
+                  const emps = (employeesQuery.data?.items ?? []) as { employee_number: string; first_name: string; last_name: string }[]
+                  downloadTemplate(crewsQuery.data ?? [], (processesQuery.data ?? []) as { name: string }[], emps)
                 }}
+                className="flex items-center gap-3 w-full group"
+                style={{ padding: '12px 16px', borderRadius: 'var(--radius-md)', border: '1.5px solid rgba(99,102,241,0.12)', background: 'rgba(99,102,241,0.03)', cursor: 'pointer' }}
+              >
+                <Download size={18} style={{ color: 'var(--primary)', flexShrink: 0 }} />
+                <div style={{ textAlign: 'left', flex: 1 }}>
+                  <div style={{ fontFamily: 'var(--font-body)', fontSize: '13px', fontWeight: 600, color: 'var(--foreground)' }}>Download Excel Template</div>
+                  <div style={{ fontFamily: 'var(--font-body)', fontSize: '11px', color: 'var(--muted-foreground)', marginTop: 1 }}>Employees + Skills in one file</div>
+                </div>
+              </motion.button>
+
+              {UploadZone}
+
+              {validation && <ValidationSummary v={validation} sv={null} />}
+
+              {/* Next button */}
+              <div className="flex justify-between">
+                <motion.button variants={scalePress} whileTap="press" onClick={() => router.push('/dashboard/employees')} style={btnStyle(false)}>Annuleren</motion.button>
+                <motion.button
+                  variants={scalePress} whileTap="press"
+                  disabled={!validation || validation.valid.length === 0}
+                  onClick={() => setStep('skills')}
+                  style={btnStyle(true, !validation || validation.valid.length === 0)}
+                >
+                  Volgende →
+                </motion.button>
+              </div>
+            </>
+          )}
+
+          {/* ── STEP: SKILLS ──────────────────────────────────────────── */}
+          {step === 'skills' && (
+            <>
+              {/* Employee summary chip */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', borderRadius: 'var(--radius-sm)', backgroundColor: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.15)' }}>
+                <Check size={14} style={{ color: 'var(--success)' }} />
+                <span style={{ fontFamily: 'var(--font-body)', fontSize: '13px', fontWeight: 600, color: 'var(--success)' }}>
+                  {validation?.valid.length} medewerkers klaar
+                </span>
+              </div>
+
+              {/* Download skills template */}
+              {hasProcesses && (
+                <motion.button
+                  variants={scalePress} whileTap="press" whileHover={{ y: -1 }} transition={snappy}
+                  onClick={() => downloadSkillsTemplate(employeeNames, (processesQuery.data ?? []) as { name: string }[])}
+                  className="flex items-center gap-3 w-full"
+                  style={{ padding: '12px 16px', borderRadius: 'var(--radius-md)', border: '1.5px solid rgba(245,158,11,0.2)', background: 'rgba(245,158,11,0.04)', cursor: 'pointer' }}
+                >
+                  <Download size={18} style={{ color: '#F59E0B', flexShrink: 0 }} />
+                  <div style={{ textAlign: 'left', flex: 1 }}>
+                    <div style={{ fontFamily: 'var(--font-body)', fontSize: '13px', fontWeight: 600, color: 'var(--foreground)' }}>Download Skills Template</div>
+                    <div style={{ fontFamily: 'var(--font-body)', fontSize: '11px', color: 'var(--muted-foreground)', marginTop: 1 }}>Pre-filled with your {employeeNames.length} medewerkers + {(processesQuery.data ?? []).length} processen</div>
+                  </div>
+                </motion.button>
+              )}
+
+              {UploadZone}
+
+              {skillsValidation && <ValidationSummary v={null} sv={skillsValidation} />}
+
+              {importError && (
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '10px 14px', borderRadius: 'var(--radius-sm)', backgroundColor: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.15)' }}>
+                  <AlertCircle size={14} style={{ color: 'var(--destructive)', marginTop: 2, flexShrink: 0 }} />
+                  <span style={{ fontFamily: 'var(--font-body)', fontSize: '13px', color: 'var(--destructive)' }}>{importError}</span>
+                </div>
+              )}
+
+              {/* Footer buttons */}
+              <div className="flex justify-between">
+                <motion.button variants={scalePress} whileTap="press" onClick={() => setStep('employees')} style={btnStyle(false)}>← Terug</motion.button>
+                <div className="flex gap-2">
+                  <motion.button
+                    variants={scalePress} whileTap="press"
+                    onClick={handleImportAll}
+                    disabled={!validation || validation.valid.length === 0}
+                    style={btnStyle(true, !validation || validation.valid.length === 0)}
+                  >
+                    {skillsValidation && skillsValidation.matched.length > 0
+                      ? `Import ${validation?.valid.length} medewerkers + ${skillsValidation.matched.length} skills`
+                      : `Import ${validation?.valid.length} medewerkers`}
+                  </motion.button>
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* ── STEP: IMPORTING ───────────────────────────────────────── */}
+          {step === 'importing' && (
+            <div className="text-center py-12">
+              <svg className="animate-spin mx-auto mb-4" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2.5">
+                <circle cx="12" cy="12" r="10" strokeOpacity="0.2" /><path d="M12 2a10 10 0 0 1 10 10" strokeLinecap="round" />
+              </svg>
+              <p style={{ fontFamily: 'var(--font-body)', fontSize: '14px', fontWeight: 600, color: 'var(--foreground)' }}>Importeren...</p>
+              <p style={{ fontFamily: 'var(--font-body)', fontSize: '12px', color: 'var(--muted-foreground)', marginTop: 4 }}>
+                {validation?.valid.length} medewerkers{skillsValidation && skillsValidation.matched.length > 0 ? ` + ${skillsValidation.matched.length} skills` : ''}
+              </p>
+            </div>
+          )}
+
+          {/* ── STEP: DONE ────────────────────────────────────────────── */}
+          {step === 'done' && (
+            <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={wobbly} className="text-center py-8">
+              <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ ...wobbly, delay: 0.15 }}
+                style={{ width: 64, height: 64, borderRadius: 'var(--radius-lg)', backgroundColor: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}
               >
                 <Check size={28} style={{ color: 'var(--success)' }} />
               </motion.div>
-              <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '20px', fontWeight: 700, color: 'var(--foreground)' }}>
-                Import Complete
-              </h3>
+              <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '20px', fontWeight: 700, color: 'var(--foreground)' }}>Import Complete</h3>
               <p style={{ fontFamily: 'var(--font-body)', fontSize: '14px', color: 'var(--muted-foreground)', marginTop: 8 }}>
-                {importResult && importResult.employees > 0 && `${importResult.employees} employees imported`}
-                {importResult && importResult.employees > 0 && importResult.skills > 0 && ', '}
-                {importResult && importResult.skills > 0 && `${importResult.skills} skills ${importResult.employees > 0 ? 'updated' : 'geïmporteerd'}`}
+                {importResult && importResult.employees > 0 && `${importResult.employees} medewerkers`}
+                {importResult && importResult.skills > 0 && ` + ${importResult.skills} skills`}
+                {' geïmporteerd'}
               </p>
-
-              {/* Skills template download — Step 2 of the two-stage rocket */}
-              {importResult && importResult.skills === 0 && (processesQuery.data ?? []).length > 0 && (
-                <motion.div
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ ...bouncy, delay: 0.3 }}
-                  style={{
-                    marginTop: 20, padding: '16px 20px',
-                    borderRadius: 'var(--radius-md)',
-                    border: '1.5px solid rgba(245,158,11,0.2)',
-                    background: 'linear-gradient(135deg, rgba(245,158,11,0.06), rgba(234,88,12,0.03))',
-                  }}
-                >
-                  <p style={{ fontFamily: 'var(--font-body)', fontSize: '13px', fontWeight: 600, color: 'var(--foreground)', margin: 0 }}>
-                    Next: grade employee skills
-                  </p>
-                  <p style={{ fontFamily: 'var(--font-body)', fontSize: '12px', color: 'var(--muted-foreground)', margin: '4px 0 12px' }}>
-                    Download a pre-filled template with your employees and processes, fill in skill levels 1-5, then upload it here.
-                  </p>
-                  <motion.button
-                    variants={scalePress} whileTap="press"
-                    whileHover={{ y: -1 }}
-                    onClick={() => {
-                      const procs = (processesQuery.data ?? []) as { name: string }[]
-                      downloadSkillsTemplate(importResult.employeeNames, procs)
-                    }}
-                    className="flex items-center gap-2"
-                    style={{
-                      padding: '8px 16px', borderRadius: 'var(--radius-sm)',
-                      background: 'linear-gradient(135deg, #F59E0B, #EA580C)',
-                      color: '#fff', border: 'none', fontFamily: 'var(--font-body)',
-                      fontSize: '13px', fontWeight: 600, cursor: 'pointer',
-                    }}
-                  >
-                    <Download size={14} />
-                    Download Skills Template
-                  </motion.button>
-                </motion.div>
-              )}
-
-              <div className="flex gap-3" style={{ marginTop: 16, justifyContent: 'center' }}>
-                <motion.button
-                  variants={scalePress} whileTap="press"
-                  onClick={() => {
-                    setImportMode('skills')
-                    setState('ready')
-                    setValidation(null)
-                    setSkillsValidation(null)
-                    setImportResult(null)
-                    setFileName('')
-                    setImportError(null)
-                  }}
-                  style={{
-                    padding: '10px 24px', borderRadius: 'var(--radius-sm)',
-                    border: '1px solid var(--border)', backgroundColor: 'var(--card)',
-                    color: 'var(--foreground)', fontFamily: 'var(--font-body)',
-                    fontSize: '14px', fontWeight: 600, cursor: 'pointer',
-                  }}
-                >
-                  Upload Skills
-                </motion.button>
-                <motion.button
-                  variants={scalePress} whileTap="press"
-                  onClick={() => router.push('/dashboard/employees')}
-                  style={{
-                    padding: '10px 24px', borderRadius: 'var(--radius-sm)',
-                    background: 'linear-gradient(135deg, var(--primary), #8B5CF6)',
-                    color: '#fff', border: 'none', fontFamily: 'var(--font-body)',
-                    fontSize: '14px', fontWeight: 600, cursor: 'pointer',
-                  }}
-                >
-                  View Employees
-                </motion.button>
-              </div>
+              <motion.button
+                variants={scalePress} whileTap="press"
+                onClick={() => router.push('/dashboard/employees')}
+                style={{ ...btnStyle(true), marginTop: 24 }}
+              >
+                Bekijk medewerkers
+              </motion.button>
             </motion.div>
-          ) : (
-            <>
-              {/* Step 1: Download template (employees mode only) */}
-              {importMode === 'employees' && <div>
-                <div className="flex items-center gap-2 mb-3">
-                  <div style={{
-                    width: 24, height: 24, borderRadius: 'var(--radius-full)',
-                    background: 'linear-gradient(135deg, var(--primary), #8B5CF6)', color: '#fff',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontFamily: 'var(--font-body)', fontSize: '11px', fontWeight: 700,
-                    boxShadow: '0 2px 8px rgba(99,102,241,0.25)',
-                  }}>1</div>
-                  <span style={{ fontFamily: 'var(--font-body)', fontSize: '14px', fontWeight: 600, color: 'var(--foreground)' }}>
-                    Download the template
-                  </span>
-                </div>
-                <motion.button
-                  variants={scalePress} whileTap="press"
-                  whileHover={{ y: -1 }}
-                  transition={snappy}
-                  onClick={() => {
-                    const emps = (employeesQuery.data?.items ?? []) as { employee_number: string; first_name: string; last_name: string }[]
-                    const procs = (processesQuery.data ?? []) as { name: string }[]
-                    downloadTemplate(crewsQuery.data ?? [], procs, emps)
-                  }}
-                  className="flex items-center gap-3 w-full group"
-                  style={{
-                    padding: '14px 18px', borderRadius: 'var(--radius-md)',
-                    border: '1.5px solid rgba(99,102,241,0.12)',
-                    background: 'linear-gradient(135deg, rgba(99,102,241,0.04), rgba(139,92,246,0.02))',
-                    cursor: 'pointer', transition: 'all 0.2s',
-                  }}
-                  onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'rgba(99,102,241,0.25)'; e.currentTarget.style.boxShadow = '0 4px 16px rgba(99,102,241,0.08)' }}
-                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'rgba(99,102,241,0.12)'; e.currentTarget.style.boxShadow = 'none' }}
-                >
-                  <div style={{
-                    width: 40, height: 40, borderRadius: 'var(--radius-sm)',
-                    background: 'linear-gradient(135deg, rgba(99,102,241,0.12), rgba(139,92,246,0.08))',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                  }}>
-                    <Download size={18} style={{ color: 'var(--primary)' }} />
-                  </div>
-                  <div style={{ textAlign: 'left', flex: 1 }}>
-                    <div style={{ fontFamily: 'var(--font-body)', fontSize: '13px', fontWeight: 600, color: 'var(--foreground)' }}>
-                      Download Excel Template
-                    </div>
-                    <div style={{ fontFamily: 'var(--font-body)', fontSize: '11px', color: 'var(--muted-foreground)', marginTop: 2 }}>
-                      Employees + Skills sheets in one file
-                    </div>
-                  </div>
-                  <div style={{ color: 'var(--muted-foreground)', transition: 'transform 0.15s' }} className="group-hover:translate-y-0.5">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M12 5v14" /><path d="m19 12-7 7-7-7" />
-                    </svg>
-                  </div>
-                </motion.button>
-              </div>}
-
-              {/* Step 2: Upload filled template */}
-              <div>
-                <div className="flex items-center gap-2 mb-3">
-                  <div style={{
-                    width: 24, height: 24, borderRadius: 'var(--radius-full)',
-                    background: (validation || skillsValidation)
-                      ? 'linear-gradient(135deg, var(--success), #059669)'
-                      : 'linear-gradient(135deg, var(--muted), var(--muted))',
-                    color: (validation || skillsValidation) ? '#fff' : 'var(--muted-foreground)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontFamily: 'var(--font-body)', fontSize: '11px', fontWeight: 700,
-                    boxShadow: (validation || skillsValidation) ? '0 2px 8px rgba(16,185,129,0.25)' : 'none',
-                    transition: 'all 0.3s',
-                  }}>
-                    {(validation || skillsValidation) ? <Check size={13} /> : importMode === 'skills' ? '1' : '2'}
-                  </div>
-                  <span style={{ fontFamily: 'var(--font-body)', fontSize: '14px', fontWeight: 600, color: 'var(--foreground)' }}>
-                    {importMode === 'skills' ? 'Upload your skills file' : 'Upload your filled template'}
-                  </span>
-                </div>
-
-                <motion.div
-                  animate={dragOver ? { scale: 1.01 } : { scale: 1 }}
-                  transition={snappy}
-                  onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
-                  onDragLeave={() => setDragOver(false)}
-                  onDrop={handleDrop}
-                  onClick={() => fileRef.current?.click()}
-                  style={{
-                    border: `2px dashed ${dragOver ? 'var(--primary)' : 'rgba(99,102,241,0.15)'}`,
-                    borderRadius: 'var(--radius-lg)',
-                    padding: '32px 20px',
-                    textAlign: 'center',
-                    cursor: 'pointer',
-                    background: dragOver
-                      ? 'linear-gradient(135deg, rgba(99,102,241,0.06), rgba(139,92,246,0.03))'
-                      : 'linear-gradient(135deg, rgba(99,102,241,0.02), transparent)',
-                    transition: 'all 0.25s',
-                  }}
-                >
-                  <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleFileSelect} style={{ display: 'none' }} />
-                  <div style={{
-                    width: 48, height: 48, borderRadius: 'var(--radius-md)',
-                    background: 'rgba(99,102,241,0.08)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    margin: '0 auto 12px',
-                  }}>
-                    <Upload size={22} style={{ color: 'var(--primary)' }} />
-                  </div>
-                  {fileName ? (
-                    <>
-                      <p style={{ fontFamily: 'var(--font-body)', fontSize: '14px', fontWeight: 600, color: 'var(--foreground)' }}>
-                        {fileName}
-                      </p>
-                      <p style={{ fontFamily: 'var(--font-body)', fontSize: '11px', color: 'var(--primary)', marginTop: 4, fontWeight: 500 }}>
-                        Click to replace
-                      </p>
-                    </>
-                  ) : (
-                    <>
-                      <p style={{ fontFamily: 'var(--font-body)', fontSize: '14px', fontWeight: 500, color: 'var(--foreground)' }}>
-                        Drop your Excel file here
-                      </p>
-                      <p style={{ fontFamily: 'var(--font-body)', fontSize: '12px', color: 'var(--muted-foreground)', marginTop: 4 }}>
-                        or click to browse &middot; .xlsx, .xls, .csv
-                      </p>
-                    </>
-                  )}
-                </motion.div>
-              </div>
-
-              {/* Validation results — employees */}
-              <AnimatePresence>
-                {validation && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: 'auto' }}
-                    exit={{ opacity: 0, height: 0 }}
-                    transition={bouncy}
-                  >
-                    {/* Employee validation summary */}
-                    <div className="flex items-center gap-4 mb-2">
-                      {validation.valid.length > 0 && (
-                        <div className="flex items-center gap-1.5">
-                          <Check size={14} style={{ color: 'var(--success)' }} />
-                          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '13px', fontWeight: 600, color: 'var(--success)' }}>
-                            {validation.valid.length} employees valid
-                          </span>
-                        </div>
-                      )}
-                      {validation.errors.length > 0 && (
-                        <button onClick={() => setShowErrors(!showErrors)}
-                          className="flex items-center gap-1.5"
-                          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
-                        >
-                          <AlertCircle size={14} style={{ color: 'var(--destructive)' }} />
-                          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '13px', fontWeight: 600, color: 'var(--destructive)' }}>
-                            {validation.errors.length} errors
-                          </span>
-                        </button>
-                      )}
-                    </div>
-
-                    {/* Skills validation summary */}
-                    {skillsValidation && (
-                      <div className="flex items-center gap-4 mb-3 flex-wrap">
-                        {skillsValidation.matched.length > 0 && (
-                          <>
-                            <div className="flex items-center gap-1.5">
-                              <Check size={14} style={{ color: 'var(--success)' }} />
-                              <span style={{ fontFamily: 'var(--font-mono)', fontSize: '13px', fontWeight: 600, color: 'var(--success)' }}>
-                                {skillsValidation.matched.length} skills across {skillsValidation.employeesMatched} employees
-                              </span>
-                            </div>
-                          </>
-                        )}
-                        {skillsValidation.errors.length > 0 && (
-                          <button onClick={() => setShowSkillsErrors(!showSkillsErrors)}
-                            className="flex items-center gap-1.5"
-                            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
-                          >
-                            <AlertCircle size={14} style={{ color: 'var(--destructive)' }} />
-                            <span style={{ fontFamily: 'var(--font-mono)', fontSize: '13px', fontWeight: 600, color: 'var(--destructive)' }}>
-                              {skillsValidation.errors.length} skill errors
-                            </span>
-                          </button>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Employee error details */}
-                    {showErrors && validation.errors.length > 0 && (
-                      <div style={{
-                        maxHeight: 120, overflowY: 'auto', marginBottom: 8,
-                        backgroundColor: 'rgba(239,68,68,0.04)', border: '1px solid rgba(239,68,68,0.1)',
-                        borderRadius: 'var(--radius-sm)', padding: '8px 12px',
-                      }}>
-                        {validation.errors.slice(0, 20).map((err, i) => (
-                          <div key={i} style={{ fontFamily: 'var(--font-body)', fontSize: '11px', color: 'var(--destructive)', padding: '2px 0' }}>
-                            Row {err.row}: {err.field} — {err.message}
-                          </div>
-                        ))}
-                        {validation.errors.length > 20 && (
-                          <div style={{ fontFamily: 'var(--font-body)', fontSize: '11px', color: 'var(--muted-foreground)', padding: '4px 0' }}>
-                            +{validation.errors.length - 20} more errors
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Skills error details */}
-                    {showSkillsErrors && skillsValidation && skillsValidation.errors.length > 0 && (
-                      <div style={{
-                        maxHeight: 120, overflowY: 'auto',
-                        backgroundColor: 'rgba(239,68,68,0.04)', border: '1px solid rgba(239,68,68,0.1)',
-                        borderRadius: 'var(--radius-sm)', padding: '8px 12px',
-                      }}>
-                        {skillsValidation.errors.slice(0, 20).map((err, i) => (
-                          <div key={i} style={{ fontFamily: 'var(--font-body)', fontSize: '11px', color: 'var(--destructive)', padding: '2px 0' }}>
-                            Row {err.row}: {err.message}
-                          </div>
-                        ))}
-                        {skillsValidation.errors.length > 20 && (
-                          <div style={{ fontFamily: 'var(--font-body)', fontSize: '11px', color: 'var(--muted-foreground)', padding: '4px 0' }}>
-                            +{skillsValidation.errors.length - 20} more errors
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
-              {/* Import error */}
-              {importError && (
-                <motion.div
-                  initial={{ opacity: 0, y: -4 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={bouncy}
-                  style={{
-                    padding: '10px 14px', borderRadius: 'var(--radius-sm)',
-                    backgroundColor: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.15)',
-                    display: 'flex', alignItems: 'flex-start', gap: '8px',
-                  }}
-                >
-                  <AlertCircle size={14} style={{ color: 'var(--destructive)', marginTop: 2, flexShrink: 0 }} />
-                  <span style={{ fontFamily: 'var(--font-body)', fontSize: '13px', color: 'var(--destructive)' }}>
-                    {importError}
-                  </span>
-                </motion.div>
-              )}
-
-              {/* Skills-only validation results */}
-              {importMode === 'skills' && !validation && skillsValidation && (
-                <AnimatePresence>
-                  <motion.div
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: 'auto' }}
-                    exit={{ opacity: 0, height: 0 }}
-                    transition={bouncy}
-                  >
-                    <div className="flex items-center gap-4 mb-2 flex-wrap">
-                      {skillsValidation.matched.length > 0 && (
-                        <div className="flex items-center gap-1.5">
-                          <Check size={14} style={{ color: 'var(--success)' }} />
-                          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '13px', fontWeight: 600, color: 'var(--success)' }}>
-                            {skillsValidation.matched.length} skills voor {skillsValidation.employeesMatched} medewerkers
-                          </span>
-                        </div>
-                      )}
-                      {skillsValidation.errors.length > 0 && (
-                        <button onClick={() => setShowSkillsErrors(!showSkillsErrors)}
-                          className="flex items-center gap-1.5"
-                          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
-                        >
-                          <AlertCircle size={14} style={{ color: 'var(--destructive)' }} />
-                          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '13px', fontWeight: 600, color: 'var(--destructive)' }}>
-                            {skillsValidation.errors.length} errors
-                          </span>
-                        </button>
-                      )}
-                    </div>
-                    {showSkillsErrors && skillsValidation.errors.length > 0 && (
-                      <div style={{
-                        maxHeight: 120, overflowY: 'auto',
-                        backgroundColor: 'rgba(239,68,68,0.04)', border: '1px solid rgba(239,68,68,0.1)',
-                        borderRadius: 'var(--radius-sm)', padding: '8px 12px',
-                      }}>
-                        {skillsValidation.errors.slice(0, 20).map((err, i) => (
-                          <div key={i} style={{ fontFamily: 'var(--font-body)', fontSize: '11px', color: 'var(--destructive)', padding: '2px 0' }}>
-                            Row {err.row}: {err.message}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </motion.div>
-                </AnimatePresence>
-              )}
-
-              {/* Import button — employees mode */}
-              {importMode === 'employees' && validation && validation.valid.length > 0 && (
-                <motion.button
-                  variants={scalePress} whileTap="press"
-                  onClick={handleImport}
-                  disabled={state === 'importing'}
-                  className="w-full flex items-center justify-center gap-2"
-                  style={{
-                    padding: '12px 20px', borderRadius: 'var(--radius-sm)',
-                    background: 'linear-gradient(135deg, var(--primary), #8B5CF6)',
-                    color: '#fff', border: 'none', fontFamily: 'var(--font-body)',
-                    fontSize: '14px', fontWeight: 600,
-                    cursor: state === 'importing' ? 'not-allowed' : 'pointer',
-                    opacity: state === 'importing' ? 0.7 : 1,
-                  }}
-                >
-                  {state === 'importing' ? (
-                    <>
-                      <svg className="animate-spin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                        <circle cx="12" cy="12" r="10" strokeOpacity="0.3" /><path d="M12 2a10 10 0 0 1 10 10" strokeLinecap="round" />
-                      </svg>
-                      Importing...
-                    </>
-                  ) : (
-                    <>
-                      Import {validation.valid.length} employees
-                      {skillsValidation && skillsValidation.matched.length > 0 && ` + ${skillsValidation.matched.length} skills`}
-                    </>
-                  )}
-                </motion.button>
-              )}
-
-              {/* Import button — skills mode */}
-              {importMode === 'skills' && skillsValidation && skillsValidation.matched.length > 0 && (
-                <motion.button
-                  variants={scalePress} whileTap="press"
-                  onClick={handleSkillsImport}
-                  disabled={state === 'importing'}
-                  className="w-full flex items-center justify-center gap-2"
-                  style={{
-                    padding: '12px 20px', borderRadius: 'var(--radius-sm)',
-                    background: 'linear-gradient(135deg, var(--primary), #8B5CF6)',
-                    color: '#fff', border: 'none', fontFamily: 'var(--font-body)',
-                    fontSize: '14px', fontWeight: 600,
-                    cursor: state === 'importing' ? 'not-allowed' : 'pointer',
-                    opacity: state === 'importing' ? 0.7 : 1,
-                  }}
-                >
-                  {state === 'importing' ? (
-                    <>
-                      <svg className="animate-spin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                        <circle cx="12" cy="12" r="10" strokeOpacity="0.3" /><path d="M12 2a10 10 0 0 1 10 10" strokeLinecap="round" />
-                      </svg>
-                      Importing...
-                    </>
-                  ) : (
-                    <>Import {skillsValidation.matched.length} skills</>
-                  )}
-                </motion.button>
-              )}
-            </>
           )}
         </div>
       </motion.div>
