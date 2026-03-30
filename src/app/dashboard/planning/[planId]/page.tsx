@@ -481,7 +481,7 @@ export default function PlanDetailPage() {
           icon={<Coins size={16} />}
           gradientColors={['#10B981', '#059669']}
           delay={0.05}
-          prefix="\u20AC"
+          prefix="€"
         />
         <KpiHeroCard
           label="Overuren"

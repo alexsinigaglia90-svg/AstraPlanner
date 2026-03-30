@@ -82,7 +82,7 @@ export interface Assignment {
   shift_pattern_id: string;
   scheduled_hours: number;
   cost_estimate: number;
-  assignment_source: "optimizer" | "locked";
+  assignment_source: "optimizer" | "manual" | "swap" | "ai_suggested";
 }
 
 export interface UnmetDemandSlot {

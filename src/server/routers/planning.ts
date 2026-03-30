@@ -349,7 +349,7 @@ export const planningRouter = router({
           .from('shift_assignment_staging')
           .select('employee_id, process_id, shift_pattern_id, scheduled_hours, cost_estimate, assignment_source, start_time, end_time')
           .eq('plan_version_id', input.plan_version_id)
-          .eq('assignment_source', 'locked'),
+          .eq('assignment_source', 'manual'),
       ])
 
       assertNoError(employeesResult.error, 'runOptimizer:employees')
@@ -459,7 +459,7 @@ export const planningRouter = router({
           shift_pattern_id: a.shift_pattern_id as string,
           scheduled_hours: a.scheduled_hours as number,
           cost_estimate: (a.cost_estimate as number) ?? 0,
-          assignment_source: 'locked' as const,
+          assignment_source: 'manual' as const,
         }
       })
 
@@ -499,7 +499,7 @@ export const planningRouter = router({
         .from('shift_assignment_staging')
         .delete()
         .eq('plan_version_id', input.plan_version_id)
-        .neq('assignment_source', 'locked')
+        .neq('assignment_source', 'manual')
 
       assertNoError(deleteErr, 'runOptimizer:deleteOldStaging')
 
@@ -772,7 +772,7 @@ export const planningRouter = router({
           start_time: startTime,
           end_time: endTime,
           scheduled_hours: shiftRow.duration_hours as number,
-          assignment_source: 'locked',
+          assignment_source: 'manual',
           status: 'draft',
         })
         .select('id, employee_id, process_id, shift_pattern_id, assignment_date, scheduled_hours, assignment_source')
@@ -862,7 +862,7 @@ export const planningRouter = router({
 
       const { data, error } = await admin
         .from('shift_assignment_staging')
-        .update({ assignment_source: 'locked', updated_at: new Date().toISOString() })
+        .update({ assignment_source: 'manual', updated_at: new Date().toISOString() })
         .eq('id', input.assignment_id)
         .eq('organization_id', ctx.organizationId)
         .select('id, assignment_source')

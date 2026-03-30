@@ -155,21 +155,21 @@ describe('solveGreedy', () => {
       shift_pattern_id: 'manual',
       scheduled_hours: 8,
       cost_estimate: 180,
-      assignment_source: 'locked',
+      assignment_source: 'manual',
     }
     const input = makeInput({ locked_assignments: [locked] })
     const result = solveGreedy(input)
 
-    // locked + emp2 optimiser assignment = 2 total
+    // manual + emp2 optimiser assignment = 2 total
     expect(result.assignments).toHaveLength(2)
     expect(result.unmet_demand).toHaveLength(0)
     expect(result.metrics.coverage_percentage).toBe(100)
 
-    const lockedAssignment = result.assignments.find(
-      (a) => a.assignment_source === 'locked',
+    const manualAssignment = result.assignments.find(
+      (a) => a.assignment_source === 'manual',
     )
-    expect(lockedAssignment).toBeDefined()
-    expect(lockedAssignment!.employee_id).toBe('emp1')
+    expect(manualAssignment).toBeDefined()
+    expect(manualAssignment!.employee_id).toBe('emp1')
   })
 
   it('records solve time and reports null optimality gap', () => {
