@@ -487,7 +487,14 @@ export default function EmployeeImportPage() {
 
     try {
       // All employee_ids should be real UUIDs now (matched against DB)
-      const validSkills = skillsValidation.matched.filter((s) => !s.employee_id.startsWith('pending:'))
+      // Deduplicate: same employee+process can only appear once (last value wins)
+      const deduped = new Map<string, typeof skillsValidation.matched[0]>()
+      for (const s of skillsValidation.matched) {
+        if (!s.employee_id.startsWith('pending:')) {
+          deduped.set(`${s.employee_id}:${s.process_id}`, s)
+        }
+      }
+      const validSkills = [...deduped.values()]
 
       if (validSkills.length === 0) {
         setImportError('Geen skills konden gekoppeld worden — controleer of de namen overeenkomen.')
