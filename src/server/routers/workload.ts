@@ -248,7 +248,8 @@ export const workloadRouter = router({
           proficiency_level: es.proficiency_level,
           // Split hours evenly across processes this employee is qualified for
           available_hours: weeklyHours / totalSkills,
-          productive_pct: Number(emp?.job_role?.productive_pct) || 0.95,
+          // productive_pct is stored as 0-100 integer in DB, convert to 0-1 fraction
+          productive_pct: (Number(emp?.job_role?.productive_pct) || 95) / 100,
         }
       })
 
