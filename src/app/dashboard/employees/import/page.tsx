@@ -466,6 +466,19 @@ export default function EmployeeImportPage() {
             .map((e) => [`${e.first_name} ${e.last_name}`.toLowerCase(), e.id])
         )
 
+        // Debug: log resolution
+        const pendingCount = skillsValidation.matched.filter((s) => s.employee_id.startsWith('pending:')).length
+        const directCount = skillsValidation.matched.length - pendingCount
+        console.log('[skills-import] matched:', skillsValidation.matched.length, 'pending:', pendingCount, 'direct:', directCount)
+        console.log('[skills-import] freshEmpMap size:', freshEmpMap.size)
+        if (pendingCount > 0) {
+          const samplePending = skillsValidation.matched.find((s) => s.employee_id.startsWith('pending:'))
+          const sampleKey = samplePending?.employee_id.replace('pending:', '').toLowerCase()
+          console.log('[skills-import] sample pending key:', JSON.stringify(sampleKey))
+          const sampleMapKeys = [...freshEmpMap.keys()].slice(0, 3)
+          console.log('[skills-import] sample map keys:', JSON.stringify(sampleMapKeys))
+        }
+
         const resolvedSkills = skillsValidation.matched
           .map((s) => {
             let empId = s.employee_id
@@ -475,6 +488,8 @@ export default function EmployeeImportPage() {
             return empId ? { employee_id: empId, process_id: s.process_id, proficiency_level: s.proficiency_level } : null
           })
           .filter((s): s is NonNullable<typeof s> => s !== null)
+
+        console.log('[skills-import] resolved:', resolvedSkills.length, 'of', skillsValidation.matched.length)
 
         if (resolvedSkills.length > 0) {
           await bulkImportSkills.mutateAsync({ skills: resolvedSkills })
