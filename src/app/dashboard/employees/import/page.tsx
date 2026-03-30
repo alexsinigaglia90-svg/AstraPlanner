@@ -405,7 +405,7 @@ export default function EmployeeImportPage() {
       }
 
       // Always fetch fresh employee data directly from the server (not from stale cache)
-      const freshData = await utils.workforce.listEmployees.fetch({ site_id: activeSiteId!, limit: 2000 })
+      const freshData = await utils.workforce.listEmployees.fetch({ site_id: activeSiteId!, limit: 1000 })
       const existingEmployees = ((freshData?.items ?? []) as { id: string; employee_number: string; first_name: string; last_name: string }[])
 
       const headers = Object.keys(rawData[0]!)
