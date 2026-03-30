@@ -291,15 +291,14 @@ export const workforceRouter = router({
         employees: z
           .array(
             z.object({
-              employee_number: z.string().min(1),
+              employee_number: z.string().min(1).optional(),
               first_name: z.string().min(1),
               last_name: z.string().min(1),
               department: z.string().optional(),
-              contract_type: ContractTypeSchema,
+              contract_type: ContractTypeSchema.optional(),
               weekly_hours_contracted: z.number().positive(),
-              hourly_rate: z.number().nonnegative(),
+              hourly_rate: z.number().nonnegative().optional(),
               job_role_id: z.string().uuid().optional(),
-              shift_id: z.string().uuid().optional(),
               crew_id: z.string().uuid().optional(),
             }),
           )
@@ -370,16 +369,17 @@ export const workforceRouter = router({
         }
       }
 
-      // Build employee rows
+      // Build employee rows — auto-generate employee_number if not provided
       const today = new Date().toISOString().split('T')[0]
-      const rows = employees.map((e) => ({
+      const timestamp = Date.now().toString(36)
+      const rows = employees.map((e, idx) => ({
         organization_id: orgId,
-        employee_number: e.employee_number,
+        employee_number: e.employee_number ?? `EMP-${timestamp}-${String(idx + 1).padStart(4, '0')}`,
         first_name: e.first_name,
         last_name: e.last_name,
-        contract_type: e.contract_type,
+        contract_type: e.contract_type ?? 'full_time',
         weekly_hours_contracted: e.weekly_hours_contracted,
-        hourly_rate: e.hourly_rate,
+        hourly_rate: e.hourly_rate ?? 0,
         home_site_id: site_id,
         hire_date: today,
         department_id: e.department
@@ -677,5 +677,56 @@ export const workforceRouter = router({
       assertNoError(error, 'deleteEmployee')
 
       return { deleted: true }
+    }),
+
+  // -------------------------------------------------------------------------
+  // bulkDeleteEmployees  (manager+)
+  // -------------------------------------------------------------------------
+  bulkDeleteEmployees: managerProcedure
+    .input(z.object({ ids: z.array(z.string().uuid()).min(1).max(200) }))
+    .mutation(async ({ ctx, input }) => {
+      const admin = createAdminClient()
+
+      // Check which employees have planning history
+      const { data: assigned } = await admin
+        .from('shift_assignment')
+        .select('employee_id')
+        .in('employee_id', input.ids)
+
+      const blockedIds = new Set((assigned ?? []).map((a) => (a as Record<string, unknown>).employee_id as string))
+      const deletableIds = input.ids.filter((id) => !blockedIds.has(id))
+
+      if (deletableIds.length > 0) {
+        const { error } = await admin
+          .from('employee')
+          .delete()
+          .in('id', deletableIds)
+
+        assertNoError(error, 'bulkDeleteEmployees')
+      }
+
+      return {
+        deleted: deletableIds.length,
+        blocked: input.ids.filter((id) => blockedIds.has(id)),
+      }
+    }),
+
+  // -------------------------------------------------------------------------
+  // bulkArchiveEmployees  (manager+) — set status to 'terminated'
+  // -------------------------------------------------------------------------
+  bulkArchiveEmployees: managerProcedure
+    .input(z.object({ ids: z.array(z.string().uuid()).min(1).max(200) }))
+    .mutation(async ({ ctx, input }) => {
+      const admin = createAdminClient()
+
+      const { error } = await admin
+        .from('employee')
+        .update({ status: 'terminated' })
+        .in('id', input.ids)
+        .eq('organization_id', ctx.organizationId)
+
+      assertNoError(error, 'bulkArchiveEmployees')
+
+      return { archived: input.ids.length }
     }),
 })

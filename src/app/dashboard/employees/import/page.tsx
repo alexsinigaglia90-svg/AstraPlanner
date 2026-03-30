@@ -10,22 +10,18 @@ import { useSiteStore } from '@/stores/site-store'
 import { useDemoStore } from '@/hooks/use-demo'
 import { useToast } from '@/components/domain/toast'
 import { demoShifts, demoEmployees, demoProcesses } from '@/components/onboarding/demo-seed'
-import { matchShift, matchCrew, matchRole } from '@/lib/shift-matcher'
+import { matchCrew, matchRole } from '@/lib/shift-matcher'
 import * as XLSX from 'xlsx'
 
 // ── Dataloader column definitions ───────────────────────────────────────────
 // These match what the solver needs (no skills — those are graded individually)
 
 const TEMPLATE_COLUMNS = [
-  { key: 'employee_number', label: 'Employee Number', example: 'EMP-001', required: true },
   { key: 'first_name', label: 'First Name', example: 'Lars', required: true },
   { key: 'last_name', label: 'Last Name', example: 'van der Berg', required: true },
   { key: 'department', label: 'Department', example: 'Operations', required: true },
-  { key: 'contract_type', label: 'Contract Type', example: 'full_time', required: true },
   { key: 'weekly_hours', label: 'Weekly Hours', example: '40', required: true },
-  { key: 'hourly_rate', label: 'Hourly Rate (\u20AC)', example: '22.50', required: true },
   { key: 'role', label: 'Role', example: 'Orderpicker', required: false },
-  { key: 'shift', label: 'Shift', example: 'Day Shift', required: false },
   { key: 'crew', label: 'Crew', example: 'Team A', required: false },
 ]
 
@@ -46,15 +42,11 @@ interface SkillsValidationResult {
 // ── Combined template download ──────────────────────────────────────────────
 
 function downloadTemplate(
-  shifts: { name: string }[],
   crews: { name: string }[],
   processes: { name: string }[],
   employees: { employee_number: string; first_name: string; last_name: string }[],
 ) {
   const columns = TEMPLATE_COLUMNS.map((c) => {
-    if (c.key === 'shift' && shifts.length > 0) {
-      return { ...c, example: shifts[0]!.name }
-    }
     if (c.key === 'crew' && crews.length > 0) {
       return { ...c, example: crews[0]!.name }
     }
@@ -72,13 +64,13 @@ function downloadTemplate(
 
   // Sheet 2: Skills
   if (processes.length > 0) {
-    const skillHeaders = ['Employee Number', ...processes.map((p) => p.name)]
+    const skillHeaders = ['Employee Name', ...processes.map((p) => p.name)]
     const skillExamples = employees.length > 0
       ? employees.slice(0, 3).map((emp) => [
-          emp.employee_number,
+          `${emp.first_name} ${emp.last_name}`,
           ...processes.map(() => ''),
         ])
-      : [['EMP-001', ...processes.map(() => '')]]
+      : [['Lars van der Berg', ...processes.map(() => '')]]
     const wsSkills = XLSX.utils.aoa_to_sheet([skillHeaders, ...skillExamples])
     wsSkills['!cols'] = skillHeaders.map((h) => ({ wch: Math.max(h.length + 2, 16) }))
     XLSX.utils.book_append_sheet(wb, wsSkills, 'Skills')
@@ -86,26 +78,87 @@ function downloadTemplate(
 
   // Sheet 3: Reference
   const refRows: string[][] = [
-    ['Available Shifts', 'Available Crews', 'Instructions'],
-    ['', '', 'Fill Sheet 1 (Employees) with employee data.'],
-    ['', '', 'Fill Sheet 2 (Skills) with skill levels 1-5.'],
-    ['', '', '1=Beginner, 2=Basic, 3=Intermediate, 4=Advanced, 5=Expert'],
-    ['', '', 'Leave skill cells empty or 0 to skip.'],
+    ['Available Crews', 'Instructions'],
+    ['', 'Fill Sheet 1 (Employees) with employee data.'],
+    ['', 'Fill Sheet 2 (Skills) with skill levels 1-5.'],
+    ['', '1=Beginner, 2=Basic, 3=Intermediate, 4=Advanced, 5=Expert'],
+    ['', 'Leave skill cells empty or 0 to skip.'],
   ]
-  const maxRows = Math.max(shifts.length, crews.length, 1)
+  const maxRows = Math.max(crews.length, 1)
   for (let i = 0; i < maxRows; i++) {
     if (i < refRows.length - 1) {
-      refRows[i + 1]![0] = shifts[i]?.name ?? ''
-      refRows[i + 1]![1] = crews[i]?.name ?? ''
+      refRows[i + 1]![0] = crews[i]?.name ?? ''
     } else {
-      refRows.push([shifts[i]?.name ?? '', crews[i]?.name ?? '', ''])
+      refRows.push([crews[i]?.name ?? '', ''])
     }
   }
   const wsRef = XLSX.utils.aoa_to_sheet(refRows)
-  wsRef['!cols'] = [{ wch: 25 }, { wch: 25 }, { wch: 55 }]
+  wsRef['!cols'] = [{ wch: 25 }, { wch: 55 }]
   XLSX.utils.book_append_sheet(wb, wsRef, 'Reference')
 
   XLSX.writeFile(wb, 'AstraPlanner_Import_Template.xlsx')
+}
+
+// ── Download pre-filled skills template ─────────────────────────────────────
+
+function downloadSkillsTemplate(
+  employeeNames: string[],
+  processes: { name: string }[],
+) {
+  const wb = XLSX.utils.book_new()
+
+  // Skills matrix: Employee Name + process columns
+  const headers = ['Employee Name', ...processes.map((p) => p.name)]
+  const rows = employeeNames.map((name) => [name, ...processes.map(() => '')])
+  const ws = XLSX.utils.aoa_to_sheet([headers, ...rows])
+  ws['!cols'] = headers.map((h) => ({ wch: Math.max(h.length + 4, 18) }))
+  XLSX.utils.book_append_sheet(wb, ws, 'Skills')
+
+  // Reference sheet
+  const ref = [
+    ['Instructions'],
+    ['Fill in skill levels 1-5 for each employee/process combination.'],
+    ['1 = Beginner, 2 = Basic, 3 = Intermediate, 4 = Advanced, 5 = Expert'],
+    ['Leave cells empty or 0 to skip.'],
+    ['Column order does not matter — processes are matched by name.'],
+  ]
+  const wsRef = XLSX.utils.aoa_to_sheet(ref)
+  wsRef['!cols'] = [{ wch: 60 }]
+  XLSX.utils.book_append_sheet(wb, wsRef, 'Reference')
+
+  XLSX.writeFile(wb, 'AstraPlanner_Skills_Template.xlsx')
+}
+
+// ── Fuzzy process name matching ─────────────────────────────────────────────
+
+const NAME_COLUMN_ALIASES = new Set([
+  'employee name', 'employee', 'name', 'naam', 'medewerker',
+  'werknemer', 'full name', 'volledige naam', 'first name',
+])
+
+function isNameColumn(header: string): boolean {
+  return NAME_COLUMN_ALIASES.has(header.toLowerCase().trim())
+}
+
+function fuzzyMatchProcess(
+  header: string,
+  processes: Map<string, string>,
+): string | null {
+  const norm = (s: string) => s.toLowerCase().replace(/[\s_\-]+/g, ' ').trim()
+  const h = norm(header)
+
+  // Exact match
+  const exact = processes.get(h)
+  if (exact) return exact
+
+  // Try without common suffixes/prefixes
+  for (const [procName, procId] of processes) {
+    if (procName === h) return procId
+    // One contains the other (e.g. "orderpicken" matches "Orderpicken afdeling A")
+    if (procName.includes(h) || h.includes(procName)) return procId
+  }
+
+  return null
 }
 
 // ── Validate parsed data (employees) ────────────────────────────────────────
@@ -133,18 +186,6 @@ function validateData(rows: Record<string, string>[]): ValidationResult {
       errors.push({ row: rowNum, field: 'Weekly Hours', message: 'Must be a number' })
       hasError = true
     }
-    const rate = row['Hourly Rate (\u20AC)']
-    if (rate && isNaN(Number(rate))) {
-      errors.push({ row: rowNum, field: 'Hourly Rate (\u20AC)', message: 'Must be a number' })
-      hasError = true
-    }
-
-    const validContractTypes = ['full_time', 'part_time', 'temporary', 'seasonal', 'contractor']
-    const ct = row['Contract Type'] != null ? String(row['Contract Type']).trim().toLowerCase() : ''
-    if (ct && !validContractTypes.includes(ct)) {
-      errors.push({ row: rowNum, field: 'Contract Type', message: `Must be one of: ${validContractTypes.join(', ')}` })
-      hasError = true
-    }
 
     if (!hasError) {
       valid.push({ row: rowNum, data: row })
@@ -159,63 +200,80 @@ function validateData(rows: Record<string, string>[]): ValidationResult {
 function validateSkillsData(
   rows: Record<string, string>[],
   headers: string[],
-  employees: { id: string; employee_number: string }[],
+  employees: { id: string; employee_number: string; first_name: string; last_name: string }[],
   processes: { id: string; name: string }[],
-  pendingEmployeeNumbers?: string[],
+  pendingEmployeeNames?: string[],
 ): SkillsValidationResult {
-  const empMap = new Map(employees.map((e) => [e.employee_number.toLowerCase(), e.id]))
-  // Also include employee numbers from the Employees sheet that will be created
-  const pendingSet = new Set((pendingEmployeeNumbers ?? []).map((n) => n.toLowerCase()))
-  const procMap = new Map(processes.map((p) => [p.name.toLowerCase(), p.id]))
+  // Match on full name (first + last)
+  const empMap = new Map(employees.map((e) => [`${e.first_name} ${e.last_name}`.toLowerCase(), e.id]))
+  const pendingSet = new Set((pendingEmployeeNames ?? []).map((n) => n.toLowerCase()))
+
+  // Build normalized process map for fuzzy matching
+  const norm = (s: string) => s.toLowerCase().replace(/[\s_\-]+/g, ' ').trim()
+  const procMap = new Map(processes.map((p) => [norm(p.name), p.id]))
 
   const matched: SkillsValidationResult['matched'] = []
   const errors: SkillsValidationResult['errors'] = []
   const matchedEmployeeIds = new Set<string>()
   const matchedProcessIds = new Set<string>()
 
-  // Process headers are all columns after the first (Employee Number)
-  const processHeaders = headers.slice(1)
+  // Auto-detect name column: find first header that looks like a name field
+  let nameColIdx = headers.findIndex((h) => isNameColumn(h))
+  if (nameColIdx === -1) nameColIdx = 0 // fallback: first column is always the name
+
+  // Process headers: all columns except the name column
+  const processHeaders = headers.filter((_, idx) => idx !== nameColIdx)
+
+  // Pre-resolve process columns to IDs (fuzzy match, order-independent)
+  const procColumnMap = new Map<string, string>()
+  const unmatchedColumns: string[] = []
+  for (const header of processHeaders) {
+    const processId = fuzzyMatchProcess(header, procMap)
+    if (processId) {
+      procColumnMap.set(header, processId)
+    } else {
+      unmatchedColumns.push(header)
+    }
+  }
+
+  if (unmatchedColumns.length > 0 && procColumnMap.size === 0) {
+    errors.push({ row: 0, message: `No process columns matched. Check that column names match your process names.` })
+    return { matched, employeesMatched: 0, processesMatched: 0, errors }
+  }
 
   rows.forEach((row, i) => {
     const rowNum = i + 2
-    const empNumRaw = row[headers[0]!]
-    const empNum = empNumRaw != null ? String(empNumRaw).trim() : ''
+    const empNameRaw = row[headers[nameColIdx]!]
+    const empName = empNameRaw != null ? String(empNameRaw).trim() : ''
 
-    if (!empNum) {
-      errors.push({ row: rowNum, message: 'Employee Number is empty' })
+    if (!empName) {
+      errors.push({ row: rowNum, message: 'Employee Name is empty' })
       return
     }
 
-    const employeeId = empMap.get(empNum.toLowerCase())
-    const isPending = !employeeId && pendingSet.has(empNum.toLowerCase())
+    const employeeId = empMap.get(empName.toLowerCase())
+    const isPending = !employeeId && pendingSet.has(empName.toLowerCase())
     if (!employeeId && !isPending) {
-      errors.push({ row: rowNum, message: `Employee "${empNum}" not found` })
+      errors.push({ row: rowNum, message: `Employee "${empName}" not found` })
       return
     }
 
     if (employeeId) matchedEmployeeIds.add(employeeId)
 
-    for (const procHeader of processHeaders) {
-      const rawVal = row[procHeader]
+    for (const [colHeader, processId] of procColumnMap) {
+      const rawVal = row[colHeader]
       const strVal = rawVal != null ? String(rawVal).trim() : ''
       if (!strVal || strVal === '0') continue
 
       const level = Number(strVal)
       if (isNaN(level) || !Number.isInteger(level) || level < 1 || level > 5) {
-        errors.push({ row: rowNum, message: `Invalid skill level "${strVal}" for ${procHeader} (must be 1-5)` })
-        continue
-      }
-
-      const processId = procMap.get(procHeader.toLowerCase())
-      if (!processId) {
-        errors.push({ row: rowNum, message: `Process "${procHeader}" not found` })
+        errors.push({ row: rowNum, message: `Invalid skill level "${strVal}" for ${colHeader} (must be 1-5)` })
         continue
       }
 
       matchedProcessIds.add(processId)
-      // Use employee_id if known, or store employee_number for pending resolution
       matched.push({
-        employee_id: employeeId ?? `pending:${empNum}`,
+        employee_id: employeeId ?? `pending:${empName}`,
         process_id: processId,
         proficiency_level: level,
       })
@@ -240,10 +298,6 @@ export default function EmployeeImportPage() {
   const utils = trpc.useUtils()
   const bulkImport = trpc.workforce.bulkImportEmployees.useMutation()
   const bulkImportSkills = trpc.workforce.bulkImportSkills.useMutation()
-  const shiftsQuery = trpc.org.listShifts.useQuery(
-    { site_id: activeSiteId! },
-    { enabled: !!activeSiteId && !isDemo },
-  )
   const crewsQuery = trpc.org.listCrews.useQuery(
     { site_id: activeSiteId! },
     { enabled: !!activeSiteId && !isDemo },
@@ -271,7 +325,7 @@ export default function EmployeeImportPage() {
   const [showErrors, setShowErrors] = useState(false)
   const [showSkillsErrors, setShowSkillsErrors] = useState(false)
   const [importError, setImportError] = useState<string | null>(null)
-  const [importResult, setImportResult] = useState<{ employees: number; skills: number } | null>(null)
+  const [importResult, setImportResult] = useState<{ employees: number; skills: number; employeeNames: string[] } | null>(null)
 
   // ── Combined file processing ───────────────────────────────────────────────
   const processFile = useCallback(async (file: File) => {
@@ -317,7 +371,7 @@ export default function EmployeeImportPage() {
       // ── Process Sheet 2: Skills (if present) ───────────────────────────
       const skillSheet = wb.Sheets['Skills']
       if (skillSheet) {
-        const employees = (employeesQuery.data?.items ?? []) as { id: string; employee_number: string }[]
+        const employees = (employeesQuery.data?.items ?? []) as { id: string; employee_number: string; first_name: string; last_name: string }[]
         const processes = (processesQuery.data ?? []) as { id: string; name: string }[]
 
         if (employees.length === 0 && processes.length === 0) {
@@ -339,9 +393,13 @@ export default function EmployeeImportPage() {
           const rawData = XLSX.utils.sheet_to_json<Record<string, string>>(skillSheet, { defval: '' })
           if (rawData.length > 0) {
             const headers = Object.keys(rawData[0]!)
-            // Pass employee numbers from the Employees sheet so pending imports are not flagged as errors
-            const pendingEmpNums = empResult.valid.map((v) => String(v.data['Employee Number'] ?? '').trim()).filter(Boolean)
-            const skillResult = validateSkillsData(rawData, headers, employees, processes, pendingEmpNums)
+            // Pass employee names from the Employees sheet so pending imports are not flagged as errors
+            const pendingEmpNames = empResult.valid.map((v) => {
+              const first = String(v.data['First Name'] ?? '').trim()
+              const last = String(v.data['Last Name'] ?? '').trim()
+              return `${first} ${last}`
+            }).filter((n) => n.trim().length > 0)
+            const skillResult = validateSkillsData(rawData, headers, employees, processes, pendingEmpNames)
             setSkillsValidation(skillResult)
           }
         }
@@ -376,28 +434,23 @@ export default function EmployeeImportPage() {
     setImportError(null)
 
     try {
-      const shifts = shiftsQuery.data ?? []
       const crews = crewsQuery.data ?? []
       const roles = rolesQuery.data ?? []
 
       // Step 1: Import employees
       const employees = validation.valid.map((v) => {
         const d = v.data
+        const firstName = String(d['First Name'] ?? '').trim()
+        const lastName = String(d['Last Name'] ?? '').trim()
         const roleValue = String(d['Role'] ?? '').trim()
-        const shiftValue = String(d['Shift'] ?? '').trim()
         const crewValue = String(d['Crew'] ?? '').trim()
 
         return {
-          employee_number: String(d['Employee Number'] ?? '').trim(),
-          first_name: String(d['First Name'] ?? '').trim(),
-          last_name: String(d['Last Name'] ?? '').trim(),
+          first_name: firstName,
+          last_name: lastName,
           department: String(d['Department'] ?? '').trim() || undefined,
-          contract_type: String(d['Contract Type'] ?? '').trim().toLowerCase() as
-            'full_time' | 'part_time' | 'temporary' | 'seasonal' | 'contractor',
           weekly_hours_contracted: Number(d['Weekly Hours']),
-          hourly_rate: Number(d['Hourly Rate (\u20AC)']),
           job_role_id: roleValue ? matchRole(roleValue, roles) ?? undefined : undefined,
-          shift_id: shiftValue ? matchShift(shiftValue, shifts) ?? undefined : undefined,
           crew_id: crewValue ? matchCrew(crewValue, crews) ?? undefined : undefined,
         }
       })
@@ -410,17 +463,17 @@ export default function EmployeeImportPage() {
         // Fetch fresh employee list to get IDs for newly created employees
         const freshEmployees = await utils.workforce.listEmployees.fetch({ site_id: activeSiteId, limit: 1000 })
         const freshEmpMap = new Map(
-          ((freshEmployees?.items ?? []) as { id: string; employee_number: string }[])
-            .map((e) => [e.employee_number.toLowerCase(), e.id])
+          ((freshEmployees?.items ?? []) as { id: string; first_name: string; last_name: string }[])
+            .map((e) => [`${e.first_name} ${e.last_name}`.toLowerCase(), e.id])
         )
 
-        // Resolve pending:EMP-XXX to actual IDs
+        // Resolve pending names to actual IDs
         const resolvedSkills = skillsValidation.matched
           .map((s) => {
             let empId = s.employee_id
             if (empId.startsWith('pending:')) {
-              const empNum = empId.replace('pending:', '').toLowerCase()
-              empId = freshEmpMap.get(empNum) ?? ''
+              const empName = empId.replace('pending:', '').toLowerCase()
+              empId = freshEmpMap.get(empName) ?? ''
             }
             return empId ? { employee_id: empId, process_id: s.process_id, proficiency_level: s.proficiency_level } : null
           })
@@ -432,7 +485,12 @@ export default function EmployeeImportPage() {
         }
       }
 
-      setImportResult({ employees: validation.valid.length, skills: skillCount })
+      const importedNames = validation.valid.map((v) => {
+        const first = String(v.data['First Name'] ?? '').trim()
+        const last = String(v.data['Last Name'] ?? '').trim()
+        return `${first} ${last}`
+      })
+      setImportResult({ employees: validation.valid.length, skills: skillCount, employeeNames: importedNames })
       setState('done')
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Import failed'
@@ -512,18 +570,80 @@ export default function EmployeeImportPage() {
                 {importResult?.employees} employees imported
                 {importResult && importResult.skills > 0 && `, ${importResult.skills} skills updated`}
               </p>
-              <motion.button
-                variants={scalePress} whileTap="press"
-                onClick={() => router.push('/dashboard/employees')}
-                style={{
-                  marginTop: 24, padding: '10px 24px', borderRadius: 'var(--radius-sm)',
-                  background: 'linear-gradient(135deg, var(--primary), #8B5CF6)',
-                  color: '#fff', border: 'none', fontFamily: 'var(--font-body)',
-                  fontSize: '14px', fontWeight: 600, cursor: 'pointer',
-                }}
-              >
-                View Employees
-              </motion.button>
+
+              {/* Skills template download — Step 2 of the two-stage rocket */}
+              {importResult && importResult.skills === 0 && (processesQuery.data ?? []).length > 0 && (
+                <motion.div
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ ...bouncy, delay: 0.3 }}
+                  style={{
+                    marginTop: 20, padding: '16px 20px',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1.5px solid rgba(245,158,11,0.2)',
+                    background: 'linear-gradient(135deg, rgba(245,158,11,0.06), rgba(234,88,12,0.03))',
+                  }}
+                >
+                  <p style={{ fontFamily: 'var(--font-body)', fontSize: '13px', fontWeight: 600, color: 'var(--foreground)', margin: 0 }}>
+                    Next: grade employee skills
+                  </p>
+                  <p style={{ fontFamily: 'var(--font-body)', fontSize: '12px', color: 'var(--muted-foreground)', margin: '4px 0 12px' }}>
+                    Download a pre-filled template with your employees and processes, fill in skill levels 1-5, then upload it here.
+                  </p>
+                  <motion.button
+                    variants={scalePress} whileTap="press"
+                    whileHover={{ y: -1 }}
+                    onClick={() => {
+                      const procs = (processesQuery.data ?? []) as { name: string }[]
+                      downloadSkillsTemplate(importResult.employeeNames, procs)
+                    }}
+                    className="flex items-center gap-2"
+                    style={{
+                      padding: '8px 16px', borderRadius: 'var(--radius-sm)',
+                      background: 'linear-gradient(135deg, #F59E0B, #EA580C)',
+                      color: '#fff', border: 'none', fontFamily: 'var(--font-body)',
+                      fontSize: '13px', fontWeight: 600, cursor: 'pointer',
+                    }}
+                  >
+                    <Download size={14} />
+                    Download Skills Template
+                  </motion.button>
+                </motion.div>
+              )}
+
+              <div className="flex gap-3" style={{ marginTop: 16, justifyContent: 'center' }}>
+                <motion.button
+                  variants={scalePress} whileTap="press"
+                  onClick={() => {
+                    setState('ready')
+                    setValidation(null)
+                    setSkillsValidation(null)
+                    setImportResult(null)
+                    setFileName('')
+                    setImportError(null)
+                  }}
+                  style={{
+                    padding: '10px 24px', borderRadius: 'var(--radius-sm)',
+                    border: '1px solid var(--border)', backgroundColor: 'var(--card)',
+                    color: 'var(--foreground)', fontFamily: 'var(--font-body)',
+                    fontSize: '14px', fontWeight: 600, cursor: 'pointer',
+                  }}
+                >
+                  Upload Skills
+                </motion.button>
+                <motion.button
+                  variants={scalePress} whileTap="press"
+                  onClick={() => router.push('/dashboard/employees')}
+                  style={{
+                    padding: '10px 24px', borderRadius: 'var(--radius-sm)',
+                    background: 'linear-gradient(135deg, var(--primary), #8B5CF6)',
+                    color: '#fff', border: 'none', fontFamily: 'var(--font-body)',
+                    fontSize: '14px', fontWeight: 600, cursor: 'pointer',
+                  }}
+                >
+                  View Employees
+                </motion.button>
+              </div>
             </motion.div>
           ) : (
             <>
@@ -548,7 +668,7 @@ export default function EmployeeImportPage() {
                   onClick={() => {
                     const emps = (employeesQuery.data?.items ?? []) as { employee_number: string; first_name: string; last_name: string }[]
                     const procs = (processesQuery.data ?? []) as { name: string }[]
-                    downloadTemplate(shiftsQuery.data ?? [], crewsQuery.data ?? [], procs, emps)
+                    downloadTemplate(crewsQuery.data ?? [], procs, emps)
                   }}
                   className="flex items-center gap-3 w-full group"
                   style={{

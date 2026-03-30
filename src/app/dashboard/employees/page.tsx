@@ -380,7 +380,7 @@ export default function EmployeesPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkDeleting, setBulkDeleting] = useState(false)
 
-  const deleteEmployee = trpc.workforce.deleteEmployee.useMutation()
+
 
   const toggleSelect = (id: string) => {
     setSelectedIds((prev) => {
@@ -405,6 +405,8 @@ export default function EmployeesPage() {
   }
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [showArchivePrompt, setShowArchivePrompt] = useState(false)
+  const [blockedIds, setBlockedIds] = useState<string[]>([])
 
   const handleBulkDeleteRequest = () => {
     if (isDemo) { toast.showError(DEMO_MSG); return }
@@ -412,28 +414,57 @@ export default function EmployeesPage() {
     setShowDeleteConfirm(true)
   }
 
+  const bulkDelete = trpc.workforce.bulkDeleteEmployees.useMutation()
+  const bulkArchive = trpc.workforce.bulkArchiveEmployees.useMutation()
+
   const handleBulkDelete = async () => {
     setShowDeleteConfirm(false)
+    const ids = [...selectedIds]
+
+    // Optimistic UI: immediately remove cards
+    setAllEmployees((prev) => prev.filter((e) => !selectedIds.has(e.id)))
     setBulkDeleting(true)
-    let deleted = 0
-    const errors: string[] = []
-
-    for (const id of selectedIds) {
-      try {
-        await deleteEmployee.mutateAsync({ id })
-        deleted++
-      } catch (err) {
-        errors.push(err instanceof Error ? err.message : 'Onbekende fout')
-      }
-    }
-
-    setBulkDeleting(false)
     exitSelectionMode()
-    utils.workforce.listEmployees.invalidate()
 
-    if (errors.length > 0) {
-      toast.showError(`${deleted} verwijderd, ${errors.length} mislukt: ${errors[0]}`)
+    try {
+      const result = await bulkDelete.mutateAsync({ ids })
+
+      if (result.blocked.length > 0) {
+        // Some employees have planning history — prompt to archive
+        setBlockedIds(result.blocked)
+        setShowArchivePrompt(true)
+        if (result.deleted > 0) {
+          toast.showSuccess(`${result.deleted} medewerker${result.deleted !== 1 ? 's' : ''} verwijderd`)
+        }
+        // Refetch to restore blocked employees in the list
+        setAllEmployees([])
+        setCursor(undefined)
+        utils.workforce.listEmployees.invalidate()
+      } else {
+        toast.showSuccess(`${result.deleted} medewerker${result.deleted !== 1 ? 's' : ''} verwijderd`)
+        utils.workforce.listEmployees.invalidate()
+      }
+    } catch (err) {
+      toast.showError(err instanceof Error ? err.message : 'Verwijderen mislukt')
+      setAllEmployees([])
+      setCursor(undefined)
+    } finally {
+      setBulkDeleting(false)
     }
+  }
+
+  const handleBulkArchive = async () => {
+    setShowArchivePrompt(false)
+    try {
+      const result = await bulkArchive.mutateAsync({ ids: blockedIds })
+      toast.showSuccess(`${result.archived} medewerker${result.archived !== 1 ? 's' : ''} gearchiveerd`)
+      setAllEmployees([])
+      setCursor(undefined)
+      utils.workforce.listEmployees.invalidate()
+    } catch (err) {
+      toast.showError(err instanceof Error ? err.message : 'Archiveren mislukt')
+    }
+    setBlockedIds([])
   }
 
   const deptsQuery = trpc.org.listDepartments.useQuery(
@@ -1167,6 +1198,107 @@ export default function EmployeesPage() {
                   }}
                 >
                   Verwijder definitief
+                </motion.button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Archive prompt modal — shown when blocked employees have planning history */}
+      <AnimatePresence>
+        {showArchivePrompt && blockedIds.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => { setShowArchivePrompt(false); setBlockedIds([]) }}
+            style={{
+              position: 'fixed', inset: 0, zIndex: 60,
+              background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.92, y: 12 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.92, y: 12 }}
+              transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                width: 400, background: 'var(--card)', borderRadius: 'var(--radius-lg)',
+                border: '1px solid var(--border)', boxShadow: 'var(--elevation-4)',
+                padding: '28px', textAlign: 'center',
+              }}
+            >
+              {/* Archive icon */}
+              <motion.div
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ type: 'spring', stiffness: 500, damping: 20, delay: 0.05 }}
+                style={{
+                  width: 56, height: 56, borderRadius: 16, margin: '0 auto 16px',
+                  background: 'rgba(245,158,11,0.1)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}
+              >
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#F59E0B" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="2" y="3" width="20" height="5" rx="1" />
+                  <path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" />
+                  <path d="M10 12h4" />
+                </svg>
+              </motion.div>
+
+              <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700, color: 'var(--foreground)', margin: '0 0 6px' }}>
+                {blockedIds.length} medewerker{blockedIds.length !== 1 ? 's' : ''} met planhistorie
+              </h3>
+              <p style={{ fontFamily: 'var(--font-body)', fontSize: 13, color: 'var(--muted-foreground)', margin: '0 0 8px', lineHeight: 1.5 }}>
+                Deze medewerkers hebben inplanningen in het verleden en kunnen niet verwijderd worden.
+              </p>
+
+              {/* Show blocked employee names */}
+              <div style={{
+                margin: '0 0 20px', padding: '10px 14px', borderRadius: 'var(--radius-sm)',
+                background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.15)',
+                maxHeight: 120, overflowY: 'auto', textAlign: 'left',
+              }}>
+                {blockedIds.map((id) => {
+                  const emp = allEmployees.find((e) => e.id === id)
+                  return (
+                    <div key={id} style={{ fontFamily: 'var(--font-body)', fontSize: 12, color: 'var(--foreground)', padding: '2px 0' }}>
+                      {emp ? `${emp.first_name} ${emp.last_name}` : id}
+                    </div>
+                  )
+                })}
+              </div>
+
+              <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+                <motion.button
+                  whileHover={{ scale: 1.03 }}
+                  whileTap={{ scale: 0.97 }}
+                  onClick={() => { setShowArchivePrompt(false); setBlockedIds([]) }}
+                  style={{
+                    padding: '10px 24px', borderRadius: 'var(--radius-md)',
+                    border: '1px solid var(--border)', background: 'var(--card)',
+                    fontFamily: 'var(--font-body)', fontSize: 14, fontWeight: 500,
+                    color: 'var(--foreground)', cursor: 'pointer',
+                  }}
+                >
+                  Overslaan
+                </motion.button>
+                <motion.button
+                  whileHover={{ scale: 1.03 }}
+                  whileTap={{ scale: 0.97 }}
+                  onClick={handleBulkArchive}
+                  style={{
+                    padding: '10px 24px', borderRadius: 'var(--radius-md)',
+                    border: 'none', background: 'linear-gradient(135deg, #F59E0B, #EA580C)',
+                    fontFamily: 'var(--font-body)', fontSize: 14, fontWeight: 600,
+                    color: '#fff', cursor: 'pointer',
+                    boxShadow: '0 4px 14px rgba(245,158,11,0.3)',
+                  }}
+                >
+                  Archiveer
                 </motion.button>
               </div>
             </motion.div>
