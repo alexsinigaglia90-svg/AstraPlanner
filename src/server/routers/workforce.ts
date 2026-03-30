@@ -146,7 +146,7 @@ export const workforceRouter = router({
           .single(),
         admin
           .from('employee_skill')
-          .select('id, process_id, proficiency_level, certification_date, expiry_date, last_practiced_date, is_primary_skill')
+          .select('id, process_id, proficiency_level, certification_date, expiry_date, is_primary_skill')
           .eq('employee_id', input.id),
         admin
           .from('employee_availability_override')
@@ -169,7 +169,6 @@ export const workforceRouter = router({
         proficiency_level: s.proficiency_level as number,
         certification_date: (s.certification_date as string) ?? null,
         expiry_date: (s.expiry_date as string) ?? null,
-        last_practiced_date: (s.last_practiced_date as string) ?? null,
       }))
 
       const availability_overrides = ((overridesResult.data ?? []) as Array<Record<string, unknown>>).map((o) => ({
