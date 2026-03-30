@@ -404,13 +404,16 @@ export default function EmployeeImportPage() {
         return
       }
 
+      // Always fetch fresh employee data directly from the server (not from stale cache)
+      const freshData = await utils.workforce.listEmployees.fetch({ site_id: activeSiteId!, limit: 2000 })
+      const existingEmployees = ((freshData?.items ?? []) as { id: string; employee_number: string; first_name: string; last_name: string }[])
+
       const headers = Object.keys(rawData[0]!)
-      const existingEmployees = (employeesQuery.data?.items ?? []) as { id: string; employee_number: string; first_name: string; last_name: string }[]
-      setSkillsValidation(validateSkillsData(rawData, headers, existingEmployees, processes, employeeNames))
+      setSkillsValidation(validateSkillsData(rawData, headers, existingEmployees, processes))
     } catch (err) {
       setSkillsValidation({ matched: [], employeesMatched: 0, processesMatched: 0, errors: [{ row: 0, message: err instanceof Error ? err.message : 'Could not read file' }] })
     }
-  }, [employeesQuery.data, processesQuery.data, employeeNames])
+  }, [processesQuery.data, activeSiteId, utils])
 
   // ── File handlers (route to correct processor based on step) ───────────────
   const activeProcessor = step === 'skills' ? processSkillsFile : processEmployeesFile
