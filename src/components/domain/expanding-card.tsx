@@ -455,55 +455,22 @@ function SkillsTab({
 
   const empQuery = trpc.workforce.getEmployee.useQuery({ id: employeeId })
   const isLoading = empQuery.isLoading
-
-  // Local skills state — syncs from server but updates optimistically
-  const [localSkills, setLocalSkills] = useState<Array<{
-    id: string; process_id: string; process_name: string; proficiency_level: number;
-    certification_date: string | null; expiry_date: string | null; last_practiced_date: string | null
-  }>>([])
-
-  // Sync from server when data arrives
-  useEffect(() => {
-    if (empQuery.data?.skills) {
-      setLocalSkills(empQuery.data.skills)
-    }
-  }, [empQuery.data?.skills])
-
-  const skills = localSkills
+  const skills = empQuery.data?.skills ?? []
 
   const updateSkill = trpc.workforce.updateSkill.useMutation({
-    onSuccess: (_data, variables) => {
-      // Optimistically update local state
-      setLocalSkills((prev) => {
-        const existing = prev.find((s) => s.process_id === variables.process_id)
-        if (existing) {
-          return prev.map((s) => s.process_id === variables.process_id
-            ? { ...s, proficiency_level: variables.proficiency_level }
-            : s
-          )
-        }
-        // New skill added
-        return [...prev, {
-          id: `temp-${Date.now()}`,
-          process_id: variables.process_id,
-          process_name: '',
-          proficiency_level: variables.proficiency_level,
-          certification_date: null,
-          expiry_date: null,
-          last_practiced_date: null,
-        }]
-      })
-      toast.showSuccess('Skill bijgewerkt')
+    onSuccess: () => {
+      void empQuery.refetch()
       void utils.workforce.listSkillMatrix.invalidate()
+      toast.showSuccess('Skill bijgewerkt')
     },
     onError: (err) => toast.showError(`Fout: ${err.message}`),
   })
 
   const deleteSkill = trpc.workforce.deleteSkill.useMutation({
-    onSuccess: (_data, variables) => {
-      setLocalSkills((prev) => prev.filter((s) => s.process_id !== variables.process_id))
-      toast.showSuccess('Skill verwijderd')
+    onSuccess: () => {
+      void empQuery.refetch()
       void utils.workforce.listSkillMatrix.invalidate()
+      toast.showSuccess('Skill verwijderd')
     },
     onError: (err) => toast.showError(`Fout: ${err.message}`),
   })
@@ -665,70 +632,84 @@ function SkillsTab({
       })}
 
       {/* Add skill */}
-      {addingSkill ? (
-        <motion.div
-          variants={fadeInUp}
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 4,
-            maxHeight: 180,
-            overflowY: 'auto',
-            borderRadius: 12,
-            border: '1px solid var(--border)',
-            background: 'rgba(255,255,255,0.8)',
-            padding: 4,
-          }}
-        >
-          {available.length === 0 ? (
-            <div style={{ padding: '12px 14px', fontSize: 12, color: 'var(--muted-foreground)', textAlign: 'center' }}>
-              Alle processen zijn al toegewezen
-            </div>
-          ) : (
-            available.map((p) => (
+      <div style={{ position: 'relative' }}>
+        <AnimatePresence>
+          {addingSkill && (
+            <motion.div
+              initial={{ opacity: 0, y: 10, filter: 'blur(8px)' }}
+              animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+              exit={{ opacity: 0, y: 10, filter: 'blur(8px)' }}
+              transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+              style={{
+                position: 'absolute',
+                bottom: '100%',
+                left: 0,
+                right: 0,
+                marginBottom: 6,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 4,
+                maxHeight: 200,
+                overflowY: 'auto',
+                padding: 6,
+                borderRadius: 14,
+                background: 'rgba(15,23,42,0.85)',
+                backdropFilter: 'blur(12px)',
+                boxShadow: '0 12px 40px rgba(0,0,0,0.25)',
+                zIndex: 50,
+              }}
+            >
+              {available.length === 0 ? (
+                <div style={{ padding: '12px 14px', fontSize: 12, color: '#94A3B8', textAlign: 'center' }}>
+                  Alle processen zijn al toegewezen
+                </div>
+              ) : (
+                available.map((p, i) => (
+                  <motion.button
+                    key={p.id}
+                    initial={{ opacity: 0, x: 12 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: i * 0.04 }}
+                    onClick={() => handleAddSkill(p.id)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      padding: '8px 14px',
+                      borderRadius: 10,
+                      border: 'none',
+                      background: 'transparent',
+                      color: '#f8fafc',
+                      fontFamily: 'var(--font-body)',
+                      fontSize: 13,
+                      fontWeight: 500,
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      width: '100%',
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.1)' }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
+                  >
+                    <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#818CF8', flexShrink: 0 }} />
+                    {p.name}
+                  </motion.button>
+                ))
+              )}
               <motion.button
-                key={p.id}
-                whileHover={{ background: 'rgba(99,102,241,0.08)' }}
                 whileTap={{ scale: 0.97 }}
-                onClick={() => handleAddSkill(p.id)}
+                onClick={() => setAddingSkill(false)}
                 style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  padding: '8px 12px',
-                  borderRadius: 8,
-                  border: 'none',
-                  background: 'transparent',
-                  cursor: 'pointer',
-                  fontFamily: 'var(--font-body)',
-                  fontSize: 13,
-                  fontWeight: 500,
-                  color: 'var(--foreground)',
-                  textAlign: 'left',
-                  width: '100%',
+                  padding: '6px 12px', borderRadius: 8, border: 'none',
+                  background: 'transparent', cursor: 'pointer',
+                  fontFamily: 'var(--font-body)', fontSize: 11, color: '#94A3B8',
                 }}
               >
-                <div style={{
-                  width: 6, height: 6, borderRadius: '50%',
-                  background: 'var(--primary, #6366F1)', flexShrink: 0,
-                }} />
-                {p.name}
+                Annuleren
               </motion.button>
-            ))
+            </motion.div>
           )}
-          <motion.button
-            whileTap={{ scale: 0.97 }}
-            onClick={() => setAddingSkill(false)}
-            style={{
-              padding: '6px 12px', borderRadius: 8, border: 'none',
-              background: 'transparent', cursor: 'pointer',
-              fontFamily: 'var(--font-body)', fontSize: 11, color: 'var(--muted-foreground)',
-            }}
-          >
-            Annuleren
-          </motion.button>
-        </motion.div>
-      ) : (
+        </AnimatePresence>
+      {!addingSkill ? (
         <motion.button
           variants={fadeInUp}
           whileTap={{ scale: 0.97 }}
@@ -747,7 +728,8 @@ function SkillsTab({
         >
           + Skill toevoegen
         </motion.button>
-      )}
+      ) : null}
+      </div>
     </motion.div>
   )
 }

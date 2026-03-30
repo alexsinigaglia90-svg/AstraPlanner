@@ -856,7 +856,7 @@ export const orgRouter = router({
       const admin = createAdminClient()
       const { data, error } = await admin
         .from('job_role')
-        .select('id, name, code, parent_role_id, role_type, productive_pct, follows_shifts, custom_start_time, custom_end_time, custom_days, min_per_shift, department_id, hourly_rate')
+        .select('id, name, code, parent_role_id, role_type, productive_pct, follows_shifts, custom_start_time, custom_end_time, custom_days, min_per_shift, department_id')
         .eq('site_id', input.site_id)
         .eq('organization_id', ctx.organizationId)
         .eq('is_active', true)
