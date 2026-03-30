@@ -427,8 +427,8 @@ export default function EmployeeImportPage() {
     if (e.target) e.target.value = '' // allow re-selecting same file
   }, [activeProcessor])
 
-  // ── Import all (employees + skills) ────────────────────────────────────────
-  const handleImportAll = async () => {
+  // ── Step 1 → 2: Import employees, then move to skills step ──────────────
+  const handleImportEmployees = async () => {
     if (isDemo) { toast.showError('Dit is een demo — start je eigen omgeving om wijzigingen te maken'); return }
     if (!validation || !activeSiteId) return
     setStep('importing')
@@ -438,7 +438,6 @@ export default function EmployeeImportPage() {
       const crews = crewsQuery.data ?? []
       const roles = rolesQuery.data ?? []
 
-      // Step 1: Import employees
       const employees = validation.valid.map((v) => {
         const d = v.data
         const roleValue = String(d['Role'] ?? '').trim()
@@ -454,55 +453,50 @@ export default function EmployeeImportPage() {
       })
 
       await bulkImport.mutateAsync({ site_id: activeSiteId, employees })
-      let skillCount = 0
 
-      // Step 2: Import skills (if any)
-      if (skillsValidation && skillsValidation.matched.length > 0) {
-        // Invalidate cache first, then fetch fresh data to get newly created employee IDs
-        await utils.workforce.listEmployees.invalidate()
-        const freshEmployees = await utils.workforce.listEmployees.fetch({ site_id: activeSiteId, limit: 2000 })
-        const freshEmpMap = new Map(
-          ((freshEmployees?.items ?? []) as { id: string; first_name: string; last_name: string }[])
-            .map((e) => [`${e.first_name} ${e.last_name}`.toLowerCase(), e.id])
-        )
+      // Refresh employee cache so skills step can match against real DB records
+      await utils.workforce.listEmployees.invalidate()
+      await employeesQuery.refetch()
 
-        // Debug: log resolution
-        const pendingCount = skillsValidation.matched.filter((s) => s.employee_id.startsWith('pending:')).length
-        const directCount = skillsValidation.matched.length - pendingCount
-        console.log('[skills-import] matched:', skillsValidation.matched.length, 'pending:', pendingCount, 'direct:', directCount)
-        console.log('[skills-import] freshEmpMap size:', freshEmpMap.size)
-        if (pendingCount > 0) {
-          const samplePending = skillsValidation.matched.find((s) => s.employee_id.startsWith('pending:'))
-          const sampleKey = samplePending?.employee_id.replace('pending:', '').toLowerCase()
-          console.log('[skills-import] sample pending key:', JSON.stringify(sampleKey))
-          const sampleMapKeys = [...freshEmpMap.keys()].slice(0, 3)
-          console.log('[skills-import] sample map keys:', JSON.stringify(sampleMapKeys))
-        }
+      setImportResult({ employees: validation.valid.length, skills: 0 })
 
-        const resolvedSkills = skillsValidation.matched
-          .map((s) => {
-            let empId = s.employee_id
-            if (empId.startsWith('pending:')) {
-              empId = freshEmpMap.get(empId.replace('pending:', '').toLowerCase()) ?? ''
-            }
-            return empId ? { employee_id: empId, process_id: s.process_id, proficiency_level: s.proficiency_level } : null
-          })
-          .filter((s): s is NonNullable<typeof s> => s !== null)
-
-        console.log('[skills-import] resolved:', resolvedSkills.length, 'of', skillsValidation.matched.length)
-
-        if (resolvedSkills.length > 0) {
-          await bulkImportSkills.mutateAsync({ skills: resolvedSkills })
-          skillCount = resolvedSkills.length
-        }
+      if (hasProcesses) {
+        setStep('skills')
+        toast.showSuccess(`${validation.valid.length} medewerkers geïmporteerd — upload nu de skills`)
+      } else {
+        setStep('done')
+        toast.showSuccess(`${validation.valid.length} medewerkers geïmporteerd`)
       }
-
-      setImportResult({ employees: validation.valid.length, skills: skillCount })
-      setStep('done')
-      utils.workforce.listEmployees.invalidate()
     } catch (err) {
       setImportError(err instanceof Error ? err.message : 'Import failed')
-      setStep('skills') // go back so they can retry
+      setStep('employees')
+    }
+  }
+
+  // ── Step 2: Import skills (employees already in DB) ────────────────────────
+  const handleImportSkills = async () => {
+    if (isDemo) { toast.showError('Dit is een demo — start je eigen omgeving om wijzigingen te maken'); return }
+    if (!skillsValidation || !activeSiteId) return
+    setStep('importing')
+    setImportError(null)
+
+    try {
+      // All employee_ids should be real UUIDs now (matched against DB)
+      const validSkills = skillsValidation.matched.filter((s) => !s.employee_id.startsWith('pending:'))
+
+      if (validSkills.length === 0) {
+        setImportError('Geen skills konden gekoppeld worden — controleer of de namen overeenkomen.')
+        setStep('skills')
+        return
+      }
+
+      await bulkImportSkills.mutateAsync({ skills: validSkills })
+      setImportResult((prev) => ({ employees: prev?.employees ?? 0, skills: validSkills.length }))
+      setStep('done')
+      toast.showSuccess(`${validSkills.length} skills geïmporteerd`)
+    } catch (err) {
+      setImportError(err instanceof Error ? err.message : 'Skills import failed')
+      setStep('skills')
     }
   }
 
@@ -681,16 +675,16 @@ export default function EmployeeImportPage() {
 
               {validation && <ValidationSummary v={validation} sv={null} />}
 
-              {/* Next button */}
+              {/* Import employees + next */}
               <div className="flex justify-between">
                 <motion.button variants={scalePress} whileTap="press" onClick={() => router.push('/dashboard/employees')} style={btnStyle(false)}>Annuleren</motion.button>
                 <motion.button
                   variants={scalePress} whileTap="press"
                   disabled={!validation || validation.valid.length === 0}
-                  onClick={() => setStep('skills')}
+                  onClick={handleImportEmployees}
                   style={btnStyle(true, !validation || validation.valid.length === 0)}
                 >
-                  Volgende →
+                  Import {validation?.valid.length ?? 0} medewerkers →
                 </motion.button>
               </div>
             </>
@@ -703,7 +697,7 @@ export default function EmployeeImportPage() {
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', borderRadius: 'var(--radius-sm)', backgroundColor: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.15)' }}>
                 <Check size={14} style={{ color: 'var(--success)' }} />
                 <span style={{ fontFamily: 'var(--font-body)', fontSize: '13px', fontWeight: 600, color: 'var(--success)' }}>
-                  {validation?.valid.length} medewerkers klaar
+                  {importResult?.employees ?? validation?.valid.length} medewerkers geïmporteerd
                 </span>
               </div>
 
@@ -736,19 +730,23 @@ export default function EmployeeImportPage() {
 
               {/* Footer buttons */}
               <div className="flex justify-between">
-                <motion.button variants={scalePress} whileTap="press" onClick={() => setStep('employees')} style={btnStyle(false)}>← Terug</motion.button>
-                <div className="flex gap-2">
-                  <motion.button
-                    variants={scalePress} whileTap="press"
-                    onClick={handleImportAll}
-                    disabled={!validation || validation.valid.length === 0}
-                    style={btnStyle(true, !validation || validation.valid.length === 0)}
-                  >
-                    {skillsValidation && skillsValidation.matched.length > 0
-                      ? `Import ${validation?.valid.length} medewerkers + ${skillsValidation.matched.length} skills`
-                      : `Import ${validation?.valid.length} medewerkers`}
-                  </motion.button>
-                </div>
+                <motion.button
+                  variants={scalePress} whileTap="press"
+                  onClick={() => { setStep('done'); toast.showSuccess(`${importResult?.employees ?? 0} medewerkers geïmporteerd`) }}
+                  style={btnStyle(false)}
+                >
+                  Overslaan
+                </motion.button>
+                <motion.button
+                  variants={scalePress} whileTap="press"
+                  onClick={handleImportSkills}
+                  disabled={!skillsValidation || skillsValidation.matched.length === 0}
+                  style={btnStyle(true, !skillsValidation || skillsValidation.matched.length === 0)}
+                >
+                  {skillsValidation && skillsValidation.matched.length > 0
+                    ? `Import ${skillsValidation.matched.length} skills`
+                    : 'Import skills'}
+                </motion.button>
               </div>
             </>
           )}
