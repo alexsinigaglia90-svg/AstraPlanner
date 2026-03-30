@@ -332,12 +332,14 @@ export const planningRouter = router({
           .eq('organization_id', orgId)
           .limit(1)
           .single(),
-        // Workload plan rows for this plan version
+        // Workload plan rows — try plan-specific first, fall back to site-wide (null plan_version_id)
         admin
           .from('workload_plan')
-          .select('process_id, fte_needed, period_start, period_end')
-          .eq('plan_version_id', input.plan_version_id)
-          .eq('organization_id', orgId),
+          .select('process_id, fte_needed, period_start, period_end, plan_version_id')
+          .eq('site_id', siteId)
+          .eq('organization_id', orgId)
+          .gte('period_start', periodStart)
+          .lte('period_start', periodEnd),
         // Labor rules
         admin
           .from('labor_rule')
@@ -384,10 +386,15 @@ export const planningRouter = router({
       // Generate time slots for each week in the period
       const allTimeSlots = generateTimeSlotsForPeriod(periodStart, periodEnd, workDays, shiftDefs)
 
-      // Build workload rows
-      const workloadRows: WorkloadRow[] = ((workloadResult.data ?? []) as Array<Record<string, unknown>>).map((w) => ({
+      // Build workload rows — prefer plan-specific, fallback to site-wide (null plan_version_id)
+      const allWorkloadRows = ((workloadResult.data ?? []) as Array<Record<string, unknown>>)
+      const planSpecific = allWorkloadRows.filter((w) => w.plan_version_id === input.plan_version_id)
+      const siteWide = allWorkloadRows.filter((w) => w.plan_version_id === null || w.plan_version_id === undefined)
+      const workloadSource = planSpecific.length > 0 ? planSpecific : siteWide
+
+      const workloadRows: WorkloadRow[] = workloadSource.map((w) => ({
         process_id: w.process_id as string,
-        fte_needed: w.fte_needed as number | null,
+        fte_needed: Number(w.fte_needed) || null,
         period_start: w.period_start as string,
         period_end: w.period_end as string,
       }))
