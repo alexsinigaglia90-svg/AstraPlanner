@@ -73,7 +73,8 @@ export const workforceRouter = router({
           `id, employee_number, first_name, last_name, contract_type,
            weekly_hours_contracted, home_site_id, department_id, crew_id, job_role_id, hourly_rate, status,
            is_multi_site_eligible,
-           employee_skill!employee_skill_employee_id_fkey(id)`,
+           employee_skill!employee_skill_employee_id_fkey(id),
+           job_role:job_role_id(hourly_rate)`,
           { count: 'exact' },
         )
         .eq('home_site_id', site_id)
@@ -113,7 +114,7 @@ export const workforceRouter = router({
         department_id: (e.department_id as string) ?? null,
         crew_id: (e.crew_id as string) ?? null,
         job_role_id: (e.job_role_id as string) ?? null,
-        hourly_rate: e.hourly_rate as number,
+        hourly_rate: (e.hourly_rate as number | null) ?? ((e.job_role as Record<string, unknown> | null)?.hourly_rate as number | null) ?? null,
         skill_count: Array.isArray(e.employee_skill)
           ? (e.employee_skill as Array<{ id: string | null }>).filter(
               (s) => s.id != null,
@@ -139,7 +140,8 @@ export const workforceRouter = router({
           .select(
             `id, employee_number, first_name, last_name, email, contract_type,
              weekly_hours_contracted, hourly_rate, home_site_id, department_id, crew_id, job_role_id,
-             is_multi_site_eligible, status, preferences_json`,
+             is_multi_site_eligible, status, preferences_json,
+             job_role:job_role_id(hourly_rate)`,
           )
           .eq('id', input.id)
           .eq('organization_id', ctx.organizationId)
@@ -190,7 +192,7 @@ export const workforceRouter = router({
         email: (employee.email as string) ?? null,
         contract_type: employee.contract_type as string,
         weekly_hours_contracted: employee.weekly_hours_contracted as number,
-        hourly_rate: employee.hourly_rate as number,
+        hourly_rate: (employee.hourly_rate as number | null) ?? ((employee.job_role as Record<string, unknown> | null)?.hourly_rate as number | null) ?? null,
         home_site_id: employee.home_site_id as string,
         department_id: (employee.department_id as string) ?? null,
         crew_id: (employee.crew_id as string) ?? null,

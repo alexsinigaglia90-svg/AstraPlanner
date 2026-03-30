@@ -369,7 +369,7 @@ export const absenceRouter = router({
 
       // Fetch the employee's skills (process IDs)
       const { data: skills, error: skillsError } = await admin
-        .from('employee_process_skill')
+        .from('employee_skill')
         .select('process_id, proficiency_level')
         .eq('employee_id', input.employee_id)
         .eq('organization_id', ctx.organizationId)
@@ -447,7 +447,7 @@ export const absenceRouter = router({
 
       // Fetch absent employee's skills
       const { data: absentSkills, error: absentSkillsError } = await admin
-        .from('employee_process_skill')
+        .from('employee_skill')
         .select('process_id')
         .eq('employee_id', input.employee_id)
         .eq('organization_id', ctx.organizationId)
@@ -470,7 +470,7 @@ export const absenceRouter = router({
 
       // Fetch skills for all candidates
       const { data: allSkills, error: allSkillsError } = await admin
-        .from('employee_process_skill')
+        .from('employee_skill')
         .select('employee_id, process_id, proficiency_level')
         .eq('organization_id', ctx.organizationId)
         .in('employee_id', candidateIds)

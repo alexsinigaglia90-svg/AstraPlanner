@@ -40,7 +40,7 @@ export const workloadRouter = router({
         .eq('site_id', input.site_id)
         .not('demand_type_id', 'is', null)
         .gte('period_start', input.period_start)
-        .lte('period_end', input.period_end)
+        .lte('period_start', input.period_end)
 
       if (fErr) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: fErr.message })
 
@@ -52,7 +52,7 @@ export const workloadRouter = router({
         .not('process_id', 'is', null)
         .is('demand_type_id', null)
         .gte('period_start', input.period_start)
-        .lte('period_end', input.period_end)
+        .lte('period_start', input.period_end)
 
       if (pfErr) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: pfErr.message })
 

@@ -73,6 +73,9 @@ export function computeWorkload(
         const pStart = new Date(demand.period_start)
         const pEnd = new Date(demand.period_end)
         const spanDays = Math.max(1, Math.round((pEnd.getTime() - pStart.getTime()) / (24 * 60 * 60 * 1000)))
+        if (isNaN(spanDays)) {
+          throw new Error(`Invalid period dates: ${demand.period_start} to ${demand.period_end}`)
+        }
         const effectiveHours = spanDays <= 1 ? (effectiveHoursPerWeek / 5) : effectiveHoursPerWeek // 8h/day or 40h/week
         fteNeeded = hoursNeeded / effectiveHours
       } else {

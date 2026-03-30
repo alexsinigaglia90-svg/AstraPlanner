@@ -21,11 +21,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Must be tenant_admin' }, { status: 403 })
   }
 
+  // Verify caller's org matches the target organization (prevent cross-org escalation)
+  const callerOrgId = user.app_metadata?.organization_id
   const body = await request.json()
   const { target_email, organization_id, role } = body
 
   if (!target_email || !organization_id || !role) {
     return NextResponse.json({ error: 'Missing fields: target_email, organization_id, role' }, { status: 400 })
+  }
+
+  if (callerRole !== 'super_admin' && callerOrgId !== organization_id) {
+    return NextResponse.json({ error: 'Cannot assign users to a different organization' }, { status: 403 })
   }
 
   const admin = createAdminClient()

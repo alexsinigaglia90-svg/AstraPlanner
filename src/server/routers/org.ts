@@ -593,6 +593,9 @@ export const orgRouter = router({
       const [eh, em] = input.end_time.split(':')
       const startHours = parseInt(sh ?? '0', 10) + parseInt(sm ?? '0', 10) / 60
       const endHours = parseInt(eh ?? '0', 10) + parseInt(em ?? '0', 10) / 60
+      if (isNaN(startHours) || isNaN(endHours)) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Invalid shift time format' })
+      }
       const isOvernight = input.is_overnight ?? endHours < startHours
       const duration_hours = isOvernight
         ? (24 - startHours) + endHours
@@ -630,6 +633,7 @@ export const orgRouter = router({
         .from('rotation_entry')
         .select('id', { count: 'exact', head: true })
         .eq('shift_pattern_id', input.id)
+        .eq('organization_id', ctx.organizationId)
       assertNoError(countErr, 'deleteShift:checkRotation')
       if (count && count > 0) {
         throw new TRPCError({
@@ -716,8 +720,8 @@ export const orgRouter = router({
     .mutation(async ({ ctx, input }) => {
       const admin = createAdminClient()
       const [empCount, rotCount] = await Promise.all([
-        admin.from('employee').select('id', { count: 'exact', head: true }).eq('crew_id', input.id),
-        admin.from('rotation_entry').select('id', { count: 'exact', head: true }).eq('crew_id', input.id),
+        admin.from('employee').select('id', { count: 'exact', head: true }).eq('crew_id', input.id).eq('organization_id', ctx.organizationId),
+        admin.from('rotation_entry').select('id', { count: 'exact', head: true }).eq('crew_id', input.id).eq('organization_id', ctx.organizationId),
       ])
       assertNoError(empCount.error, 'deleteCrew:checkEmployees')
       assertNoError(rotCount.error, 'deleteCrew:checkRotation')

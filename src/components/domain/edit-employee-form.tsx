@@ -16,7 +16,7 @@ interface EditEmployeeFormProps {
     email: string | null
     contract_type: string
     weekly_hours_contracted: number
-    hourly_rate: number
+    hourly_rate: number | null
     home_site_id: string
     department_id: string | null
     is_multi_site_eligible: boolean
@@ -101,7 +101,7 @@ export function EditEmployeeForm({ employee, onClose, onDeleted, isNew }: EditEm
     email: employee.email ?? '',
     contract_type: employee.contract_type,
     weekly_hours_contracted: employee.weekly_hours_contracted,
-    hourly_rate: employee.hourly_rate,
+    hourly_rate: employee.hourly_rate ?? 0,
     is_multi_site_eligible: employee.is_multi_site_eligible,
     status: employee.status,
     crew_id: employee.crew_id ?? '',

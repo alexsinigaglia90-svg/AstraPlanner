@@ -131,6 +131,7 @@ export const demandRouter = router({
           updated_at,
           demand_type:demand_type_id(name)
         `)
+        .eq('organization_id', ctx.organizationId)
         .eq('site_id', input.site_id)
         .gte('period_start', input.period_start)
         .lte('period_end', input.period_end)
