@@ -225,19 +225,29 @@ export const workloadRouter = router({
       // ── A7: Employee availability (fallback to contracted hours) ───────
       // Full rotation-based availability is deferred to Phase 5.
       // For now, use weekly_hours_contracted as available_hours.
+      // IMPORTANT: An employee can only work on 1 process at a time.
+      // Split their available hours across the processes they're skilled for.
+      const skillCountPerEmployee = new Map<string, number>()
+      for (const es of empSkills ?? []) {
+        skillCountPerEmployee.set(es.employee_id, (skillCountPerEmployee.get(es.employee_id) ?? 0) + 1)
+      }
+
       const employeeAvail: EmployeeAvailability[] = (empSkills ?? []).map(es => {
         const emp = es.employee as unknown as {
           id: string
           weekly_hours_contracted: number
           job_role: { productive_pct: number } | null
         }
+        const totalSkills = skillCountPerEmployee.get(es.employee_id) ?? 1
+        const weeklyHours = absentEmployeeIds.has(es.employee_id)
+          ? 0
+          : (Number(emp?.weekly_hours_contracted) || DEFAULT_WEEKLY_HOURS)
         return {
           employee_id: es.employee_id,
           process_id: es.process_id,
           proficiency_level: es.proficiency_level,
-          available_hours: absentEmployeeIds.has(es.employee_id)
-            ? 0
-            : (Number(emp?.weekly_hours_contracted) || DEFAULT_WEEKLY_HOURS),
+          // Split hours evenly across processes this employee is qualified for
+          available_hours: weeklyHours / totalSkills,
           productive_pct: Number(emp?.job_role?.productive_pct) || 0.95,
         }
       })
