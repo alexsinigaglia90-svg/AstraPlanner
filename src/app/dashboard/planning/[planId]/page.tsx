@@ -8,6 +8,9 @@ import { trpc } from '@/lib/trpc/client'
 import { containerStagger, fadeInUp, bouncy, scalePress } from '@/lib/motion'
 import { useToast } from '@/components/domain/toast'
 import { KpiHeroCard } from '@/components/domain/kpi-hero-card'
+import { PlanGrid } from '@/components/domain/plan-grid'
+import { PlanCoverageBar } from '@/components/domain/plan-coverage-bar'
+import { useSiteStore } from '@/stores/site-store'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -140,6 +143,7 @@ export default function PlanDetailPage() {
   const toast = useToast()
   const utils = trpc.useUtils()
 
+  const { activeSiteId } = useSiteStore()
   const [pendingAction, setPendingAction] = useState<string | null>(null)
 
   // ── Data query ───────────────────────────────────────────────────────────
@@ -151,6 +155,25 @@ export default function PlanDetailPage() {
   } = trpc.planning.getPlanVersion.useQuery(
     { id: planId },
     { enabled: !!planId },
+  )
+
+  // ── Grid data queries ───────────────────────────────────────────────────
+
+  const employeesQ = trpc.workforce.listEmployees.useQuery(
+    { site_id: activeSiteId!, limit: 999 },
+    { enabled: !!activeSiteId },
+  )
+  const processesQ = trpc.org.listProcesses.useQuery(
+    { site_id: activeSiteId! },
+    { enabled: !!activeSiteId },
+  )
+  const departmentsQ = trpc.org.listDepartments.useQuery(
+    { site_id: activeSiteId! },
+    { enabled: !!activeSiteId },
+  )
+  const shiftsQ = trpc.org.listShifts.useQuery(
+    { site_id: activeSiteId! },
+    { enabled: !!activeSiteId },
   )
 
   // ── Mutations ────────────────────────────────────────────────────────────
@@ -441,31 +464,28 @@ export default function PlanDetailPage() {
         />
       </div>
 
-      {/* ── Placeholder for assignments grid ───────────────────────────── */}
-      <motion.div
-        variants={fadeInUp}
-        style={{
-          background: 'var(--card)',
-          border: '1px solid var(--border)',
-          borderRadius: 24,
-          padding: '48px 28px',
-          boxShadow: 'var(--elevation-1)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          minHeight: 240,
-        }}
-      >
-        <span
-          style={{
-            fontFamily: 'var(--font-body)',
-            fontSize: 15,
-            color: 'var(--muted-foreground)',
-            fontWeight: 500,
-          }}
-        >
-          Toewijzingen worden hier getoond
-        </span>
+      {/* ── Assignment Heatmap Grid ────────────────────────────────────── */}
+      <motion.div variants={fadeInUp}>
+        <PlanGrid
+          assignments={plan.assignments}
+          employees={(employeesQ.data?.items ?? []) as Array<{ id: string; first_name: string; last_name: string; department_id: string | null }>}
+          processes={(processesQ.data ?? []) as Array<{ id: string; name: string; department_id: string }>}
+          departments={(departmentsQ.data ?? []) as Array<{ id: string; name: string; color: string }>}
+          shifts={(shiftsQ.data ?? []) as Array<{ id: string; name: string }>}
+          weekStart={plan.plan_period_start}
+          workDays={[1, 2, 3, 4, 5]}
+          isEditable={status === 'draft' || status === 'optimized'}
+        />
+      </motion.div>
+
+      {/* ── Coverage summary bar ────────────────────────────────────────── */}
+      <motion.div variants={fadeInUp}>
+        <PlanCoverageBar
+          assignments={plan.assignments}
+          processes={(processesQ.data ?? []) as Array<{ id: string; name: string; department_id: string }>}
+          departments={(departmentsQ.data ?? []) as Array<{ id: string; name: string; color: string }>}
+          demandByProcess={null}
+        />
       </motion.div>
     </motion.div>
   )
