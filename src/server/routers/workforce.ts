@@ -297,7 +297,7 @@ export const workforceRouter = router({
               department: z.string().optional(),
               contract_type: ContractTypeSchema.optional(),
               weekly_hours_contracted: z.number().positive(),
-              hourly_rate: z.number().nonnegative().optional(),
+              hourly_rate: z.number().positive().optional(),
               job_role_id: z.string().uuid().optional(),
               crew_id: z.string().uuid().optional(),
             }),
@@ -379,7 +379,7 @@ export const workforceRouter = router({
         last_name: e.last_name,
         contract_type: e.contract_type ?? 'full_time',
         weekly_hours_contracted: e.weekly_hours_contracted,
-        hourly_rate: e.hourly_rate ?? 0,
+        hourly_rate: e.hourly_rate ?? null,
         home_site_id: site_id,
         hire_date: today,
         department_id: e.department
