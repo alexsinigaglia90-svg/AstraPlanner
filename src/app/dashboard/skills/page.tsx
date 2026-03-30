@@ -165,12 +165,31 @@ export default function SkillMatrixPage() {
   const skillData = isDemo ? demoSkillEntries : (skills.data ?? [])
   const deptData = isDemo ? demoDepartments.filter((d) => d.site_id === activeSiteId) : (departments.data ?? [])
 
-  const skillMap = useMemo(() => {
+  // Base skill map from server data
+  const serverSkillMap = useMemo(() => {
     const map = new Map<string, number>()
     for (const s of skillData) {
       map.set(`${s.employee_id}:${s.process_id}`, s.proficiency_level)
     }
     return map
+  }, [skillData])
+
+  // Local optimistic overrides layered on top of server data
+  const [optimisticOverrides, setOptimisticOverrides] = useState<Map<string, number>>(new Map())
+
+  // Merged skill map: optimistic overrides take precedence
+  const skillMap = useMemo(() => {
+    const map = new Map(serverSkillMap)
+    for (const [key, val] of optimisticOverrides) {
+      if (val === 0) map.delete(key)
+      else map.set(key, val)
+    }
+    return map
+  }, [serverSkillMap, optimisticOverrides])
+
+  // Clear optimistic overrides when server data refreshes
+  useEffect(() => {
+    setOptimisticOverrides(new Map())
   }, [skillData])
 
   const deptMap = useMemo(() => {
@@ -259,71 +278,89 @@ export default function SkillMatrixPage() {
   )
 
   const handleDialSelect = useCallback(
-    async (level: number) => {
+    (level: number) => {
       if (!dialCell) return
       if (isDemo) { showError(DEMO_MSG); setDialCell(null); return }
-      try {
-        await updateSkill.mutateAsync({
-          employee_id: dialCell.empId,
-          process_id: dialCell.procId,
-          proficiency_level: level,
-        })
-        await utils.workforce.listSkillMatrix.invalidate()
-        setDialCell(null)
-      } catch (err) {
-        showError(err instanceof Error ? err.message : 'Failed to update skill')
-      }
+      const key = `${dialCell.empId}:${dialCell.procId}`
+
+      // Optimistic: update UI instantly
+      setOptimisticOverrides((prev) => new Map(prev).set(key, level))
+      setDialCell(null)
+
+      // Fire-and-forget: server call in background
+      updateSkill.mutate(
+        { employee_id: dialCell.empId, process_id: dialCell.procId, proficiency_level: level },
+        {
+          onSuccess: () => utils.workforce.listSkillMatrix.invalidate(),
+          onError: (err) => {
+            setOptimisticOverrides((prev) => { const next = new Map(prev); next.delete(key); return next })
+            showError(err instanceof Error ? err.message : 'Failed to update skill')
+          },
+        },
+      )
     },
-    [dialCell, updateSkill, utils, showError],
+    [dialCell, updateSkill, utils, showError, isDemo],
   )
 
-  const handleDialRemove = useCallback(async () => {
+  const handleDialRemove = useCallback(() => {
     if (!dialCell) return
     if (isDemo) { showError(DEMO_MSG); setDialCell(null); return }
-    try {
-      await deleteSkill.mutateAsync({
-        employee_id: dialCell.empId,
-        process_id: dialCell.procId,
-      })
-      await utils.workforce.listSkillMatrix.invalidate()
-      setDialCell(null)
-    } catch (err) {
-      showError(err instanceof Error ? err.message : 'Failed to remove skill')
-    }
-  }, [dialCell, deleteSkill, utils, showError])
+    const key = `${dialCell.empId}:${dialCell.procId}`
+
+    // Optimistic: remove from UI instantly
+    setOptimisticOverrides((prev) => new Map(prev).set(key, 0))
+    setDialCell(null)
+
+    deleteSkill.mutate(
+      { employee_id: dialCell.empId, process_id: dialCell.procId },
+      {
+        onSuccess: () => utils.workforce.listSkillMatrix.invalidate(),
+        onError: (err) => {
+          setOptimisticOverrides((prev) => { const next = new Map(prev); next.delete(key); return next })
+          showError(err instanceof Error ? err.message : 'Failed to remove skill')
+        },
+      },
+    )
+  }, [dialCell, deleteSkill, utils, showError, isDemo])
+
+  const bulkImportSkillsMutation = trpc.workforce.bulkImportSkills.useMutation()
 
   const handleBulkSet = useCallback(
-    async (level: number | 'clear') => {
+    (level: number | 'clear') => {
       if (!selectedEmployee) return
       if (isDemo) { showError(DEMO_MSG); return }
-      try {
-        if (level === 'clear') {
-          for (const proc of orderedProcesses) {
-            const existing = skillMap.get(`${selectedEmployee}:${proc.id}`) ?? 0
-            if (existing > 0) {
-              await deleteSkill.mutateAsync({
-                employee_id: selectedEmployee,
-                process_id: proc.id,
-              })
-            }
-          }
-        } else {
-          for (const proc of orderedProcesses) {
-            await updateSkill.mutateAsync({
-              employee_id: selectedEmployee,
-              process_id: proc.id,
-              proficiency_level: level,
-            })
-          }
+
+      // Optimistic: update all cells instantly
+      setOptimisticOverrides((prev) => {
+        const next = new Map(prev)
+        for (const proc of orderedProcesses) {
+          next.set(`${selectedEmployee}:${proc.id}`, level === 'clear' ? 0 : level)
         }
-        await utils.workforce.listSkillMatrix.invalidate()
-        showSuccess(level === 'clear' ? 'All skills cleared' : `All skills set to level ${level}`)
-        setSelectedEmployee(null)
-      } catch (err) {
-        showError(err instanceof Error ? err.message : 'Failed to update skills')
+        return next
+      })
+
+      const empId = selectedEmployee
+      setSelectedEmployee(null)
+
+      if (level === 'clear') {
+        // Batch delete: fire individual deletes but don't await them sequentially
+        const toDelete = orderedProcesses.filter((proc) => (serverSkillMap.get(`${empId}:${proc.id}`) ?? 0) > 0)
+        Promise.all(toDelete.map((proc) => deleteSkill.mutateAsync({ employee_id: empId, process_id: proc.id })))
+          .then(() => utils.workforce.listSkillMatrix.invalidate())
+          .catch((err) => showError(err instanceof Error ? err.message : 'Failed to clear skills'))
+      } else {
+        // Batch set: use bulkImportSkills for one server call
+        const skills = orderedProcesses.map((proc) => ({ employee_id: empId, process_id: proc.id, proficiency_level: level }))
+        bulkImportSkillsMutation.mutate(
+          { skills },
+          {
+            onSuccess: () => { utils.workforce.listSkillMatrix.invalidate(); showSuccess(`All skills set to level ${level}`) },
+            onError: (err) => showError(err instanceof Error ? err.message : 'Failed to update skills'),
+          },
+        )
       }
     },
-    [selectedEmployee, orderedProcesses, skillMap, updateSkill, deleteSkill, utils, showError, showSuccess],
+    [selectedEmployee, orderedProcesses, serverSkillMap, deleteSkill, bulkImportSkillsMutation, utils, showError, showSuccess, isDemo],
   )
 
   const handleEmployeeNameClick = useCallback(
