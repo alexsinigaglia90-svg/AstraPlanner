@@ -489,8 +489,28 @@ export const planningRouter = router({
         time_budget_seconds: input.time_budget_seconds ?? 30,
       }
 
+      // Debug: log solver input summary
+      console.log('[solver] Input summary:', {
+        timeSlots: allTimeSlots.length,
+        demand: demand.length,
+        demandSample: demand.slice(0, 3).map(d => ({ proc: d.process_id.slice(0, 8), slot: d.time_slot_id, fte: d.required_fte })),
+        employees: employees.length,
+        employeeSkillCounts: employees.slice(0, 3).map(e => ({ id: e.id.slice(0, 8), skills: e.skills.length, avail: e.availability.length })),
+        workloadRowsTotal: workloadSource.length,
+        workloadRowsSample: workloadSource.slice(0, 3).map(w => ({ proc: (w.process_id as string).slice(0, 8), fte: w.fte_needed, start: w.period_start })),
+        lockedAssignments: lockedAssignments.length,
+      })
+
       // d. Run solver
       const solverOutput = solveGreedy(solverInput, laborRules)
+
+      console.log('[solver] Output:', {
+        assignments: solverOutput.assignments.length,
+        unmetDemand: solverOutput.unmet_demand.length,
+        coverage: solverOutput.metrics.coverage_percentage,
+        cost: solverOutput.metrics.total_cost,
+        solveTime: solverOutput.metrics.solve_time_ms,
+      })
 
       // Validate output
       const validation = validateSolverOutput(solverOutput)
