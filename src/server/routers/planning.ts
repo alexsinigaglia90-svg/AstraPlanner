@@ -124,7 +124,7 @@ export const planningRouter = router({
       const [planResult, assignmentsResult] = await Promise.all([
         admin
           .from('plan_version')
-          .select('id, version_number, name, plan_period_start, plan_period_end, status, created_at, updated_at, summary_metrics_json, optimizer_config_json, notes')
+          .select('id, version_number, name, plan_period_start, plan_period_end, status, site_id, created_at, updated_at, summary_metrics_json, optimizer_config_json, notes')
           .eq('id', input.id)
           .eq('organization_id', ctx.organizationId)
           .single(),
@@ -163,6 +163,7 @@ export const planningRouter = router({
         plan_period_start: plan.plan_period_start as string,
         plan_period_end: plan.plan_period_end as string,
         status: plan.status as string,
+        site_id: plan.site_id as string,
         created_at: plan.created_at as string,
         updated_at: plan.updated_at as string,
         summary_metrics_json: (plan.summary_metrics_json as Record<string, unknown>) ?? null,
