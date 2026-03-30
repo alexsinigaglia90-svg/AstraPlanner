@@ -26,6 +26,7 @@
     "ai": "^6.0.140",
     "framer-motion": "^11.15.0",
     "free-email-domains": "^1.2.25",
+    "highs": "^1.8.0",
     "lucide-react": "^0.468.0",
     "next": "16.2.1",
     "next-intl": "^4.8.3",
