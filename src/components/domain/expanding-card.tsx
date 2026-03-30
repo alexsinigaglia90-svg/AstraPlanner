@@ -537,9 +537,14 @@ function SkillsTab({
         </div>
       )}
 
-      {skills.map((skill) => {
+      {skills.map((skill, idx) => {
         const name = processMap.get(skill.process_id) ?? 'Onbekend'
         const isHolding = holdingId === skill.process_id
+        const isActive = activeGrader === skill.process_id
+        const level = Number(skill.proficiency_level)
+        const levelLabels = ['', 'Beginner', 'Basis', 'Competent', 'Gevorderd', 'Expert']
+        const levelColors = ['', '#94A3B8', '#F59E0B', '#6366F1', '#8B5CF6', '#10B981']
+
         return (
           <motion.div
             key={skill.process_id}
@@ -553,60 +558,110 @@ function SkillsTab({
                 animate={{ width: '100%' }}
                 transition={{ duration: 1.2, ease: 'linear' }}
                 style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  bottom: 0,
-                  borderRadius: 12,
-                  background: 'rgba(239,68,68,0.12)',
-                  pointerEvents: 'none',
-                  zIndex: 1,
+                  position: 'absolute', top: 0, left: 0, bottom: 0,
+                  borderRadius: 16, background: 'rgba(239,68,68,0.12)',
+                  pointerEvents: 'none', zIndex: 1,
                 }}
               />
             )}
             <motion.div
-              whileTap={{ scale: 0.98 }}
+              whileHover={{ y: -2, boxShadow: '0 6px 20px rgba(99,102,241,0.12)' }}
+              whileTap={{ scale: 0.97 }}
               onMouseDown={() => handleHoldStart(skill.process_id)}
               onMouseUp={handleHoldEnd}
               onMouseLeave={handleHoldEnd}
               onTouchStart={() => handleHoldStart(skill.process_id)}
               onTouchEnd={handleHoldEnd}
-              onClick={() => setActiveGrader(activeGrader === skill.process_id ? null : skill.process_id)}
+              onClick={() => setActiveGrader(isActive ? null : skill.process_id)}
+              transition={bouncy}
               style={{
                 position: 'relative',
-                background: 'rgba(255,255,255,0.7)',
+                background: isActive
+                  ? 'linear-gradient(135deg, rgba(99,102,241,0.08), rgba(139,92,246,0.04))'
+                  : 'rgba(255,255,255,0.7)',
                 backdropFilter: 'blur(8px)',
-                border: '1px solid rgba(255,255,255,0.5)',
-                borderRadius: 12,
-                padding: '10px 14px',
+                border: isActive
+                  ? '2px solid rgba(99,102,241,0.3)'
+                  : '1px solid rgba(255,255,255,0.5)',
+                borderRadius: 16,
+                padding: '12px 16px',
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'space-between',
+                gap: 12,
                 cursor: 'pointer',
                 userSelect: 'none',
                 zIndex: 2,
               }}
             >
-              <span
-                style={{
-                  fontFamily: 'var(--font-body)',
-                  fontSize: 13,
-                  fontWeight: 600,
+              {/* Mini proficiency ring */}
+              <div style={{ position: 'relative', width: 36, height: 36, flexShrink: 0 }}>
+                <svg width="36" height="36" viewBox="0 0 36 36">
+                  <circle cx="18" cy="18" r="14" fill="none" stroke="rgba(100,116,139,0.1)" strokeWidth="3" />
+                  <motion.circle
+                    cx="18" cy="18" r="14"
+                    fill="none"
+                    stroke={levelColors[level] ?? '#6366F1'}
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                    strokeDasharray={`${(level / 5) * 88} 88`}
+                    transform="rotate(-90 18 18)"
+                    initial={{ strokeDasharray: '0 88' }}
+                    animate={{ strokeDasharray: `${(level / 5) * 88} 88` }}
+                    transition={{ duration: 0.8, delay: idx * 0.1, ease: [0.22, 1, 0.36, 1] }}
+                  />
+                </svg>
+                <div style={{
+                  position: 'absolute', inset: 0,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 700,
+                  color: levelColors[level] ?? 'var(--foreground)',
+                }}>
+                  {level}
+                </div>
+              </div>
+
+              {/* Name + level label */}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{
+                  fontFamily: 'var(--font-body)', fontSize: 13, fontWeight: 600,
                   color: 'var(--foreground)',
+                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                }}>
+                  {name}
+                </div>
+                <div style={{
+                  fontFamily: 'var(--font-body)', fontSize: 10, fontWeight: 500,
+                  color: levelColors[level] ?? 'var(--muted-foreground)',
+                  marginTop: 1,
+                }}>
+                  {levelLabels[level] ?? `Level ${level}`}
+                </div>
+              </div>
+
+              {/* Tap hint */}
+              <motion.div
+                animate={{ x: isActive ? 0 : [0, 3, 0] }}
+                transition={{ repeat: isActive ? 0 : Infinity, repeatDelay: 3, duration: 0.4 }}
+                style={{
+                  fontSize: 11, color: 'var(--muted-foreground)', opacity: 0.5,
+                  fontFamily: 'var(--font-body)',
                 }}
               >
-                {name}
-              </span>
-              <StarRating level={Number(skill.proficiency_level)} />
+                {isActive ? '✕' : 'Tap →'}
+              </motion.div>
             </motion.div>
 
             {/* Radial grader popover */}
             <AnimatePresence>
-              {activeGrader === skill.process_id && (
-                <div
+              {isActive && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.9, y: 8 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.9, y: 8 }}
+                  transition={bouncy}
                   style={{
                     position: 'absolute',
-                    top: -140,
+                    top: -160,
                     left: '50%',
                     transform: 'translateX(-50%)',
                     zIndex: 60,
@@ -614,7 +669,7 @@ function SkillsTab({
                 >
                   <RadialSkillGrader
                     processName={name}
-                    level={Number(skill.proficiency_level)}
+                    level={level}
                     onChange={(lvl) => {
                       updateSkill.mutate({
                         employee_id: employeeId,
@@ -624,7 +679,7 @@ function SkillsTab({
                     }}
                     onClose={() => setActiveGrader(null)}
                   />
-                </div>
+                </motion.div>
               )}
             </AnimatePresence>
           </motion.div>
