@@ -12,8 +12,9 @@ import { Avatar } from '@/components/domain/avatar'
 import { AnimatedCounter } from '@/components/domain/animated-counter'
 import { getDeptColor } from '@/components/domain/process-card'
 import { useToast } from '@/components/domain/toast'
+import { RadialSkillGrader } from '@/components/domain/radial-skill-grader'
 
-// ── Proficiency config ───────────────────────────────────────────────────────
+// ── Proficiency config (for cell colors) ─────────────────────────────────────
 
 const LEVELS: Record<number, { label: string; color: string }> = {
   0: { label: 'None',     color: 'transparent' },
@@ -24,256 +25,12 @@ const LEVELS: Record<number, { label: string; color: string }> = {
   5: { label: 'Expert',   color: 'rgba(245,158,11,0.5)' },
 }
 
-const ARC_COLORS: Record<number, string> = {
-  1: 'rgba(148,163,184,0.5)',
-  2: 'rgba(99,102,241,0.45)',
-  3: 'rgba(99,102,241,0.65)',
-  4: 'rgba(16,185,129,0.6)',
-  5: 'rgba(245,158,11,0.7)',
-}
-
-const ARC_GLOW: Record<number, string> = {
-  1: 'rgba(148,163,184,0.4)',
-  2: 'rgba(99,102,241,0.4)',
-  3: 'rgba(99,102,241,0.5)',
-  4: 'rgba(16,185,129,0.5)',
-  5: 'rgba(245,158,11,0.5)',
-}
-
 const DIAL_COLORS: Record<number, string> = {
   1: 'rgba(99,102,241,0.35)',
   2: 'rgba(99,102,241,0.50)',
   3: 'rgba(99,102,241,0.70)',
   4: 'rgba(16,185,129,0.65)',
   5: 'rgba(245,158,11,0.75)',
-}
-
-// ── SVG Arc Helpers ──────────────────────────────────────────────────────────
-
-function polarToCartesian(cx: number, cy: number, r: number, angleDeg: number) {
-  const rad = ((angleDeg - 90) * Math.PI) / 180
-  return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) }
-}
-
-function describeArc(
-  cx: number,
-  cy: number,
-  r: number,
-  startAngle: number,
-  endAngle: number,
-): string {
-  const start = polarToCartesian(cx, cy, r, endAngle)
-  const end = polarToCartesian(cx, cy, r, startAngle)
-  const largeArc = endAngle - startAngle <= 180 ? '0' : '1'
-  return `M ${start.x} ${start.y} A ${r} ${r} 0 ${largeArc} 0 ${end.x} ${end.y}`
-}
-
-function arcMidpoint(cx: number, cy: number, r: number, startAngle: number, endAngle: number) {
-  const mid = (startAngle + endAngle) / 2
-  return polarToCartesian(cx, cy, r, mid)
-}
-
-// ── Animated Radial Skill Grader ─────────────────────────────────────────────
-
-interface RadialDialProps {
-  currentLevel: number
-  onSelect: (level: number) => void
-  onRemove: () => void
-  onClose: () => void
-  cellRect: DOMRect
-  containerRect: DOMRect
-}
-
-function RadialDial({ currentLevel, onSelect, onRemove, onClose, cellRect, containerRect }: RadialDialProps) {
-  const dialRef = useRef<HTMLDivElement>(null)
-  const [hoveredSegment, setHoveredSegment] = useState<number | null>(null)
-
-  // Position: center horizontally on cell, above or below depending on space
-  const cellCenterX = cellRect.left - containerRect.left + cellRect.width / 2
-  const cellTop = cellRect.top - containerRect.top
-  const cellBottom = cellRect.bottom - containerRect.top
-  const spaceAbove = cellTop
-  const dialHeight = 120
-
-  const positionAbove = spaceAbove > dialHeight + 8
-  const top = positionAbove ? cellTop - dialHeight - 6 : cellBottom + 6
-  const left = Math.max(4, cellCenterX - 90)
-
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (dialRef.current && !dialRef.current.contains(e.target as Node)) {
-        onClose()
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [onClose])
-
-  // Arc config
-  const svgW = 160
-  const svgH = 90
-  const cx = svgW / 2
-  const cy = svgH - 6
-  const radius = 64
-  const strokeW = 14
-
-  // 5 segments: 180deg to 360deg
-  const segments = [1, 2, 3, 4, 5].map((lvl, i) => {
-    const startAngle = 180 + i * 36
-    const endAngle = 180 + (i + 1) * 36
-    return { lvl, startAngle, endAngle }
-  })
-
-  // Indicator position for current level
-  const indicatorPos = currentLevel > 0
-    ? arcMidpoint(cx, cy, radius, segments[currentLevel - 1]!.startAngle, segments[currentLevel - 1]!.endAngle)
-    : null
-
-  const displayLevel = hoveredSegment ?? currentLevel
-
-  return (
-    <motion.div
-      ref={dialRef}
-      initial={{ opacity: 0, scale: 0.8, filter: 'blur(4px)', y: positionAbove ? 10 : -10 }}
-      animate={{ opacity: 1, scale: 1, filter: 'blur(0px)', y: 0 }}
-      exit={{ opacity: 0, scale: 0.9, filter: 'blur(2px)' }}
-      transition={bouncy}
-      style={{
-        position: 'absolute',
-        top,
-        left,
-        width: 180,
-        zIndex: 50,
-        backgroundColor: 'rgba(15,10,30,0.92)',
-        backdropFilter: 'blur(16px)',
-        WebkitBackdropFilter: 'blur(16px)',
-        borderRadius: 16,
-        boxShadow: '0 16px 48px rgba(0,0,0,0.35), 0 2px 12px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.06)',
-        padding: '14px 10px 10px',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        gap: 4,
-      }}
-      onClick={(e) => e.stopPropagation()}
-    >
-      {/* SVG Arc */}
-      <svg width={svgW} height={svgH} style={{ overflow: 'visible' }}>
-        {/* Background arc track */}
-        <path
-          d={describeArc(cx, cy, radius, 180, 360)}
-          fill="none"
-          stroke="rgba(255,255,255,0.06)"
-          strokeWidth={strokeW + 4}
-          strokeLinecap="round"
-        />
-
-        {/* Segments */}
-        {segments.map(({ lvl, startAngle, endAngle }) => {
-          const isActive = lvl === currentLevel
-          const isHovered = lvl === hoveredSegment
-          return (
-            <path
-              key={lvl}
-              d={describeArc(cx, cy, radius, startAngle + 1, endAngle - 1)}
-              fill="none"
-              stroke={ARC_COLORS[lvl]}
-              strokeWidth={isActive ? strokeW + 2 : isHovered ? strokeW + 1 : strokeW}
-              strokeLinecap="round"
-              style={{
-                cursor: 'pointer',
-                filter: isActive ? `drop-shadow(0 0 6px ${ARC_GLOW[lvl]})` : isHovered ? `drop-shadow(0 0 4px ${ARC_GLOW[lvl]})` : 'none',
-                transition: 'stroke-width 0.2s, filter 0.2s',
-              }}
-              onMouseEnter={() => setHoveredSegment(lvl)}
-              onMouseLeave={() => setHoveredSegment(null)}
-              onClick={() => onSelect(lvl)}
-            />
-          )
-        })}
-
-        {/* Indicator dot */}
-        {indicatorPos && (
-          <motion.circle
-            animate={{ cx: indicatorPos.x, cy: indicatorPos.y }}
-            transition={{ type: 'spring', stiffness: 300, damping: 20, mass: 0.8 }}
-            r={5}
-            fill="#fff"
-            style={{
-              filter: `drop-shadow(0 0 6px ${ARC_GLOW[currentLevel] ?? 'rgba(255,255,255,0.5)'})`,
-            }}
-          />
-        )}
-
-        {/* Level numbers on each segment */}
-        {segments.map(({ lvl, startAngle, endAngle }) => {
-          const pos = arcMidpoint(cx, cy, radius, startAngle, endAngle)
-          const isActive = lvl === currentLevel
-          return (
-            <text
-              key={`label-${lvl}`}
-              x={pos.x}
-              y={pos.y + (lvl === currentLevel ? 0 : 0)}
-              textAnchor="middle"
-              dominantBaseline="central"
-              style={{
-                fontSize: 9,
-                fontWeight: 700,
-                fontFamily: 'var(--font-mono)',
-                fill: isActive ? '#fff' : 'rgba(255,255,255,0.4)',
-                pointerEvents: 'none',
-                userSelect: 'none',
-              }}
-            >
-              {lvl}
-            </text>
-          )
-        })}
-      </svg>
-
-      {/* Level label */}
-      <AnimatePresence mode="wait">
-        <motion.span
-          key={displayLevel}
-          initial={{ opacity: 0, y: 4 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -4 }}
-          transition={{ duration: 0.15 }}
-          style={{
-            fontFamily: 'var(--font-display)',
-            fontSize: 12,
-            fontWeight: 700,
-            color: displayLevel > 0 ? '#fff' : 'rgba(255,255,255,0.4)',
-            letterSpacing: '0.03em',
-            minHeight: 16,
-          }}
-        >
-          {displayLevel > 0 ? LEVELS[displayLevel]!.label : 'Select level'}
-        </motion.span>
-      </AnimatePresence>
-
-      {/* Remove link */}
-      {currentLevel > 0 && (
-        <button
-          onClick={onRemove}
-          style={{
-            background: 'none',
-            border: 'none',
-            color: 'rgba(239,68,68,0.7)',
-            fontFamily: 'var(--font-body)',
-            fontSize: 10,
-            fontWeight: 500,
-            cursor: 'pointer',
-            padding: '1px 6px',
-            borderRadius: 4,
-            marginTop: 0,
-          }}
-        >
-          Remove
-        </button>
-      )}
-    </motion.div>
-  )
 }
 
 // ── Stat Card (compact) ─────────────────────────────────────────────────────
@@ -1115,18 +872,37 @@ export default function SkillMatrixPage() {
             </tbody>
           </table>
 
-          {/* Radial Dial Overlay */}
+          {/* Radial Skill Grader Overlay */}
           <AnimatePresence>
-            {dialCell && containerRef.current && (
-              <RadialDial
-                currentLevel={skillMap.get(`${dialCell.empId}:${dialCell.procId}`) ?? 0}
-                onSelect={handleDialSelect}
-                onRemove={handleDialRemove}
-                onClose={() => setDialCell(null)}
-                cellRect={dialCell.rect}
-                containerRect={containerRef.current.getBoundingClientRect()}
-              />
-            )}
+            {dialCell && containerRef.current && (() => {
+              const containerRect = containerRef.current!.getBoundingClientRect()
+              const cellCenterX = dialCell.rect.left - containerRect.left + dialCell.rect.width / 2
+              const cellTop = dialCell.rect.top - containerRect.top
+              const cellBottom = dialCell.rect.bottom - containerRect.top
+              const dialHeight = 280
+              const positionAbove = cellTop > dialHeight + 8
+              const top = positionAbove ? cellTop - dialHeight - 6 : cellBottom + 6
+              const left = Math.max(4, Math.min(cellCenterX - 130, containerRect.width - 270))
+              const currentLevel = skillMap.get(`${dialCell.empId}:${dialCell.procId}`) ?? 0
+              const proc = orderedProcesses.find((p) => p.id === dialCell.procId)
+
+              return (
+                <div style={{ position: 'absolute', top, left, zIndex: 50 }}>
+                  <RadialSkillGrader
+                    processName={proc?.name ?? ''}
+                    level={currentLevel}
+                    onChange={(lvl) => {
+                      if (lvl === 0) {
+                        handleDialRemove()
+                      } else {
+                        handleDialSelect(lvl)
+                      }
+                    }}
+                    onClose={() => setDialCell(null)}
+                  />
+                </div>
+              )
+            })()}
           </AnimatePresence>
 
           {/* CSS for hover "+" visibility */}
