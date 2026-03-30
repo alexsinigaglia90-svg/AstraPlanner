@@ -317,6 +317,7 @@ export default function EmployeeImportPage() {
 
   // ── Combined import state ──────────────────────────────────────────────────
   const fileRef = useRef<HTMLInputElement>(null)
+  const [importMode, setImportMode] = useState<'employees' | 'skills'>('employees')
   const [state, setState] = useState<ImportState>('ready')
   const [dragOver, setDragOver] = useState(false)
   const [fileName, setFileName] = useState('')
@@ -413,18 +414,105 @@ export default function EmployeeImportPage() {
     }
   }, [employeesQuery.data, processesQuery.data])
 
+  // ── Skills-only file processing ─────────────────────────────────────────────
+  const processSkillsFile = useCallback(async (file: File) => {
+    setFileName(file.name)
+    setState('validating')
+    setValidation(null)
+    setSkillsValidation(null)
+    setImportError(null)
+    setImportResult(null)
+    setShowErrors(false)
+    setShowSkillsErrors(false)
+
+    try {
+      const buffer = await new Promise<ArrayBuffer>((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve(reader.result as ArrayBuffer)
+        reader.onerror = () => reject(new Error('Failed to read file'))
+        reader.readAsArrayBuffer(file)
+      })
+
+      const wb = XLSX.read(new Uint8Array(buffer), { type: 'array' })
+      const skillSheet = wb.Sheets['Skills'] ?? wb.Sheets[wb.SheetNames[0]!]
+      if (!skillSheet) throw new Error('No Skills sheet found')
+
+      const employees = (employeesQuery.data?.items ?? []) as { id: string; employee_number: string; first_name: string; last_name: string }[]
+      const processes = (processesQuery.data ?? []) as { id: string; name: string }[]
+
+      if (processes.length === 0) {
+        setSkillsValidation({
+          matched: [], employeesMatched: 0, processesMatched: 0,
+          errors: [{ row: 0, message: 'No processes found for this site. Add processes first.' }],
+        })
+        setState('error')
+        return
+      }
+
+      const rawData = XLSX.utils.sheet_to_json<Record<string, string>>(skillSheet, { defval: '' })
+      if (rawData.length === 0) {
+        setSkillsValidation({
+          matched: [], employeesMatched: 0, processesMatched: 0,
+          errors: [{ row: 0, message: 'No data rows found in Skills sheet.' }],
+        })
+        setState('error')
+        return
+      }
+
+      const headers = Object.keys(rawData[0]!)
+      const skillResult = validateSkillsData(rawData, headers, employees, processes)
+      setSkillsValidation(skillResult)
+      setState(skillResult.matched.length > 0 ? 'ready' : 'error')
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Could not read file'
+      setSkillsValidation({
+        matched: [], employeesMatched: 0, processesMatched: 0,
+        errors: [{ row: 0, message: msg }],
+      })
+      setState('error')
+    }
+  }, [employeesQuery.data, processesQuery.data])
+
+  // ── Skills-only import ──────────────────────────────────────────────────────
+  const handleSkillsImport = async () => {
+    if (isDemo) { toast.showError('Dit is een demo — start je eigen omgeving om wijzigingen te maken'); return }
+    if (!skillsValidation || !activeSiteId) return
+    setState('importing')
+    setImportError(null)
+
+    try {
+      const skills = skillsValidation.matched.filter((s) => !s.employee_id.startsWith('pending:'))
+      if (skills.length === 0) {
+        setImportError('No valid skills to import — check that employee names match.')
+        setState('error')
+        return
+      }
+
+      await bulkImportSkills.mutateAsync({ skills })
+      setImportResult({ employees: 0, skills: skills.length, employeeNames: [] })
+      setState('done')
+      toast.showSuccess(`${skills.length} skills geïmporteerd`)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Import failed'
+      setImportError(msg)
+      setState('error')
+    }
+  }
+
   // ── Drag/drop handlers ─────────────────────────────────────────────────────
+  const activeProcessor = importMode === 'skills' ? processSkillsFile : processFile
+
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault()
     setDragOver(false)
     const file = e.dataTransfer.files[0]
-    if (file) processFile(file)
-  }, [processFile])
+    if (file) activeProcessor(file)
+  }, [activeProcessor])
 
   const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
-    if (file) processFile(file)
-  }, [processFile])
+    if (file) activeProcessor(file)
+  }, [activeProcessor])
 
   // ── Combined import ────────────────────────────────────────────────────────
   const handleImport = async () => {
@@ -527,10 +615,10 @@ export default function EmployeeImportPage() {
             </div>
             <div>
               <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '18px', fontWeight: 700, color: 'var(--foreground)', margin: 0 }}>
-                Import Employees
+                {importMode === 'skills' ? 'Import Skills' : 'Import Employees'}
               </h2>
               <p style={{ fontFamily: 'var(--font-body)', fontSize: '12px', color: 'var(--muted-foreground)', margin: 0 }}>
-                Download template, fill in your data, upload
+                {importMode === 'skills' ? 'Upload your filled skills template' : 'Download template, fill in your data, upload'}
               </p>
             </div>
           </div>
@@ -567,8 +655,9 @@ export default function EmployeeImportPage() {
                 Import Complete
               </h3>
               <p style={{ fontFamily: 'var(--font-body)', fontSize: '14px', color: 'var(--muted-foreground)', marginTop: 8 }}>
-                {importResult?.employees} employees imported
-                {importResult && importResult.skills > 0 && `, ${importResult.skills} skills updated`}
+                {importResult && importResult.employees > 0 && `${importResult.employees} employees imported`}
+                {importResult && importResult.employees > 0 && importResult.skills > 0 && ', '}
+                {importResult && importResult.skills > 0 && `${importResult.skills} skills ${importResult.employees > 0 ? 'updated' : 'geïmporteerd'}`}
               </p>
 
               {/* Skills template download — Step 2 of the two-stage rocket */}
@@ -615,6 +704,7 @@ export default function EmployeeImportPage() {
                 <motion.button
                   variants={scalePress} whileTap="press"
                   onClick={() => {
+                    setImportMode('skills')
                     setState('ready')
                     setValidation(null)
                     setSkillsValidation(null)
@@ -647,8 +737,8 @@ export default function EmployeeImportPage() {
             </motion.div>
           ) : (
             <>
-              {/* Step 1: Download template */}
-              <div>
+              {/* Step 1: Download template (employees mode only) */}
+              {importMode === 'employees' && <div>
                 <div className="flex items-center gap-2 mb-3">
                   <div style={{
                     width: 24, height: 24, borderRadius: 'var(--radius-full)',
@@ -701,26 +791,26 @@ export default function EmployeeImportPage() {
                     </svg>
                   </div>
                 </motion.button>
-              </div>
+              </div>}
 
               {/* Step 2: Upload filled template */}
               <div>
                 <div className="flex items-center gap-2 mb-3">
                   <div style={{
                     width: 24, height: 24, borderRadius: 'var(--radius-full)',
-                    background: validation
+                    background: (validation || skillsValidation)
                       ? 'linear-gradient(135deg, var(--success), #059669)'
                       : 'linear-gradient(135deg, var(--muted), var(--muted))',
-                    color: validation ? '#fff' : 'var(--muted-foreground)',
+                    color: (validation || skillsValidation) ? '#fff' : 'var(--muted-foreground)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     fontFamily: 'var(--font-body)', fontSize: '11px', fontWeight: 700,
-                    boxShadow: validation ? '0 2px 8px rgba(16,185,129,0.25)' : 'none',
+                    boxShadow: (validation || skillsValidation) ? '0 2px 8px rgba(16,185,129,0.25)' : 'none',
                     transition: 'all 0.3s',
                   }}>
-                    {validation ? <Check size={13} /> : '2'}
+                    {(validation || skillsValidation) ? <Check size={13} /> : importMode === 'skills' ? '1' : '2'}
                   </div>
                   <span style={{ fontFamily: 'var(--font-body)', fontSize: '14px', fontWeight: 600, color: 'var(--foreground)' }}>
-                    Upload your filled template
+                    {importMode === 'skills' ? 'Upload your skills file' : 'Upload your filled template'}
                   </span>
                 </div>
 
@@ -895,8 +985,55 @@ export default function EmployeeImportPage() {
                 </motion.div>
               )}
 
-              {/* Import button */}
-              {validation && validation.valid.length > 0 && (
+              {/* Skills-only validation results */}
+              {importMode === 'skills' && !validation && skillsValidation && (
+                <AnimatePresence>
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    transition={bouncy}
+                  >
+                    <div className="flex items-center gap-4 mb-2 flex-wrap">
+                      {skillsValidation.matched.length > 0 && (
+                        <div className="flex items-center gap-1.5">
+                          <Check size={14} style={{ color: 'var(--success)' }} />
+                          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '13px', fontWeight: 600, color: 'var(--success)' }}>
+                            {skillsValidation.matched.length} skills voor {skillsValidation.employeesMatched} medewerkers
+                          </span>
+                        </div>
+                      )}
+                      {skillsValidation.errors.length > 0 && (
+                        <button onClick={() => setShowSkillsErrors(!showSkillsErrors)}
+                          className="flex items-center gap-1.5"
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                        >
+                          <AlertCircle size={14} style={{ color: 'var(--destructive)' }} />
+                          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '13px', fontWeight: 600, color: 'var(--destructive)' }}>
+                            {skillsValidation.errors.length} errors
+                          </span>
+                        </button>
+                      )}
+                    </div>
+                    {showSkillsErrors && skillsValidation.errors.length > 0 && (
+                      <div style={{
+                        maxHeight: 120, overflowY: 'auto',
+                        backgroundColor: 'rgba(239,68,68,0.04)', border: '1px solid rgba(239,68,68,0.1)',
+                        borderRadius: 'var(--radius-sm)', padding: '8px 12px',
+                      }}>
+                        {skillsValidation.errors.slice(0, 20).map((err, i) => (
+                          <div key={i} style={{ fontFamily: 'var(--font-body)', fontSize: '11px', color: 'var(--destructive)', padding: '2px 0' }}>
+                            Row {err.row}: {err.message}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </motion.div>
+                </AnimatePresence>
+              )}
+
+              {/* Import button — employees mode */}
+              {importMode === 'employees' && validation && validation.valid.length > 0 && (
                 <motion.button
                   variants={scalePress} whileTap="press"
                   onClick={handleImport}
@@ -923,6 +1060,35 @@ export default function EmployeeImportPage() {
                       Import {validation.valid.length} employees
                       {skillsValidation && skillsValidation.matched.length > 0 && ` + ${skillsValidation.matched.length} skills`}
                     </>
+                  )}
+                </motion.button>
+              )}
+
+              {/* Import button — skills mode */}
+              {importMode === 'skills' && skillsValidation && skillsValidation.matched.length > 0 && (
+                <motion.button
+                  variants={scalePress} whileTap="press"
+                  onClick={handleSkillsImport}
+                  disabled={state === 'importing'}
+                  className="w-full flex items-center justify-center gap-2"
+                  style={{
+                    padding: '12px 20px', borderRadius: 'var(--radius-sm)',
+                    background: 'linear-gradient(135deg, var(--primary), #8B5CF6)',
+                    color: '#fff', border: 'none', fontFamily: 'var(--font-body)',
+                    fontSize: '14px', fontWeight: 600,
+                    cursor: state === 'importing' ? 'not-allowed' : 'pointer',
+                    opacity: state === 'importing' ? 0.7 : 1,
+                  }}
+                >
+                  {state === 'importing' ? (
+                    <>
+                      <svg className="animate-spin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                        <circle cx="12" cy="12" r="10" strokeOpacity="0.3" /><path d="M12 2a10 10 0 0 1 10 10" strokeLinecap="round" />
+                      </svg>
+                      Importing...
+                    </>
+                  ) : (
+                    <>Import {skillsValidation.matched.length} skills</>
                   )}
                 </motion.button>
               )}
