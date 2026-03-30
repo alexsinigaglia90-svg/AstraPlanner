@@ -360,6 +360,32 @@ export function RadialSkillGrader({
           </AnimatePresence>
         </div>
       </motion.div>
+
+      {/* Remove button — only shown when a level is set */}
+      {level > 0 && (
+        <motion.button
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.15 }}
+          onClick={() => onChange(0)}
+          style={{
+            background: 'none',
+            border: 'none',
+            color: 'rgba(239,68,68,0.7)',
+            fontFamily: 'var(--font-body, "DM Sans", sans-serif)',
+            fontSize: 11,
+            fontWeight: 600,
+            cursor: 'pointer',
+            padding: '2px 8px',
+            borderRadius: 6,
+            marginTop: -2,
+          }}
+          onMouseEnter={(e) => { (e.target as HTMLElement).style.color = '#EF4444' }}
+          onMouseLeave={(e) => { (e.target as HTMLElement).style.color = 'rgba(239,68,68,0.7)' }}
+        >
+          Verwijder
+        </motion.button>
+      )}
     </motion.div>
   )
 }

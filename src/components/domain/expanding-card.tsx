@@ -544,14 +544,23 @@ function SkillsTab({
 
   const handleLevelChange = useCallback(
     (processId: string, newLevel: number) => {
-      pendingRef.current.set(processId, newLevel)
-      setLocalSkills((prev) =>
-        prev.map((s) =>
-          s.process_id === processId ? { ...s, proficiency_level: newLevel } : s
+      if (newLevel === 0) {
+        // Remove skill
+        deleteSkill.mutate({ employee_id: employeeId, process_id: processId })
+        pendingRef.current.delete(processId)
+        newSkillsRef.current.delete(processId)
+        setLocalSkills((prev) => prev.filter((s) => s.process_id !== processId))
+        setActiveGrader(null)
+      } else {
+        pendingRef.current.set(processId, newLevel)
+        setLocalSkills((prev) =>
+          prev.map((s) =>
+            s.process_id === processId ? { ...s, proficiency_level: newLevel } : s
+          )
         )
-      )
+      }
     },
-    [],
+    [deleteSkill, employeeId],
   )
 
   const handleAddSkill = useCallback(
