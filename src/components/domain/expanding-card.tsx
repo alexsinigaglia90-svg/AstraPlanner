@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation'
 import { trpc } from '@/lib/trpc/client'
 import { bouncy, snappy, gentle, containerStagger, fadeInUp } from '@/lib/motion'
 import { useToast } from '@/components/domain/toast'
-import { GlassSelect } from '@/components/domain/glass-select'
+// GlassSelect replaced with native <select> to fix positioning in fixed overlay
 import { RadialSkillGrader } from '@/components/domain/radial-skill-grader'
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -299,33 +299,70 @@ function ProfileTab({
         />
       )}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-        <GlassSelect
-          label="Afdeling"
-          value={deptId}
-          onChange={setDeptId}
-          options={departments.map((d) => ({ value: d.id, label: d.name }))}
-          placeholder="Kies afdeling..."
-        />
-        <GlassSelect
-          label="Crew"
-          value={crewId}
-          onChange={setCrewId}
-          options={crews.map((c) => ({ value: c.id, label: c.name }))}
-          placeholder="Kies crew..."
-        />
-        <GlassSelect
-          label="Role"
-          value={roleId}
-          onChange={setRoleId}
-          options={roles.map((r) => ({ value: r.id, label: r.name }))}
-          placeholder="Kies rol..."
-        />
-        <GlassSelect
-          label="Contract"
-          value={contract}
-          onChange={setContract}
-          options={CONTRACT_OPTIONS}
-        />
+        {/* Afdeling */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <label style={{ fontFamily: 'var(--font-body)', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--muted-foreground)' }}>
+            Afdeling
+          </label>
+          <select
+            value={deptId}
+            onChange={(e) => setDeptId(e.target.value)}
+            style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)', background: 'rgba(255,255,255,0.7)', backdropFilter: 'blur(8px)', fontFamily: 'var(--font-body)', fontSize: 13, color: 'var(--foreground)', outline: 'none', cursor: 'pointer', appearance: 'none', WebkitAppearance: 'none' }}
+          >
+            <option value="">Kies afdeling...</option>
+            {departments.map((d) => (
+              <option key={d.id} value={d.id}>{d.name}</option>
+            ))}
+          </select>
+        </div>
+        {/* Crew */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <label style={{ fontFamily: 'var(--font-body)', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--muted-foreground)' }}>
+            Crew
+          </label>
+          <select
+            value={crewId}
+            onChange={(e) => setCrewId(e.target.value)}
+            style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)', background: 'rgba(255,255,255,0.7)', backdropFilter: 'blur(8px)', fontFamily: 'var(--font-body)', fontSize: 13, color: 'var(--foreground)', outline: 'none', cursor: 'pointer', appearance: 'none', WebkitAppearance: 'none' }}
+          >
+            <option value="">Kies crew...</option>
+            {crews.map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+        </div>
+        {/* Role */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <label style={{ fontFamily: 'var(--font-body)', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--muted-foreground)' }}>
+            Role
+          </label>
+          <select
+            value={roleId}
+            onChange={(e) => setRoleId(e.target.value)}
+            style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)', background: 'rgba(255,255,255,0.7)', backdropFilter: 'blur(8px)', fontFamily: 'var(--font-body)', fontSize: 13, color: 'var(--foreground)', outline: 'none', cursor: 'pointer', appearance: 'none', WebkitAppearance: 'none' }}
+          >
+            <option value="">Kies rol...</option>
+            {roles.map((r) => (
+              <option key={r.id} value={r.id}>{r.name}</option>
+            ))}
+          </select>
+        </div>
+        {/* Contract */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <label style={{ fontFamily: 'var(--font-body)', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--muted-foreground)' }}>
+            Contract
+          </label>
+          <select
+            value={contract}
+            onChange={(e) => setContract(e.target.value)}
+            style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)', background: 'rgba(255,255,255,0.7)', backdropFilter: 'blur(8px)', fontFamily: 'var(--font-body)', fontSize: 13, color: 'var(--foreground)', outline: 'none', cursor: 'pointer', appearance: 'none', WebkitAppearance: 'none' }}
+          >
+            <option value="">Kies...</option>
+            {CONTRACT_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+        </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           <label
             style={{
@@ -357,12 +394,22 @@ function ProfileTab({
             }}
           />
         </div>
-        <GlassSelect
-          label="Status"
-          value={status}
-          onChange={setStatus}
-          options={STATUS_OPTIONS}
-        />
+        {/* Status */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <label style={{ fontFamily: 'var(--font-body)', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--muted-foreground)' }}>
+            Status
+          </label>
+          <select
+            value={status}
+            onChange={(e) => setStatus(e.target.value)}
+            style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)', background: 'rgba(255,255,255,0.7)', backdropFilter: 'blur(8px)', fontFamily: 'var(--font-body)', fontSize: 13, color: 'var(--foreground)', outline: 'none', cursor: 'pointer', appearance: 'none', WebkitAppearance: 'none' }}
+          >
+            <option value="">Kies...</option>
+            {STATUS_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+        </div>
       </div>
       <motion.button
         whileTap={{ scale: 0.97 }}
@@ -407,26 +454,56 @@ function SkillsTab({
   const [holdingId, setHoldingId] = useState<string | null>(null)
 
   const empQuery = trpc.workforce.getEmployee.useQuery({ id: employeeId })
-  const skills = empQuery.data?.skills ?? []
   const isLoading = empQuery.isLoading
 
-  const refetchSkills = () => {
-    void empQuery.refetch()
-    void utils.workforce.listSkillMatrix.invalidate()
-  }
+  // Local skills state — syncs from server but updates optimistically
+  const [localSkills, setLocalSkills] = useState<Array<{
+    id: string; process_id: string; process_name: string; proficiency_level: number;
+    certification_date: string | null; expiry_date: string | null; last_practiced_date: string | null
+  }>>([])
+
+  // Sync from server when data arrives
+  useEffect(() => {
+    if (empQuery.data?.skills) {
+      setLocalSkills(empQuery.data.skills)
+    }
+  }, [empQuery.data?.skills])
+
+  const skills = localSkills
 
   const updateSkill = trpc.workforce.updateSkill.useMutation({
-    onSuccess: () => {
-      refetchSkills()
+    onSuccess: (_data, variables) => {
+      // Optimistically update local state
+      setLocalSkills((prev) => {
+        const existing = prev.find((s) => s.process_id === variables.process_id)
+        if (existing) {
+          return prev.map((s) => s.process_id === variables.process_id
+            ? { ...s, proficiency_level: variables.proficiency_level }
+            : s
+          )
+        }
+        // New skill added
+        return [...prev, {
+          id: `temp-${Date.now()}`,
+          process_id: variables.process_id,
+          process_name: '',
+          proficiency_level: variables.proficiency_level,
+          certification_date: null,
+          expiry_date: null,
+          last_practiced_date: null,
+        }]
+      })
       toast.showSuccess('Skill bijgewerkt')
+      void utils.workforce.listSkillMatrix.invalidate()
     },
     onError: (err) => toast.showError(`Fout: ${err.message}`),
   })
 
   const deleteSkill = trpc.workforce.deleteSkill.useMutation({
-    onSuccess: () => {
-      refetchSkills()
+    onSuccess: (_data, variables) => {
+      setLocalSkills((prev) => prev.filter((s) => s.process_id !== variables.process_id))
       toast.showSuccess('Skill verwijderd')
+      void utils.workforce.listSkillMatrix.invalidate()
     },
     onError: (err) => toast.showError(`Fout: ${err.message}`),
   })
@@ -440,16 +517,9 @@ function SkillsTab({
       setAddingSkill(false)
       updateSkill.mutate(
         { employee_id: employeeId, process_id: processId, proficiency_level: 1 },
-        {
-          onSuccess: () => {
-            toast.showSuccess('Skill toegevoegd')
-            refetchSkills()
-          },
-          onError: (err) => toast.showError(`Skill toevoegen mislukt: ${err.message}`),
-        },
       )
     },
-    [updateSkill, employeeId, toast, refetchSkills],
+    [updateSkill, employeeId],
   )
 
   const handleHoldStart = useCallback(
