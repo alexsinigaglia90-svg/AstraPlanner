@@ -342,7 +342,7 @@ function ProfileTab({
             style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)', background: 'rgba(255,255,255,0.7)', backdropFilter: 'blur(8px)', fontFamily: 'var(--font-body)', fontSize: 13, color: 'var(--foreground)', outline: 'none', cursor: 'pointer', appearance: 'none', WebkitAppearance: 'none' }}
           >
             <option value="">Kies rol...</option>
-            {roles.map((r) => (
+            {roles.filter((r, i, arr) => arr.findIndex((x) => x.name === r.name) === i).map((r) => (
               <option key={r.id} value={r.id}>{r.name}</option>
             ))}
           </select>
