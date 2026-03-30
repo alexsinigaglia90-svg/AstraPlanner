@@ -17,13 +17,11 @@ interface AddEmployeeWizardProps {
 }
 
 interface EmployeeFormData {
-  employee_number: string
   first_name: string
   last_name: string
   email: string
   contract_type: string
   weekly_hours_contracted: number
-  hourly_rate: number
   department_id: string
   crew_id: string
   job_role_id: string
@@ -75,13 +73,11 @@ export function AddEmployeeWizard({ open, onClose, siteId, onSaved }: AddEmploye
   const [error, setError] = useState<string | null>(null)
 
   const [form, setForm] = useState<EmployeeFormData>({
-    employee_number: '',
     first_name: '',
     last_name: '',
     email: '',
     contract_type: 'full_time',
     weekly_hours_contracted: 40,
-    hourly_rate: 0,
     department_id: '',
     crew_id: '',
     job_role_id: '',
@@ -96,13 +92,11 @@ export function AddEmployeeWizard({ open, onClose, siteId, onSaved }: AddEmploye
       setSaving(false)
       setError(null)
       setForm({
-        employee_number: '',
         first_name: '',
         last_name: '',
         email: '',
         contract_type: 'full_time',
         weekly_hours_contracted: 40,
-        hourly_rate: 0,
         department_id: '',
         crew_id: '',
         job_role_id: '',
@@ -114,20 +108,20 @@ export function AddEmployeeWizard({ open, onClose, siteId, onSaved }: AddEmploye
   const update = (key: keyof EmployeeFormData, value: unknown) =>
     setForm((prev) => ({ ...prev, [key]: value }))
 
-  const canStep1 = form.first_name.trim() && form.last_name.trim() && form.employee_number.trim()
+  const canStep1 = form.first_name.trim() && form.last_name.trim()
 
   const handleSave = async () => {
     setSaving(true)
     setError(null)
     try {
+      const empNum = `EMP-${Date.now().toString(36)}`
       await upsert.mutateAsync({
-        employee_number: form.employee_number.trim(),
+        employee_number: empNum,
         first_name: form.first_name.trim(),
         last_name: form.last_name.trim(),
         email: form.email.trim() || null,
         contract_type: form.contract_type as 'full_time' | 'part_time' | 'temporary' | 'seasonal' | 'contractor',
         weekly_hours_contracted: form.weekly_hours_contracted,
-        hourly_rate: form.hourly_rate,
         home_site_id: siteId,
         department_id: form.department_id || null,
         crew_id: form.crew_id || null,
@@ -255,22 +249,14 @@ export function AddEmployeeWizard({ open, onClose, siteId, onSaved }: AddEmploye
                       </div>
                     </div>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                        <label style={{ fontFamily: 'var(--font-body)', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--muted-foreground)' }}>
-                          Personeelsnr. <span style={{ color: 'var(--destructive)' }}>*</span>
-                        </label>
-                        <input style={inputStyle} value={form.employee_number} onChange={(e) => update('employee_number', e.target.value)} placeholder="EMP-001" />
-                      </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                        <label style={{ fontFamily: 'var(--font-body)', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--muted-foreground)' }}>
-                          Email
-                        </label>
-                        <input style={inputStyle} type="email" value={form.email} onChange={(e) => update('email', e.target.value)} placeholder="optional" />
-                      </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <label style={{ fontFamily: 'var(--font-body)', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--muted-foreground)' }}>
+                        Email
+                      </label>
+                      <input style={inputStyle} type="email" value={form.email} onChange={(e) => update('email', e.target.value)} placeholder="optioneel" />
                     </div>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                       <GlassSelect
                         label="Contract"
                         value={form.contract_type}
@@ -279,15 +265,9 @@ export function AddEmployeeWizard({ open, onClose, siteId, onSaved }: AddEmploye
                       />
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                         <label style={{ fontFamily: 'var(--font-body)', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--muted-foreground)' }}>
-                          Hours/week
+                          Uren/week
                         </label>
                         <input style={{ ...inputStyle, fontFamily: 'var(--font-mono)' }} type="text" inputMode="decimal" value={form.weekly_hours_contracted || ''} onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*[.,]?\d?$/.test(v)) update('weekly_hours_contracted', v === '' ? 0 : Number(v.replace(',', '.'))) }} placeholder="40" />
-                      </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                        <label style={{ fontFamily: 'var(--font-body)', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--muted-foreground)' }}>
-                          Rate (€/hr)
-                        </label>
-                        <input style={{ ...inputStyle, fontFamily: 'var(--font-mono)' }} type="text" inputMode="decimal" value={form.hourly_rate || ''} onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*[.,]?\d{0,2}$/.test(v)) update('hourly_rate', v === '' ? 0 : Number(v.replace(',', '.'))) }} placeholder="0.00" />
                       </div>
                     </div>
                   </motion.div>

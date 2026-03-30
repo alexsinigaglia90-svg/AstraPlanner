@@ -126,7 +126,7 @@ export function EditEmployeeForm({ employee, onClose, onDeleted, isNew }: EditEm
         email: form.email || null,
         contract_type: form.contract_type as 'full_time' | 'part_time' | 'temporary' | 'seasonal' | 'contractor',
         weekly_hours_contracted: form.weekly_hours_contracted,
-        hourly_rate: form.hourly_rate,
+        hourly_rate: form.hourly_rate > 0 ? form.hourly_rate : undefined,
         home_site_id: employee.home_site_id,
         department_id: employee.department_id,
         crew_id: form.crew_id || null,

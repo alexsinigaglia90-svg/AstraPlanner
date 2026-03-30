@@ -216,7 +216,7 @@ export const workforceRouter = router({
         email: z.string().email().nullable().optional(),
         contract_type: ContractTypeSchema,
         weekly_hours_contracted: z.number().positive(),
-        hourly_rate: z.number().nonnegative(),
+        hourly_rate: z.number().positive().optional(),
         home_site_id: z.string().uuid(),
         department_id: z.string().uuid().nullable().optional(),
         crew_id: z.string().uuid().nullable().optional(),

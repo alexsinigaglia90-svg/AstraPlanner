@@ -222,7 +222,7 @@ function ProfileTab({
       last_name: employee.last_name,
       contract_type: contract as 'full_time' | 'part_time' | 'temporary' | 'seasonal' | 'contractor',
       weekly_hours_contracted: parseFloat(hours) || employee.weekly_hours_contracted,
-      hourly_rate: (employee as Record<string, unknown>).hourly_rate as number ?? 0,
+      hourly_rate: ((employee as Record<string, unknown>).hourly_rate as number) || undefined,
       home_site_id: siteId,
       department_id: deptId || null,
       crew_id: crewId || null,
