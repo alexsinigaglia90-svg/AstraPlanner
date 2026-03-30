@@ -10,6 +10,7 @@ import { useToast } from '@/components/domain/toast'
 import { KpiHeroCard } from '@/components/domain/kpi-hero-card'
 import { PlanGrid } from '@/components/domain/plan-grid'
 import { PlanCoverageBar } from '@/components/domain/plan-coverage-bar'
+import { AssignmentEditor } from '@/components/domain/assignment-editor'
 import { useSiteStore } from '@/stores/site-store'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -145,6 +146,9 @@ export default function PlanDetailPage() {
 
   const { activeSiteId } = useSiteStore()
   const [pendingAction, setPendingAction] = useState<string | null>(null)
+  const [selectedCell, setSelectedCell] = useState<{
+    empId: string; empName: string; date: string; shiftId: string; shiftName: string
+  } | null>(null)
 
   // ── Data query ───────────────────────────────────────────────────────────
 
@@ -262,6 +266,42 @@ export default function PlanDetailPage() {
     if (!plan?.plan_period_start) return '—'
     return getWeekNumber(plan.plan_period_start)
   }, [plan?.plan_period_start])
+
+  // ── Cell click handler ──────────────────────────────────────────────────
+
+  const handleCellClick = useCallback(
+    (empId: string, date: string, shiftId: string) => {
+      const emp = (employeesQ.data?.items ?? []).find((e) => e.id === empId)
+      const shift = (shiftsQ.data ?? []).find((s) => s.id === shiftId)
+      if (!emp || !shift) return
+      setSelectedCell({
+        empId,
+        empName: `${emp.first_name} ${emp.last_name}`,
+        date,
+        shiftId,
+        shiftName: shift.name,
+      })
+    },
+    [employeesQ.data, shiftsQ.data],
+  )
+
+  const selectedAssignment = useMemo(() => {
+    if (!selectedCell || !plan) return null
+    const match = plan.assignments.find(
+      (a) =>
+        a.employee_id === selectedCell.empId &&
+        a.assignment_date === selectedCell.date &&
+        a.shift_pattern_id === selectedCell.shiftId,
+    )
+    if (!match) return null
+    const proc = (processesQ.data ?? []).find((p) => p.id === match.process_id)
+    return {
+      id: match.id,
+      process_id: match.process_id,
+      process_name: proc?.name ?? 'Onbekend',
+      assignment_source: match.assignment_source as 'optimizer' | 'locked',
+    }
+  }, [selectedCell, plan, processesQ.data])
 
   // ── Derived: status config ───────────────────────────────────────────────
 
@@ -475,6 +515,7 @@ export default function PlanDetailPage() {
           weekStart={plan.plan_period_start}
           workDays={[1, 2, 3, 4, 5]}
           isEditable={status === 'draft' || status === 'optimized'}
+          onCellClick={handleCellClick}
         />
       </motion.div>
 
