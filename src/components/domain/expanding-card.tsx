@@ -455,14 +455,36 @@ function SkillsTab({
 
   const empQuery = trpc.workforce.getEmployee.useQuery({ id: employeeId })
   const isLoading = empQuery.isLoading
-  const skills = empQuery.data?.skills ?? []
+  const serverSkills = empQuery.data?.skills ?? []
+
+  // Local state for instant display — initialized from server data
+  const [localSkills, setLocalSkills] = useState<Array<{ process_id: string; proficiency_level: number }>>(
+    serverSkills.map((s) => ({ process_id: s.process_id, proficiency_level: Number(s.proficiency_level) }))
+  )
+
+  // Sync local state when server data arrives/changes (but don't overwrite pending changes)
+  const pendingRef = useRef<Map<string, number>>(new Map())
+  const newSkillsRef = useRef<Set<string>>(new Set())
+
+  useEffect(() => {
+    if (serverSkills.length > 0) {
+      setLocalSkills((prev) => {
+        const merged = serverSkills.map((s) => {
+          const pendingLevel = pendingRef.current.get(s.process_id)
+          return {
+            process_id: s.process_id,
+            proficiency_level: pendingLevel ?? Number(s.proficiency_level),
+          }
+        })
+        // Also include locally-added skills not yet in server data
+        const serverIds = new Set(serverSkills.map((s) => s.process_id))
+        const localOnly = prev.filter((s) => !serverIds.has(s.process_id) && newSkillsRef.current.has(s.process_id))
+        return [...merged, ...localOnly]
+      })
+    }
+  }, [serverSkills])
 
   const updateSkill = trpc.workforce.updateSkill.useMutation({
-    onSuccess: () => {
-      void empQuery.refetch()
-      void utils.workforce.listSkillMatrix.invalidate()
-      toast.showSuccess('Skill bijgewerkt')
-    },
     onError: (err) => toast.showError(`Fout: ${err.message}`),
   })
 
@@ -475,18 +497,71 @@ function SkillsTab({
     onError: (err) => toast.showError(`Fout: ${err.message}`),
   })
 
+  // Batch save all pending changes on unmount
+  useEffect(() => {
+    const pendingChanges = pendingRef.current
+    const newSkills = newSkillsRef.current
+    const empId = employeeId
+    const mutate = updateSkill.mutate
+    const refetch = empQuery.refetch
+    const invalidate = utils.workforce.listSkillMatrix.invalidate
+
+    return () => {
+      const hasChanges = pendingChanges.size > 0 || newSkills.size > 0
+      if (hasChanges) {
+        let count = 0
+        const total = pendingChanges.size + newSkills.size
+        const onDone = () => {
+          count++
+          if (count >= total) {
+            void refetch()
+            void invalidate()
+          }
+        }
+
+        pendingChanges.forEach((level, processId) => {
+          mutate(
+            { employee_id: empId, process_id: processId, proficiency_level: level },
+            { onSuccess: onDone, onError: onDone },
+          )
+        })
+        newSkills.forEach((processId) => {
+          if (!pendingChanges.has(processId)) {
+            mutate(
+              { employee_id: empId, process_id: processId, proficiency_level: 1 },
+              { onSuccess: onDone, onError: onDone },
+            )
+          }
+        })
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   const processMap = new Map(processes.map((p) => [p.id, p.name]))
-  const assignedIds = new Set(skills.map((s) => s.process_id))
+  const assignedIds = new Set(localSkills.map((s) => s.process_id))
   const available = processes.filter((p) => !assignedIds.has(p.id))
+
+  const handleLevelChange = useCallback(
+    (processId: string, newLevel: number) => {
+      pendingRef.current.set(processId, newLevel)
+      setLocalSkills((prev) =>
+        prev.map((s) =>
+          s.process_id === processId ? { ...s, proficiency_level: newLevel } : s
+        )
+      )
+    },
+    [],
+  )
 
   const handleAddSkill = useCallback(
     (processId: string) => {
       setAddingSkill(false)
-      updateSkill.mutate(
-        { employee_id: employeeId, process_id: processId, proficiency_level: 1 },
-      )
+      newSkillsRef.current.add(processId)
+      pendingRef.current.set(processId, 1)
+      setLocalSkills((prev) => [...prev, { process_id: processId, proficiency_level: 1 }])
     },
-    [updateSkill, employeeId],
+    [],
   )
 
   const handleHoldStart = useCallback(
@@ -494,6 +569,10 @@ function SkillsTab({
       setHoldingId(processId)
       holdTimerRef.current = setTimeout(() => {
         deleteSkill.mutate({ employee_id: employeeId, process_id: processId })
+        // Also remove from local state and pending
+        pendingRef.current.delete(processId)
+        newSkillsRef.current.delete(processId)
+        setLocalSkills((prev) => prev.filter((s) => s.process_id !== processId))
         setHoldingId(null)
       }, 1200)
     },
@@ -523,7 +602,7 @@ function SkillsTab({
       animate="show"
       style={{ display: 'flex', flexDirection: 'column', gap: 10 }}
     >
-      {skills.length === 0 && (
+      {localSkills.length === 0 && (
         <div
           style={{
             textAlign: 'center',
@@ -537,11 +616,11 @@ function SkillsTab({
         </div>
       )}
 
-      {skills.map((skill, idx) => {
+      {localSkills.map((skill, idx) => {
         const name = processMap.get(skill.process_id) ?? 'Onbekend'
         const isHolding = holdingId === skill.process_id
         const isActive = activeGrader === skill.process_id
-        const level = Number(skill.proficiency_level)
+        const level = skill.proficiency_level
         const levelLabels = ['', 'Beginner', 'Basis', 'Competent', 'Gevorderd', 'Expert']
         const levelColors = ['', '#94A3B8', '#F59E0B', '#6366F1', '#8B5CF6', '#10B981']
 
@@ -661,7 +740,7 @@ function SkillsTab({
                   transition={bouncy}
                   style={{
                     position: 'absolute',
-                    top: -160,
+                    top: -200,
                     left: '50%',
                     transform: 'translateX(-50%)',
                     zIndex: 60,
@@ -670,13 +749,7 @@ function SkillsTab({
                   <RadialSkillGrader
                     processName={name}
                     level={level}
-                    onChange={(lvl) => {
-                      updateSkill.mutate({
-                        employee_id: employeeId,
-                        process_id: skill.process_id,
-                        proficiency_level: lvl,
-                      })
-                    }}
+                    onChange={(lvl) => handleLevelChange(skill.process_id, lvl)}
                     onClose={() => setActiveGrader(null)}
                   />
                 </motion.div>

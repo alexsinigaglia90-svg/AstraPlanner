@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import { bouncy, wobbly, snappy } from '@/lib/motion'
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -16,19 +16,31 @@ interface RadialSkillGraderProps {
 // ── Constants ────────────────────────────────────────────────────────────────
 
 const LABELS = ['Beginner', 'Basis', 'Competent', 'Gevorderd', 'Expert'] as const
-const PARTICLE_COUNT = 10
-const PARTICLE_COLORS = ['#6366F1', '#8B5CF6', '#10B981']
-const RING_DIAMETER = 120
+const LEVEL_COLORS = ['#94A3B8', '#F59E0B', '#6366F1', '#8B5CF6', '#10B981']
+const PARTICLE_COUNT = 8
+const RING_DIAMETER = 140
 const RING_RADIUS = RING_DIAMETER / 2
 const STROKE_WIDTH = 14
-const INNER_RADIUS = RING_RADIUS - STROKE_WIDTH / 2
-const GAP_DEG = 3 // degrees of gap between segments
-const SEGMENT_DEG = (360 - GAP_DEG * 5) / 5
+const STROKE_WIDTH_HOVER = 18
+const CENTER_RADIUS = RING_RADIUS - STROKE_WIDTH / 2
+const GAP_DEG = 4
+const SEGMENT_DEG = 68 // 72 - 4 gap
+const LABEL_RADIUS = RING_RADIUS + 24
+const SVG_SIZE = RING_DIAMETER + 80 // extra space for labels
+const CENTER = SVG_SIZE / 2
+
+// Start from bottom-left (~216 degrees) going clockwise
+const START_ANGLE = 216
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
+function degToRad(deg: number): number {
+  return (deg * Math.PI) / 180
+}
+
 function polarToCartesian(cx: number, cy: number, r: number, angleDeg: number) {
-  const rad = ((angleDeg - 90) * Math.PI) / 180
+  // 0 degrees = top, clockwise
+  const rad = degToRad(angleDeg - 90)
   return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) }
 }
 
@@ -38,11 +50,18 @@ function describeArc(
   r: number,
   startAngle: number,
   endAngle: number,
-) {
-  const start = polarToCartesian(cx, cy, r, endAngle)
-  const end = polarToCartesian(cx, cy, r, startAngle)
+): string {
+  const start = polarToCartesian(cx, cy, r, startAngle)
+  const end = polarToCartesian(cx, cy, r, endAngle)
   const largeArc = endAngle - startAngle > 180 ? 1 : 0
-  return `M ${start.x} ${start.y} A ${r} ${r} 0 ${largeArc} 0 ${end.x} ${end.y}`
+  return `M ${start.x} ${start.y} A ${r} ${r} 0 ${largeArc} 1 ${end.x} ${end.y}`
+}
+
+function getSegmentAngles(index: number): { start: number; end: number; mid: number } {
+  const start = START_ANGLE + index * (SEGMENT_DEG + GAP_DEG)
+  const end = start + SEGMENT_DEG
+  const mid = start + SEGMENT_DEG / 2
+  return { start: start % 360, end: end % 360, mid: mid % 360 }
 }
 
 // ── Particle Burst ───────────────────────────────────────────────────────────
@@ -53,70 +72,54 @@ interface Particle {
   distance: number
   color: string
   delay: number
+  size: number
 }
 
-function ParticleBurst({ active }: { active: boolean }) {
+function ParticleBurst({ active, level }: { active: boolean; level: number }) {
   const [particles, setParticles] = useState<Particle[]>([])
 
   useEffect(() => {
     if (!active) return
+    const color = LEVEL_COLORS[level - 1] ?? '#6366F1'
     const newParticles: Particle[] = Array.from({ length: PARTICLE_COUNT }, (_, i) => ({
       id: Date.now() + i,
-      angle: Math.random() * 360,
-      distance: 40 + Math.random() * 40,
-      color: PARTICLE_COLORS[Math.floor(Math.random() * PARTICLE_COLORS.length)]!,
-      delay: Math.random() * 0.1,
+      angle: (360 / PARTICLE_COUNT) * i + Math.random() * 20,
+      distance: 35 + Math.random() * 30,
+      color,
+      delay: Math.random() * 0.08,
+      size: 4 + Math.random() * 3,
     }))
     setParticles(newParticles)
-    const timer = setTimeout(() => setParticles([]), 800)
+    const timer = setTimeout(() => setParticles([]), 700)
     return () => clearTimeout(timer)
-  }, [active])
-
-  const cx = RING_DIAMETER / 2 + 40 // offset for container padding
-  const cy = RING_DIAMETER / 2 + 10
+  }, [active, level])
 
   return (
     <>
       {particles.map((p) => {
-        const rad = (p.angle * Math.PI) / 180
-        const startX = cx + INNER_RADIUS * Math.cos(rad)
-        const startY = cy + INNER_RADIUS * Math.sin(rad)
-        const endX = cx + (INNER_RADIUS + p.distance) * Math.cos(rad)
-        const endY = cy + (INNER_RADIUS + p.distance) * Math.sin(rad)
-
+        const rad = degToRad(p.angle)
+        const startR = CENTER_RADIUS
+        const endR = CENTER_RADIUS + p.distance
         return (
-          <motion.div
+          <motion.circle
             key={p.id}
-            initial={{
-              position: 'absolute',
-              left: startX,
-              top: startY,
-              width: 6,
-              height: 6,
-              borderRadius: '50%',
-              backgroundColor: p.color,
-              opacity: 1,
-              scale: 1,
-            }}
+            cx={CENTER + startR * Math.cos(rad)}
+            cy={CENTER + startR * Math.sin(rad)}
+            r={p.size / 2}
+            fill={p.color}
+            initial={{ opacity: 1, r: p.size / 2 }}
             animate={{
-              left: endX,
-              top: endY,
+              cx: CENTER + endR * Math.cos(rad),
+              cy: CENTER + endR * Math.sin(rad),
               opacity: 0,
-              scale: 0,
+              r: 0,
             }}
             transition={{
-              duration: 0.6,
+              duration: 0.5,
               delay: p.delay,
               ease: [0.22, 1, 0.36, 1],
             }}
-            style={{
-              position: 'absolute',
-              width: 6,
-              height: 6,
-              borderRadius: '50%',
-              backgroundColor: p.color,
-              pointerEvents: 'none',
-            }}
+            style={{ pointerEvents: 'none' }}
           />
         )
       })}
@@ -135,10 +138,10 @@ export function RadialSkillGrader({
   const [hoveredSegment, setHoveredSegment] = useState<number | null>(null)
   const [burstKey, setBurstKey] = useState(0)
   const [burstActive, setBurstActive] = useState(false)
+  const [ringScale, setRingScale] = useState(1)
   const containerRef = useRef<HTMLDivElement>(null)
-  const prevLevel = useRef(level)
 
-  // Close on outside click
+  // Close on outside click / Escape
   useEffect(() => {
     function handleClick(e: MouseEvent) {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
@@ -158,37 +161,36 @@ export function RadialSkillGrader({
 
   const handleSegmentClick = useCallback(
     (segLevel: number) => {
-      if (segLevel > level) {
-        setBurstActive(true)
-        setBurstKey((k) => k + 1)
-        setTimeout(() => setBurstActive(false), 700)
+      if (segLevel !== level) {
+        // Haptic pulse
+        setRingScale(1.06)
+        setTimeout(() => setRingScale(1), 150)
+
+        if (segLevel > level) {
+          setBurstActive(true)
+          setBurstKey((k) => k + 1)
+          setTimeout(() => setBurstActive(false), 600)
+        }
       }
       onChange(segLevel)
     },
     [level, onChange],
   )
 
-  // Track previous level for burst detection
-  useEffect(() => {
-    prevLevel.current = level
-  }, [level])
-
-  // SVG setup
-  const svgSize = RING_DIAMETER + 8
-  const center = svgSize / 2
-
+  // Build segment data
   const segments = Array.from({ length: 5 }, (_, i) => {
-    const segIndex = i
-    const startAngle = segIndex * (SEGMENT_DEG + GAP_DEG)
-    const endAngle = startAngle + SEGMENT_DEG
-    const filled = segIndex < level
-    const hovered = hoveredSegment === segIndex
-    const segLevel = segIndex + 1
+    const segLevel = i + 1
+    const angles = getSegmentAngles(i)
+    const filled = segLevel <= level
+    const hovered = hoveredSegment === i
+    const path = describeArc(CENTER, CENTER, CENTER_RADIUS, angles.start, angles.end > angles.start ? angles.end : angles.end + 360)
+    const labelPos = polarToCartesian(CENTER, CENTER, LABEL_RADIUS, angles.mid > angles.start ? angles.mid : angles.mid + 360)
+    const color = LEVEL_COLORS[i]!
 
-    const path = describeArc(center, center, INNER_RADIUS, startAngle, endAngle)
-
-    return { segIndex, startAngle, endAngle, filled, hovered, segLevel, path }
+    return { segLevel, angles, filled, hovered, path, labelPos, color }
   })
+
+  const currentColor = LEVEL_COLORS[level - 1] ?? '#6366F1'
 
   return (
     <motion.div
@@ -199,14 +201,14 @@ export function RadialSkillGrader({
       transition={bouncy}
       style={{
         position: 'relative',
-        width: 200,
+        width: 240,
         background: 'rgba(255,255,255,0.95)',
         backdropFilter: 'blur(20px) saturate(1.8)',
         WebkitBackdropFilter: 'blur(20px) saturate(1.8)',
         border: '1px solid rgba(255,255,255,0.7)',
-        borderRadius: 20,
-        boxShadow: '0 20px 60px rgba(30,27,75,0.15)',
-        padding: 20,
+        borderRadius: 22,
+        boxShadow: '0 24px 80px rgba(30,27,75,0.18)',
+        padding: '16px 10px 14px',
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
@@ -214,9 +216,6 @@ export function RadialSkillGrader({
         overflow: 'visible',
       }}
     >
-      {/* Particle burst layer */}
-      <ParticleBurst key={burstKey} active={burstActive} />
-
       {/* Process name */}
       <motion.span
         initial={{ opacity: 0, y: -4 }}
@@ -224,12 +223,10 @@ export function RadialSkillGrader({
         transition={{ ...snappy, delay: 0.05 }}
         style={{
           fontFamily: 'var(--font-body, "DM Sans", sans-serif)',
-          fontSize: 12,
-          fontWeight: 600,
-          color: 'var(--muted-foreground, #64748B)',
-          textTransform: 'uppercase',
-          letterSpacing: '0.06em',
-          marginBottom: 14,
+          fontSize: 13,
+          fontWeight: 700,
+          color: 'var(--foreground, #1E1B4B)',
+          marginBottom: 6,
           textAlign: 'center',
           maxWidth: '100%',
           overflow: 'hidden',
@@ -240,56 +237,82 @@ export function RadialSkillGrader({
         {processName}
       </motion.span>
 
-      {/* Ring container */}
-      <div style={{ position: 'relative', width: svgSize, height: svgSize }}>
+      {/* Ring + labels SVG */}
+      <motion.div
+        animate={{ scale: ringScale }}
+        transition={{ type: 'spring', stiffness: 600, damping: 15 }}
+        style={{ position: 'relative', width: SVG_SIZE, height: SVG_SIZE }}
+      >
         <svg
-          width={svgSize}
-          height={svgSize}
-          viewBox={`0 0 ${svgSize} ${svgSize}`}
+          width={SVG_SIZE}
+          height={SVG_SIZE}
+          viewBox={`0 0 ${SVG_SIZE} ${SVG_SIZE}`}
           style={{ overflow: 'visible' }}
         >
-          <defs>
-            <linearGradient id="rsg-filled-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor="#6366F1" />
-              <stop offset="100%" stopColor="#8B5CF6" />
-            </linearGradient>
-          </defs>
-
+          {/* Segments */}
           {segments.map((seg) => (
             <motion.path
-              key={seg.segIndex}
+              key={seg.segLevel}
               d={seg.path}
               fill="none"
-              stroke={seg.filled ? 'url(#rsg-filled-grad)' : 'rgba(100,116,139,0.08)'}
+              stroke={seg.filled ? seg.color : 'rgba(100,116,139,0.08)'}
               strokeWidth={STROKE_WIDTH}
               strokeLinecap="round"
+              strokeDasharray={seg.filled ? 'none' : '4 3'}
               initial={{ opacity: 0 }}
               animate={{
                 opacity: 1,
-                strokeWidth: seg.hovered ? STROKE_WIDTH + 3 : STROKE_WIDTH,
-                filter: seg.hovered && !seg.filled
-                  ? 'brightness(1.3)'
-                  : seg.hovered
-                    ? 'brightness(1.15)'
-                    : 'brightness(1)',
+                strokeWidth: seg.hovered ? STROKE_WIDTH_HOVER : STROKE_WIDTH,
+                filter: seg.hovered ? 'brightness(1.2)' : 'brightness(1)',
               }}
               transition={snappy}
               style={{ cursor: 'pointer' }}
-              onMouseEnter={() => setHoveredSegment(seg.segIndex)}
+              onMouseEnter={() => setHoveredSegment(seg.segLevel - 1)}
               onMouseLeave={() => setHoveredSegment(null)}
               onClick={() => handleSegmentClick(seg.segLevel)}
             />
           ))}
+
+          {/* Particle burst inside SVG */}
+          <ParticleBurst key={burstKey} active={burstActive} level={level} />
+
+          {/* Labels outside ring */}
+          {segments.map((seg) => {
+            const isActive = seg.segLevel <= level
+            const isExact = seg.segLevel === level
+            return (
+              <text
+                key={`label-${seg.segLevel}`}
+                x={seg.labelPos.x}
+                y={seg.labelPos.y}
+                textAnchor="middle"
+                dominantBaseline="central"
+                style={{
+                  fontFamily: 'var(--font-body, "DM Sans", sans-serif)',
+                  fontSize: 9,
+                  fontWeight: isExact ? 700 : 600,
+                  fill: isActive ? seg.color : '#94A3B8',
+                  cursor: 'pointer',
+                  userSelect: 'none',
+                }}
+                onClick={() => handleSegmentClick(seg.segLevel)}
+                onMouseEnter={() => setHoveredSegment(seg.segLevel - 1)}
+                onMouseLeave={() => setHoveredSegment(null)}
+              >
+                {seg.segLevel} {LABELS[seg.segLevel - 1]}
+              </text>
+            )
+          })}
         </svg>
 
         {/* Center content */}
         <div
           style={{
             position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
+            top: (SVG_SIZE - RING_DIAMETER) / 2,
+            left: (SVG_SIZE - RING_DIAMETER) / 2,
+            width: RING_DIAMETER,
+            height: RING_DIAMETER,
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
@@ -297,40 +320,46 @@ export function RadialSkillGrader({
             pointerEvents: 'none',
           }}
         >
-          <motion.span
-            key={level}
-            initial={{ scale: 1.3, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={wobbly}
-            style={{
-              fontFamily: 'var(--font-mono, "JetBrains Mono", monospace)',
-              fontSize: 36,
-              fontWeight: 700,
-              color: 'var(--foreground, #1E1B4B)',
-              lineHeight: 1,
-              letterSpacing: '-0.02em',
-            }}
-          >
-            {level}
-          </motion.span>
-          <motion.span
-            key={`label-${level}`}
-            initial={{ opacity: 0, y: 4 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ ...bouncy, delay: 0.08 }}
-            style={{
-              fontFamily: 'var(--font-body, "DM Sans", sans-serif)',
-              fontSize: 11,
-              fontWeight: 500,
-              color: '#8B5CF6',
-              marginTop: 2,
-              letterSpacing: '0.01em',
-            }}
-          >
-            {LABELS[level - 1]}
-          </motion.span>
+          <AnimatePresence mode="wait">
+            <motion.span
+              key={level}
+              initial={{ scale: 1.4, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.8, opacity: 0 }}
+              transition={wobbly}
+              style={{
+                fontFamily: 'var(--font-mono, "JetBrains Mono", monospace)',
+                fontSize: 40,
+                fontWeight: 700,
+                color: currentColor,
+                lineHeight: 1,
+                letterSpacing: '-0.02em',
+              }}
+            >
+              {level}
+            </motion.span>
+          </AnimatePresence>
+          <AnimatePresence mode="wait">
+            <motion.span
+              key={`label-${level}`}
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -4 }}
+              transition={{ ...bouncy, delay: 0.06 }}
+              style={{
+                fontFamily: 'var(--font-body, "DM Sans", sans-serif)',
+                fontSize: 11,
+                fontWeight: 500,
+                color: currentColor,
+                marginTop: 2,
+                letterSpacing: '0.01em',
+              }}
+            >
+              {LABELS[level - 1]}
+            </motion.span>
+          </AnimatePresence>
         </div>
-      </div>
+      </motion.div>
     </motion.div>
   )
 }
