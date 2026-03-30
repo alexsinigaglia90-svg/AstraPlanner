@@ -458,7 +458,9 @@ export default function EmployeeImportPage() {
 
       // Step 2: Import skills (if any)
       if (skillsValidation && skillsValidation.matched.length > 0) {
-        const freshEmployees = await utils.workforce.listEmployees.fetch({ site_id: activeSiteId, limit: 1000 })
+        // Invalidate cache first, then fetch fresh data to get newly created employee IDs
+        await utils.workforce.listEmployees.invalidate()
+        const freshEmployees = await utils.workforce.listEmployees.fetch({ site_id: activeSiteId, limit: 2000 })
         const freshEmpMap = new Map(
           ((freshEmployees?.items ?? []) as { id: string; first_name: string; last_name: string }[])
             .map((e) => [`${e.first_name} ${e.last_name}`.toLowerCase(), e.id])
