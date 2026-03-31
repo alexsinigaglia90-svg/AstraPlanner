@@ -475,4 +475,77 @@ export const demandRouter = router({
 
       return { distributed: 7, total: input.volume }
     }),
+
+  // ── Import Templates ──────────────────────────────────────────────────
+
+  listTemplates: viewerProcedure
+    .input(z.object({}))
+    .query(async ({ ctx }) => {
+      const admin = createAdminClient()
+      const { data, error } = await admin
+        .from('demand_import_template')
+        .select('id, name, column_mappings, header_row, data_start_row, data_end_row, skip_rows, orientation, unit_type, sheet_name, created_at, updated_at')
+        .eq('organization_id', ctx.organizationId)
+        .order('updated_at', { ascending: false })
+      assertNoError(error, 'listTemplates')
+      return data ?? []
+    }),
+
+  saveTemplate: plannerProcedure
+    .input(z.object({
+      id: z.string().uuid().optional(),
+      name: z.string().min(1).max(100),
+      column_mappings: z.record(z.string()),
+      header_row: z.number().int().min(0).default(0),
+      data_start_row: z.number().int().min(0).default(1),
+      data_end_row: z.number().int().optional(),
+      skip_rows: z.array(z.number()).default([]),
+      orientation: z.string().default('rows_dates'),
+      unit_type: z.string().default('units'),
+      sheet_name: z.string().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const admin = createAdminClient()
+      const { id, ...rest } = input
+      const row = {
+        ...rest,
+        ...(id ? { id } : {}),
+        organization_id: ctx.organizationId,
+        created_by: ctx.user.id,
+        updated_at: new Date().toISOString(),
+      }
+
+      if (id) {
+        const { data, error } = await admin
+          .from('demand_import_template')
+          .update(row)
+          .eq('id', id)
+          .eq('organization_id', ctx.organizationId)
+          .select('id')
+          .single()
+        assertNoError(error, 'saveTemplate:update')
+        return data
+      } else {
+        const { data, error } = await admin
+          .from('demand_import_template')
+          .insert(row)
+          .select('id')
+          .single()
+        assertNoError(error, 'saveTemplate:insert')
+        return data
+      }
+    }),
+
+  deleteTemplate: managerProcedure
+    .input(z.object({ id: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      const admin = createAdminClient()
+      const { error } = await admin
+        .from('demand_import_template')
+        .delete()
+        .eq('id', input.id)
+        .eq('organization_id', ctx.organizationId)
+      assertNoError(error, 'deleteTemplate')
+      return { deleted: true }
+    }),
 })
