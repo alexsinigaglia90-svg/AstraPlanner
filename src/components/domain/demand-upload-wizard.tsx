@@ -2,10 +2,13 @@
 
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, Upload, FileSpreadsheet, Check, AlertCircle } from 'lucide-react'
+import { X, Upload, FileSpreadsheet, Check, AlertCircle, Save } from 'lucide-react'
 import { bouncy, snappy, scalePress } from '@/lib/motion'
 import { trpc } from '@/lib/trpc/client'
 import { useToast } from '@/components/domain/toast'
+import { DemandAiAnalysis } from './demand-ai-analysis'
+import type { DemandAnalysis } from './demand-ai-analysis'
+import { extractXray } from '@/lib/demand/xray'
 import * as XLSX from 'xlsx'
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -17,7 +20,7 @@ interface DemandUploadWizardProps {
   onImported: () => void
 }
 
-type WizardStep = 1 | 2 | 3
+type WizardStep = 1 | 2 | 3 | 4
 
 interface ParsedData {
   /** Process/column names extracted from the file */
@@ -340,6 +343,11 @@ export function DemandUploadWizard({
     { site_id: siteId },
     { enabled: open && siteId.length > 0 },
   )
+  const templatesQuery = trpc.demand.listTemplates.useQuery(
+    {},
+    { enabled: open },
+  )
+  const saveTemplateMutation = trpc.demand.saveTemplate.useMutation()
 
   const fileRef = useRef<HTMLInputElement>(null)
   const [step, setStep] = useState<WizardStep>(1)
@@ -351,6 +359,18 @@ export function DemandUploadWizard({
   const [mappings, setMappings] = useState<ProcessMapping[]>([])
   const [importing, setImporting] = useState(false)
   const [importResult, setImportResult] = useState<{ count: number } | null>(null)
+
+  // AI analysis state
+  const [aiAnalysis, setAiAnalysis] = useState<DemandAnalysis | null>(null)
+  const [aiLoading, setAiLoading] = useState(false)
+  const [aiError, setAiError] = useState<string | null>(null)
+  const [aiAnswers, setAiAnswers] = useState<Record<string, string>>({})
+  const [templateMatch, setTemplateMatch] = useState<{ id: string; name: string; column_mappings: Record<string, string> } | null>(null)
+  const [templateBannerDismissed, setTemplateBannerDismissed] = useState(false)
+
+  // Template save state
+  const [showTemplateSave, setShowTemplateSave] = useState(false)
+  const [templateName, setTemplateName] = useState('')
 
   // Reset state when modal opens
   const [workbook, setWorkbook] = useState<XLSX.WorkBook | null>(null)
@@ -371,6 +391,14 @@ export function DemandUploadWizard({
       setWorkbook(null)
       setSheetNames([])
       setSelectedSheet('')
+      setAiAnalysis(null)
+      setAiLoading(false)
+      setAiError(null)
+      setAiAnswers({})
+      setTemplateMatch(null)
+      setTemplateBannerDismissed(false)
+      setShowTemplateSave(false)
+      setTemplateName('')
     }
   }, [open])
 
@@ -470,6 +498,98 @@ export function DemandUploadWizard({
     [workbook, parseSheet],
   )
 
+  // ── Template matching ─────────────────────────────────────────────────────
+  const findMatchingTemplate = useCallback(
+    (sourceProcesses: string[]) => {
+      const templates = templatesQuery.data ?? []
+      for (const tmpl of templates) {
+        const templateKeys = Object.keys((tmpl.column_mappings ?? {}) as Record<string, string>)
+        const matchCount = sourceProcesses.filter((p) =>
+          templateKeys.some((k) => k.toLowerCase() === p.toLowerCase()),
+        ).length
+        if (matchCount >= sourceProcesses.length * 0.7) {
+          return { id: tmpl.id, name: tmpl.name, column_mappings: tmpl.column_mappings as Record<string, string> }
+        }
+      }
+      return null
+    },
+    [templatesQuery.data],
+  )
+
+  const applyTemplate = useCallback(
+    (tmpl: { column_mappings: Record<string, string> }) => {
+      if (!parsedData) return
+      const newMappings: ProcessMapping[] = parsedData.sourceProcesses.map((src) => {
+        const mappedId = Object.entries(tmpl.column_mappings).find(
+          ([k]) => k.toLowerCase() === src.toLowerCase(),
+        )?.[1]
+        if (mappedId) {
+          const dt = demandTypeOptions.find((d) => d.id === mappedId)
+          if (dt) {
+            return { sourceName: src, demandTypeId: dt.id, demandTypeName: dt.name, autoMatched: true, confidence: 1.0 }
+          }
+        }
+        return { sourceName: src, demandTypeId: null, demandTypeName: '', autoMatched: false, confidence: 0 }
+      })
+      setMappings(newMappings)
+    },
+    [parsedData, demandTypeOptions],
+  )
+
+  // ── AI analysis ─────────────────────────────────────────────────────────
+  const runAiAnalysis = useCallback(
+    async (wb: XLSX.WorkBook, sheet: string) => {
+      setAiLoading(true)
+      setAiError(null)
+      setAiAnalysis(null)
+      setAiAnswers({})
+
+      try {
+        const processNames = (processesQuery.data ?? []).map((p) => p.name)
+        const demandTypeNames = (demandTypesQuery.data ?? []).map((dt) => dt.name)
+        const xray = extractXray(wb, sheet, processNames, demandTypeNames)
+
+        const resp = await fetch('/api/ai/demand-analyze', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ xray }),
+        })
+
+        if (!resp.ok) {
+          const text = await resp.text().catch(() => 'Onbekende fout')
+          throw new Error(text || `HTTP ${resp.status}`)
+        }
+
+        const data: DemandAnalysis = await resp.json()
+        setAiAnalysis(data)
+      } catch (err) {
+        setAiError(err instanceof Error ? err.message : 'AI analyse mislukt')
+      } finally {
+        setAiLoading(false)
+      }
+    },
+    [processesQuery.data, demandTypesQuery.data],
+  )
+
+  const applyAiSuggestions = useCallback(
+    (analysis: DemandAnalysis) => {
+      const newMappings: ProcessMapping[] = analysis.processColumns.map((col) => {
+        const match = col.suggestedMatch
+          ? demandTypeOptions.find((dt) => dt.name.toLowerCase() === col.suggestedMatch!.toLowerCase())
+          : null
+        return {
+          sourceName: col.rawName,
+          demandTypeId: match?.id ?? null,
+          demandTypeName: match?.name ?? '',
+          autoMatched: !!match,
+          confidence: col.confidence,
+        }
+      })
+      setMappings(newMappings)
+    },
+    [demandTypeOptions],
+  )
+
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
       e.preventDefault()
@@ -514,7 +634,7 @@ export function DemandUploadWizard({
 
   const goNext = () => {
     setDirection(1)
-    setStep((s) => Math.min(s + 1, 3) as WizardStep)
+    setStep((s) => Math.min(s + 1, 4) as WizardStep)
   }
   const goBack = () => {
     setDirection(-1)
@@ -591,7 +711,9 @@ export function DemandUploadWizard({
   // ── Can advance? ─────────────────────────────────────────────────────────
 
   const canGoToStep2 = parsedData !== null
-  const canGoToStep3 = mappedCount > 0
+  const aiQuestionsAnswered = !aiAnalysis?.questions.length || aiAnalysis.questions.every((q) => aiAnswers[q.id] !== undefined)
+  const canGoToStep3 = !aiLoading && (aiAnalysis ? aiQuestionsAnswered : !aiError)
+  const canGoToStep4 = mappedCount > 0
   const canImport = !importing && mappedCount > 0 && !importResult
 
   // ── Render ─────────────────────────────────────────────────────────────────
@@ -636,7 +758,7 @@ export function DemandUploadWizard({
               transition={bouncy}
               style={{
                 width: '100%',
-                maxWidth: step === 3 ? 720 : 580,
+                maxWidth: step === 4 ? 720 : 580,
                 maxHeight: '90vh',
                 backgroundColor: 'var(--card)',
                 borderRadius: 16,
@@ -679,8 +801,9 @@ export function DemandUploadWizard({
                       }}
                     >
                       {step === 1 && 'Stap 1: Upload je Excel-bestand'}
-                      {step === 2 && 'Stap 2: Koppel processen'}
-                      {step === 3 && 'Stap 3: Controleer & importeer'}
+                      {step === 2 && 'Stap 2: AI Analyse'}
+                      {step === 3 && 'Stap 3: Koppel processen'}
+                      {step === 4 && 'Stap 4: Controleer & importeer'}
                     </p>
                   </div>
 
@@ -718,7 +841,7 @@ export function DemandUploadWizard({
                   </div>
                 </div>
 
-                <StepIndicator current={step} total={3} />
+                <StepIndicator current={step} total={4} />
               </div>
 
               {/* ── Body ────────────────────────────────────────────────── */}
@@ -950,10 +1073,141 @@ export function DemandUploadWizard({
                     </motion.div>
                   )}
 
-                  {/* ── Step 2: Process Mapping ────────────────────────── */}
+                  {/* ── Step 2: AI Analysis ─────────────────────────── */}
                   {step === 2 && (
                     <motion.div
                       key="step-2"
+                      custom={direction}
+                      variants={stepVariants}
+                      initial="enter"
+                      animate="center"
+                      exit="exit"
+                      style={{ display: 'flex', flexDirection: 'column', gap: 16 }}
+                    >
+                      {/* Template match banner */}
+                      {templateMatch && !templateBannerDismissed && (
+                        <motion.div
+                          initial={{ opacity: 0, y: -8 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={bouncy}
+                          style={{
+                            padding: '14px 16px',
+                            borderRadius: 10,
+                            backgroundColor: 'rgba(34,197,94,0.06)',
+                            border: '1px solid rgba(34,197,94,0.18)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 12,
+                            flexWrap: 'wrap',
+                          }}
+                        >
+                          <Save size={16} style={{ color: '#22c55e', flexShrink: 0 }} />
+                          <span
+                            style={{
+                              fontFamily: 'var(--font-body)',
+                              fontSize: 13,
+                              fontWeight: 600,
+                              color: 'var(--foreground)',
+                              flex: 1,
+                              minWidth: 120,
+                            }}
+                          >
+                            Template &apos;{templateMatch.name}&apos; gevonden
+                          </span>
+                          <div style={{ display: 'flex', gap: 8 }}>
+                            <motion.button
+                              whileTap={{ scale: 0.96 }}
+                              onClick={() => {
+                                applyTemplate(templateMatch)
+                                setTemplateBannerDismissed(true)
+                                // Skip AI step, go directly to mapping
+                                setDirection(1)
+                                setStep(3)
+                              }}
+                              style={{
+                                padding: '6px 14px',
+                                borderRadius: 20,
+                                border: 'none',
+                                backgroundColor: '#22c55e',
+                                color: '#fff',
+                                fontFamily: 'var(--font-body)',
+                                fontSize: 12,
+                                fontWeight: 700,
+                                cursor: 'pointer',
+                              }}
+                            >
+                              Toepassen
+                            </motion.button>
+                            <motion.button
+                              whileTap={{ scale: 0.96 }}
+                              onClick={() => {
+                                setTemplateBannerDismissed(true)
+                              }}
+                              style={{
+                                padding: '6px 14px',
+                                borderRadius: 20,
+                                border: '1px solid var(--border)',
+                                backgroundColor: 'transparent',
+                                color: 'var(--muted-foreground)',
+                                fontFamily: 'var(--font-body)',
+                                fontSize: 12,
+                                fontWeight: 600,
+                                cursor: 'pointer',
+                              }}
+                            >
+                              Overslaan, AI analyseren
+                            </motion.button>
+                          </div>
+                        </motion.div>
+                      )}
+
+                      {/* AI Analysis card */}
+                      <DemandAiAnalysis
+                        analysis={aiAnalysis}
+                        loading={aiLoading}
+                        error={aiError}
+                        answers={aiAnswers}
+                        onAnswer={(qId, ans) => setAiAnswers((prev) => ({ ...prev, [qId]: ans }))}
+                        onRetry={() => {
+                          if (workbook && selectedSheet) {
+                            runAiAnalysis(workbook, selectedSheet)
+                          }
+                        }}
+                      />
+
+                      {/* Hint when analysis is done */}
+                      {aiAnalysis && !aiLoading && (
+                        <motion.div
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          transition={{ delay: 0.3 }}
+                          style={{
+                            padding: '10px 14px',
+                            borderRadius: 8,
+                            backgroundColor: 'rgba(99,102,241,0.04)',
+                            border: '1px solid rgba(99,102,241,0.1)',
+                          }}
+                        >
+                          <p
+                            style={{
+                              fontFamily: 'var(--font-body)',
+                              fontSize: 12,
+                              color: 'var(--muted-foreground)',
+                              margin: 0,
+                              lineHeight: 1.5,
+                            }}
+                          >
+                            De AI-suggesties worden in de volgende stap als voorinvulling gebruikt. Je kunt alles nog aanpassen.
+                          </p>
+                        </motion.div>
+                      )}
+                    </motion.div>
+                  )}
+
+                  {/* ── Step 3: Process Mapping ────────────────────────── */}
+                  {step === 3 && (
+                    <motion.div
+                      key="step-3"
                       custom={direction}
                       variants={stepVariants}
                       initial="enter"
@@ -1142,10 +1396,10 @@ export function DemandUploadWizard({
                     </motion.div>
                   )}
 
-                  {/* ── Step 3: Preview & Import ───────────────────────── */}
-                  {step === 3 && (
+                  {/* ── Step 4: Preview & Import ───────────────────────── */}
+                  {step === 4 && (
                     <motion.div
-                      key="step-3"
+                      key="step-4"
                       custom={direction}
                       variants={stepVariants}
                       initial="enter"
@@ -1201,6 +1455,114 @@ export function DemandUploadWizard({
                           >
                             {importResult.count} demand entries geimporteerd
                           </p>
+
+                          {/* Template save prompt */}
+                          {!showTemplateSave ? (
+                            <motion.button
+                              initial={{ opacity: 0 }}
+                              animate={{ opacity: 1 }}
+                              transition={{ delay: 0.4 }}
+                              whileTap={{ scale: 0.96 }}
+                              onClick={() => {
+                                setShowTemplateSave(true)
+                                setTemplateName(fileName.replace(/\.[^.]+$/, ''))
+                              }}
+                              style={{
+                                marginTop: 8,
+                                padding: '8px 18px',
+                                borderRadius: 20,
+                                border: '1px solid rgba(99,102,241,0.25)',
+                                backgroundColor: 'rgba(99,102,241,0.06)',
+                                color: 'var(--primary)',
+                                fontFamily: 'var(--font-body)',
+                                fontSize: 12,
+                                fontWeight: 600,
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 6,
+                              }}
+                            >
+                              <Save size={13} />
+                              Opslaan als template?
+                            </motion.button>
+                          ) : (
+                            <motion.div
+                              initial={{ opacity: 0, y: 8 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              transition={bouncy}
+                              style={{
+                                marginTop: 12,
+                                display: 'flex',
+                                gap: 8,
+                                alignItems: 'center',
+                                width: '100%',
+                                maxWidth: 360,
+                              }}
+                            >
+                              <input
+                                type="text"
+                                value={templateName}
+                                onChange={(e) => setTemplateName(e.target.value)}
+                                placeholder="Template naam"
+                                style={{
+                                  flex: 1,
+                                  padding: '8px 12px',
+                                  borderRadius: 8,
+                                  border: '1px solid var(--border)',
+                                  backgroundColor: 'var(--card)',
+                                  color: 'var(--foreground)',
+                                  fontFamily: 'var(--font-body)',
+                                  fontSize: 13,
+                                  outline: 'none',
+                                }}
+                              />
+                              <motion.button
+                                whileTap={{ scale: 0.96 }}
+                                disabled={!templateName.trim() || saveTemplateMutation.isPending}
+                                onClick={async () => {
+                                  if (!templateName.trim() || !parsedData || !aiAnalysis) return
+                                  const columnMappings: Record<string, string> = {}
+                                  for (const m of mappings) {
+                                    if (m.demandTypeId) {
+                                      columnMappings[m.sourceName] = m.demandTypeId
+                                    }
+                                  }
+                                  try {
+                                    await saveTemplateMutation.mutateAsync({
+                                      name: templateName.trim(),
+                                      column_mappings: columnMappings,
+                                      header_row: aiAnalysis.headerRow,
+                                      data_start_row: aiAnalysis.dataStartRow,
+                                      data_end_row: aiAnalysis.dataEndRow,
+                                      skip_rows: aiAnalysis.skipRows,
+                                      orientation: aiAnalysis.orientation,
+                                      unit_type: aiAnalysis.unitType,
+                                      sheet_name: selectedSheet || undefined,
+                                    })
+                                    toast.showSuccess('Template opgeslagen')
+                                    setShowTemplateSave(false)
+                                  } catch (err) {
+                                    toast.showError(err instanceof Error ? err.message : 'Opslaan mislukt')
+                                  }
+                                }}
+                                style={{
+                                  padding: '8px 16px',
+                                  borderRadius: 8,
+                                  border: 'none',
+                                  backgroundColor: templateName.trim() ? 'var(--primary)' : 'var(--muted)',
+                                  color: templateName.trim() ? '#fff' : 'var(--muted-foreground)',
+                                  fontFamily: 'var(--font-body)',
+                                  fontSize: 13,
+                                  fontWeight: 700,
+                                  cursor: templateName.trim() ? 'pointer' : 'not-allowed',
+                                  whiteSpace: 'nowrap',
+                                }}
+                              >
+                                {saveTemplateMutation.isPending ? 'Opslaan...' : 'Opslaan'}
+                              </motion.button>
+                            </motion.div>
+                          )}
                         </motion.div>
                       ) : (
                         <>
@@ -1406,33 +1768,55 @@ export function DemandUploadWizard({
                   >
                     Sluiten
                   </motion.button>
-                ) : step < 3 ? (
+                ) : step < 4 ? (
                   <motion.button
                     variants={scalePress}
                     whileTap="press"
-                    onClick={goNext}
-                    disabled={step === 1 ? !canGoToStep2 : !canGoToStep3}
+                    onClick={() => {
+                      if (step === 1 && workbook && parsedData) {
+                        // Trigger AI analysis + template matching on step 1 -> 2
+                        const sheet = selectedSheet || workbook.SheetNames[0]!
+                        const tmpl = findMatchingTemplate(parsedData.sourceProcesses)
+                        if (tmpl) {
+                          setTemplateMatch(tmpl)
+                          setTemplateBannerDismissed(false)
+                        } else {
+                          setTemplateMatch(null)
+                        }
+                        runAiAnalysis(workbook, sheet)
+                      }
+                      // When going from step 2 to step 3, apply AI suggestions (overrides initial fuzzy match)
+                      if (step === 2 && aiAnalysis) {
+                        applyAiSuggestions(aiAnalysis)
+                      }
+                      goNext()
+                    }}
+                    disabled={
+                      step === 1 ? !canGoToStep2
+                        : step === 2 ? !canGoToStep3
+                          : !canGoToStep4
+                    }
                     style={{
                       padding: '11px 24px',
                       borderRadius: 8,
                       border: 'none',
                       background:
-                        (step === 1 ? canGoToStep2 : canGoToStep3)
+                        (step === 1 ? canGoToStep2 : step === 2 ? canGoToStep3 : canGoToStep4)
                           ? 'linear-gradient(135deg, var(--primary), #8B5CF6)'
                           : 'var(--muted)',
                       color:
-                        (step === 1 ? canGoToStep2 : canGoToStep3)
+                        (step === 1 ? canGoToStep2 : step === 2 ? canGoToStep3 : canGoToStep4)
                           ? '#fff'
                           : 'var(--muted-foreground)',
                       fontFamily: 'var(--font-body)',
                       fontSize: 14,
                       fontWeight: 700,
                       cursor:
-                        (step === 1 ? canGoToStep2 : canGoToStep3)
+                        (step === 1 ? canGoToStep2 : step === 2 ? canGoToStep3 : canGoToStep4)
                           ? 'pointer'
                           : 'not-allowed',
                       boxShadow:
-                        (step === 1 ? canGoToStep2 : canGoToStep3)
+                        (step === 1 ? canGoToStep2 : step === 2 ? canGoToStep3 : canGoToStep4)
                           ? '0 4px 14px rgba(99,102,241,0.3)'
                           : 'none',
                     }}
