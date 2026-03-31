@@ -20,12 +20,12 @@ const DemandAnalysisSchema = z.object({
         .string()
         .nullable()
         .describe('matching process from existingProcesses'),
-      confidence: z.number().min(0).max(1),
+      confidence: z.number().describe('0-1 confidence score'),
       reason: z.string(),
     }),
   ),
   unitType: z.enum(['units', 'cases', 'pallets', 'hours', 'fte', 'unknown']),
-  unitTypeConfidence: z.number().min(0).max(1),
+  unitTypeConfidence: z.number().describe('0-1 confidence score'),
   anomalies: z.array(z.string()).describe('warnings in Dutch'),
   questions: z
     .array(
@@ -37,7 +37,7 @@ const DemandAnalysisSchema = z.object({
         default: z.string().optional(),
       }),
     )
-    .max(3),
+    .describe('max 3 questions'),
 })
 
 /* ── System prompt ───────────────────────────────────────────── */
