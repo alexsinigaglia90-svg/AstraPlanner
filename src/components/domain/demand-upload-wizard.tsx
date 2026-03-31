@@ -133,8 +133,9 @@ function isoWeekLabel(mondayIso: string): string {
 
 // ── Parse the uploaded file ──────────────────────────────────────────────────
 
-function parseExcelData(wb: XLSX.WorkBook): ParsedData | string {
-  const sheet = wb.Sheets[wb.SheetNames[0]!]
+function parseExcelData(wb: XLSX.WorkBook, sheetName?: string): ParsedData | string {
+  const name = sheetName ?? wb.SheetNames[0]!
+  const sheet = wb.Sheets[name]
   if (!sheet) return 'Geen data gevonden in het bestand.'
 
   const raw = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: '' })
@@ -352,6 +353,10 @@ export function DemandUploadWizard({
   const [importResult, setImportResult] = useState<{ count: number } | null>(null)
 
   // Reset state when modal opens
+  const [workbook, setWorkbook] = useState<XLSX.WorkBook | null>(null)
+  const [sheetNames, setSheetNames] = useState<string[]>([])
+  const [selectedSheet, setSelectedSheet] = useState<string>('')
+
   useEffect(() => {
     if (open) {
       setStep(1)
@@ -363,6 +368,9 @@ export function DemandUploadWizard({
       setMappings([])
       setImporting(false)
       setImportResult(null)
+      setWorkbook(null)
+      setSheetNames([])
+      setSelectedSheet('')
     }
   }, [open])
 
@@ -384,51 +392,82 @@ export function DemandUploadWizard({
       reader.readAsArrayBuffer(file)
     })
 
+  const parseSheet = useCallback(
+    (wb: XLSX.WorkBook, sheetName: string) => {
+      const result = parseExcelData(wb, sheetName)
+      if (typeof result === 'string') {
+        setParseError(result)
+        return
+      }
+      setParsedData(result)
+      setParseError(null)
+
+      // Auto-build mappings with fuzzy matching
+      const newMappings: ProcessMapping[] = result.sourceProcesses.map((src) => {
+        const match = fuzzyMatch(src, demandTypeOptions)
+        if (match) {
+          return {
+            sourceName: src,
+            demandTypeId: match.id,
+            demandTypeName: match.name,
+            autoMatched: true,
+            confidence: match.confidence,
+          }
+        }
+        return {
+          sourceName: src,
+          demandTypeId: null,
+          demandTypeName: '',
+          autoMatched: false,
+          confidence: 0,
+        }
+      })
+      setMappings(newMappings)
+    },
+    [demandTypeOptions],
+  )
+
   const processFile = useCallback(
     async (file: File) => {
       setFileName(file.name)
       setParseError(null)
       setParsedData(null)
       setMappings([])
+      setWorkbook(null)
+      setSheetNames([])
+      setSelectedSheet('')
 
       try {
         const buffer = await readFile(file)
         const wb = XLSX.read(new Uint8Array(buffer), { type: 'array' })
-        const result = parseExcelData(wb)
+        setWorkbook(wb)
 
-        if (typeof result === 'string') {
-          setParseError(result)
-          return
+        if (wb.SheetNames.length > 1) {
+          // Multiple sheets — let user choose
+          setSheetNames(wb.SheetNames)
+          setSelectedSheet(wb.SheetNames[0]!)
+          // Don't auto-parse yet — wait for sheet selection
+        } else {
+          // Single sheet — parse immediately
+          setSheetNames([])
+          parseSheet(wb, wb.SheetNames[0]!)
         }
-
-        setParsedData(result)
-
-        // Auto-build mappings with fuzzy matching
-        const newMappings: ProcessMapping[] = result.sourceProcesses.map((src) => {
-          const match = fuzzyMatch(src, demandTypeOptions)
-          if (match) {
-            return {
-              sourceName: src,
-              demandTypeId: match.id,
-              demandTypeName: match.name,
-              autoMatched: true,
-              confidence: match.confidence,
-            }
-          }
-          return {
-            sourceName: src,
-            demandTypeId: null,
-            demandTypeName: '',
-            autoMatched: false,
-            confidence: 0,
-          }
-        })
-        setMappings(newMappings)
       } catch {
         setParseError('Bestand kon niet worden verwerkt. Controleer het formaat.')
       }
     },
-    [demandTypeOptions],
+    [parseSheet],
+  )
+
+  // When user selects a different sheet
+  const handleSheetSelect = useCallback(
+    (sheetName: string) => {
+      setSelectedSheet(sheetName)
+      if (workbook) {
+        parseSheet(workbook, sheetName)
+      }
+    },
+    [workbook, parseSheet],
   )
 
   const handleDrop = useCallback(
@@ -839,6 +878,49 @@ export function DemandUploadWizard({
                                 {parseError}
                               </p>
                             )}
+                          </div>
+                        </motion.div>
+                      )}
+
+                      {/* Sheet selector (when multiple sheets) */}
+                      {sheetNames.length > 1 && (
+                        <motion.div
+                          initial={{ opacity: 0, y: 8 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={bouncy}
+                          style={{
+                            padding: '12px 14px',
+                            borderRadius: 8,
+                            backgroundColor: 'rgba(99,102,241,0.04)',
+                            border: '1px solid rgba(99,102,241,0.12)',
+                          }}
+                        >
+                          <p style={{ fontFamily: 'var(--font-body)', fontSize: 12, fontWeight: 600, color: 'var(--foreground)', margin: '0 0 8px' }}>
+                            Selecteer tabblad
+                          </p>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                            {sheetNames.map((name) => (
+                              <motion.button
+                                key={name}
+                                whileTap={{ scale: 0.96 }}
+                                onClick={() => handleSheetSelect(name)}
+                                style={{
+                                  padding: '6px 14px',
+                                  borderRadius: 20,
+                                  border: '1.5px solid',
+                                  borderColor: selectedSheet === name ? 'var(--primary)' : 'var(--border)',
+                                  backgroundColor: selectedSheet === name ? 'rgba(99,102,241,0.08)' : 'transparent',
+                                  color: selectedSheet === name ? 'var(--primary)' : 'var(--muted-foreground)',
+                                  fontFamily: 'var(--font-body)',
+                                  fontSize: 12,
+                                  fontWeight: selectedSheet === name ? 700 : 500,
+                                  cursor: 'pointer',
+                                  transition: 'all 0.15s',
+                                }}
+                              >
+                                {name}
+                              </motion.button>
+                            ))}
                           </div>
                         </motion.div>
                       )}
