@@ -2,9 +2,11 @@
 
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { containerStagger, fadeInUp, bouncy } from '@/lib/motion'
+import { Upload } from 'lucide-react'
+import { containerStagger, fadeInUp, bouncy, scalePress } from '@/lib/motion'
 import { DemandGrid } from '@/components/domain/demand-grid'
 import { FteDashboard } from '@/components/domain/fte-dashboard'
+import { DemandUploadWizard } from '@/components/domain/demand-upload-wizard'
 import { getDefaultWeekRange } from '@/components/domain/week-range-picker'
 import { useSiteStore } from '@/stores/site-store'
 
@@ -51,6 +53,7 @@ export default function DemandPage() {
     getDefaultWeekRange
   )
   const [activeTab, setActiveTab] = useState<Tab>('invoer')
+  const [uploadOpen, setUploadOpen] = useState(false)
 
   // Wait for site to be selected
   if (!siteId) {
@@ -83,7 +86,7 @@ export default function DemandPage() {
       }}
     >
       {/* ── Page header ─────────────────────────────────────────────── */}
-      <motion.div variants={fadeInUp}>
+      <motion.div variants={fadeInUp} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <h1
           style={{
             fontFamily: 'var(--font-display)',
@@ -95,6 +98,30 @@ export default function DemandPage() {
         >
           Demand &amp; Workload
         </h1>
+
+        <motion.button
+          variants={scalePress}
+          whileTap="press"
+          onClick={() => setUploadOpen(true)}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            padding: '8px 16px',
+            borderRadius: 8,
+            border: 'none',
+            background: 'linear-gradient(135deg, #f59e0b, #f97316)',
+            color: '#fff',
+            fontFamily: 'var(--font-body)',
+            fontSize: 13,
+            fontWeight: 700,
+            cursor: 'pointer',
+            boxShadow: '0 4px 14px rgba(245,158,11,0.25)',
+          }}
+        >
+          <Upload size={14} />
+          Upload
+        </motion.button>
       </motion.div>
 
       {/* ── Tab toggle ──────────────────────────────────────────────── */}
@@ -179,6 +206,14 @@ export default function DemandPage() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* ── Upload wizard ──────────────────────────────────────────── */}
+      <DemandUploadWizard
+        open={uploadOpen}
+        onClose={() => setUploadOpen(false)}
+        siteId={siteId}
+        onImported={() => setUploadOpen(false)}
+      />
     </motion.div>
   )
 }
