@@ -76,11 +76,13 @@ export function Step2({ entries, uniquePeriods, uniqueProcesses, isDayMode }: St
                 color: 'var(--muted-foreground)',
                 borderBottom: '1px solid var(--border)',
                 whiteSpace: 'nowrap',
-                minWidth: 140,
+                minWidth: 130,
+                maxWidth: 130,
                 position: 'sticky',
                 left: 0,
                 background: 'var(--muted)',
-                zIndex: 1,
+                zIndex: 2,
+                boxShadow: '4px 0 8px rgba(0,0,0,0.04)',
               }}>
                 Proces
               </th>
@@ -116,10 +118,15 @@ export function Step2({ entries, uniquePeriods, uniqueProcesses, isDayMode }: St
                     fontWeight: 600,
                     borderBottom: idx < uniqueProcesses.length - 1 ? '1px solid var(--border)' : 'none',
                     whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    minWidth: 130,
+                    maxWidth: 130,
                     position: 'sticky',
                     left: 0,
-                    background: idx % 2 === 0 ? 'var(--card)' : 'rgba(99,102,241,0.02)',
-                    zIndex: 1,
+                    background: idx % 2 === 0 ? '#ffffff' : '#f9f8ff',
+                    zIndex: 2,
+                    boxShadow: '4px 0 8px rgba(0,0,0,0.04)',
                   }}>
                     {proc}
                   </td>
