@@ -105,6 +105,7 @@ function downloadDemandTemplate(
   mode: PlanMode = 'week',
   weekCount = 8,
   workDays: number[] = [1, 2, 3, 4, 5],
+  existingData?: Map<string, Map<string, number>>,
 ) {
   const wb = XLSX.utils.book_new()
   const columns = mode === 'week'
@@ -114,7 +115,13 @@ function downloadDemandTemplate(
   const headerRow = ['Proces', ...columns.map((c) => c.label)]
   const dateRow = ['', ...columns.map((c) => c.date)]
   const modeRow = ['_mode', mode, ...(mode === 'day' ? ['weekCount=' + weekCount] : [])]
-  const dataRows = processes.map((p) => [p.name, ...columns.map(() => '')])
+  const dataRows = processes.map((p) => [
+    p.name,
+    ...columns.map((col) => {
+      const vol = existingData?.get(p.id)?.get(col.date)
+      return vol != null && vol > 0 ? vol : ''
+    }),
+  ])
 
   const allRows = [headerRow, dateRow, modeRow, ...dataRows]
   const ws = XLSX.utils.aoa_to_sheet(allRows)
@@ -288,6 +295,33 @@ export function DemandUploadWizard({ open, onClose, siteId, onImported }: Demand
     (processesQuery.data ?? []).map((p) => ({ id: p.id, name: p.name })),
     [processesQuery.data],
   )
+
+  // Compute the date range that the template would generate so we can pre-fill it
+  const templateDateRange = useMemo(() => {
+    const mondays = getNextMondays(8)
+    return {
+      period_start: mondays[0]!.date,
+      period_end: mondays[mondays.length - 1]!.date,
+    }
+  }, [])
+
+  const forecastsQuery = trpc.demand.listProcessDemand.useQuery(
+    { site_id: activeSiteId ?? siteId, ...templateDateRange },
+    { enabled: open && !!(activeSiteId ?? siteId) },
+  )
+
+  const existingData = useMemo(() => {
+    const map = new Map<string, Map<string, number>>()
+    for (const f of forecastsQuery.data ?? []) {
+      const procId = f.process_id
+      if (!procId) continue
+      const date = (f.period_start as string).split('T')[0]!
+      if (!map.has(procId)) map.set(procId, new Map())
+      map.get(procId)!.set(date, Number(f.volume))
+    }
+    return map
+  }, [forecastsQuery.data])
+
   const departmentsQuery = trpc.org.listDepartments.useQuery(
     { site_id: activeSiteId ?? siteId },
     { enabled: open && !!(activeSiteId ?? siteId) },
@@ -449,7 +483,7 @@ export function DemandUploadWizard({ open, onClose, siteId, onImported }: Demand
                     planMode={planMode} dayWeekCount={dayWeekCount} workDayPreset={workDayPreset}
                     onPlanModeChange={setPlanMode} onDayWeekCountChange={setDayWeekCount}
                     onWorkDayPresetChange={setWorkDayPreset}
-                    onDownloadTemplate={() => downloadDemandTemplate(demandTypes, planMode, planMode === 'week' ? 8 : dayWeekCount, workDays)}
+                    onDownloadTemplate={() => downloadDemandTemplate(demandTypes, planMode, planMode === 'week' ? 8 : dayWeekCount, workDays, existingData)}
                     onDrop={handleDrop}
                     onDragOver={(e) => { e.preventDefault(); setIsDragging(true) }}
                     onDragLeave={() => setIsDragging(false)}
