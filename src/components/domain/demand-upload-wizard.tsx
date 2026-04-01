@@ -27,95 +27,136 @@ interface ParsedDemand {
   volume: number
 }
 
-// ── Template generation ───────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function getNextMondays(count: number): { date: string; label: string }[] {
+  const today = new Date()
+  const dow = today.getDay()
+  const daysUntil = dow === 1 ? 7 : (8 - dow) % 7 || 7
+  const first = new Date(today)
+  first.setDate(today.getDate() + daysUntil)
+
+  const months = ['jan', 'feb', 'mrt', 'apr', 'mei', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec']
+
+  return Array.from({ length: count }, (_, i) => {
+    const d = new Date(first)
+    d.setDate(first.getDate() + i * 7)
+    const iso = d.toISOString().split('T')[0]!
+    const weekNum = Math.ceil(((d.getTime() - new Date(d.getFullYear(), 0, 1).getTime()) / 86400000 + 1) / 7)
+    return { date: iso, label: `Wk${weekNum} (${d.getDate()} ${months[d.getMonth()]})` }
+  })
+}
+
+// ── Template generation (processes as ROWS, weeks as COLUMNS) ────────────────
 
 function downloadDemandTemplate(
-  demandTypes: Array<{ id: string; name: string }>,
+  processes: Array<{ id: string; name: string }>,
   weekCount = 8,
 ) {
   const wb = XLSX.utils.book_new()
+  const weeks = getNextMondays(weekCount)
 
-  // Sheet 1: Demand
-  const headers = ['Week Start (maandag)', ...demandTypes.map((dt) => dt.name)]
-  const rows: (string | number)[][] = []
+  // Row 1: header — "Proces" + week labels
+  // Row 2: sub-header — "" + ISO dates (hidden key for parsing)
+  // Row 3+: process name + empty cells
+  const headerRow = ['Proces', ...weeks.map((w) => w.label)]
+  const dateRow = ['', ...weeks.map((w) => w.date)]
+  const dataRows = processes.map((p) => [p.name, ...weeks.map(() => '')])
 
-  // Generate next N Mondays
-  const today = new Date()
-  const dayOfWeek = today.getDay() // 0=Sun,1=Mon,...,6=Sat
-  const daysUntilMonday = dayOfWeek === 1 ? 7 : (8 - dayOfWeek) % 7 || 7
-  const firstMonday = new Date(today)
-  firstMonday.setDate(today.getDate() + daysUntilMonday)
+  const allRows = [headerRow, dateRow, ...dataRows]
+  const ws = XLSX.utils.aoa_to_sheet(allRows)
 
-  for (let i = 0; i < weekCount; i++) {
-    const monday = new Date(firstMonday)
-    monday.setDate(firstMonday.getDate() + i * 7)
-    const dateStr = monday.toISOString().split('T')[0]!
-    rows.push([dateStr, ...demandTypes.map(() => '')])
-  }
+  // Column widths
+  ws['!cols'] = [
+    { wch: 24 }, // Process name column
+    ...weeks.map(() => ({ wch: 16 })),
+  ]
 
-  const ws = XLSX.utils.aoa_to_sheet([headers, ...rows])
-  ws['!cols'] = headers.map((h, i) => ({ wch: i === 0 ? 20 : Math.max(h.length + 4, 14) }))
+  // Style the date row as smaller/muted (row 2) — add comment as hint
+  // XLSX doesn't support cell styling without xlsx-style, but we make date row clear
+
   XLSX.utils.book_append_sheet(wb, ws, 'Demand')
 
-  // Sheet 2: Reference
-  const ref: (string | number)[][] = [
-    ['Instructies'],
-    ['Vul per week het verwachte volume in per proces.'],
-    ['Laat cellen leeg als er geen demand is.'],
-    ['De "Week Start" kolom mag niet gewijzigd worden.'],
+  // Sheet 2: Referentie
+  const ref = [
+    ['AstraPlanner — Demand Forecast Template'],
     [''],
-    ['Processen:'],
-    ...demandTypes.map((dt) => [dt.name]),
+    ['Instructies:'],
+    ['1. Vul per proces (rij) het verwachte volume in per week (kolom).'],
+    ['2. Laat cellen leeg als er geen demand is voor die week.'],
+    ['3. Wijzig de procesnamen en datums NIET.'],
+    ['4. Rij 2 bevat de weekstart-datums (maandag) — niet verwijderen.'],
+    [''],
+    ['Processen in dit template:'],
+    ...processes.map((p, i) => [`${i + 1}. ${p.name}`]),
+    [''],
+    [`Gegenereerd: ${new Date().toLocaleDateString('nl-NL', { day: 'numeric', month: 'long', year: 'numeric' })}`],
   ]
   const wsRef = XLSX.utils.aoa_to_sheet(ref)
-  wsRef['!cols'] = [{ wch: 50 }]
+  wsRef['!cols'] = [{ wch: 55 }]
   XLSX.utils.book_append_sheet(wb, wsRef, 'Referentie')
 
   XLSX.writeFile(wb, 'AstraPlanner_Demand_Template.xlsx')
 }
 
-// ── Template parsing ──────────────────────────────────────────────────────────
+// ── Template parsing (processes as ROWS, weeks as COLUMNS) ───────────────────
 
 function parseFilledTemplate(
   wb: XLSX.WorkBook,
-  demandTypes: Array<{ id: string; name: string }>,
+  processes: Array<{ id: string; name: string }>,
 ): { entries: ParsedDemand[]; errors: string[] } {
   const sheet = wb.Sheets['Demand'] ?? wb.Sheets[wb.SheetNames[0]!]
   if (!sheet) return { entries: [], errors: ['Geen "Demand" tabblad gevonden'] }
 
-  const raw = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: '' })
-  const dtMap = new Map(demandTypes.map((dt) => [dt.name.toLowerCase(), dt]))
+  const raw = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: '' }) as unknown[][]
+  if (raw.length < 3) return { entries: [], errors: ['Template bevat te weinig rijen'] }
+
+  // Row 0: header labels (Proces, Wk14 (31 mrt), ...)
+  // Row 1: ISO dates ("", 2026-04-06, 2026-04-13, ...)
+  // Row 2+: process name + volumes
+
+  const dateRow = raw[1] as string[]
+  const weekDates: string[] = []
+  for (let c = 1; c < dateRow.length; c++) {
+    const d = String(dateRow[c] ?? '').trim()
+    if (/^\d{4}-\d{2}-\d{2}$/.test(d)) {
+      weekDates.push(d)
+    }
+  }
+
+  if (weekDates.length === 0) {
+    return { entries: [], errors: ['Geen geldige datums gevonden in rij 2. Verwijder rij 2 niet uit het template.'] }
+  }
+
+  const procMap = new Map(processes.map((p) => [p.name.toLowerCase(), p]))
   const entries: ParsedDemand[] = []
   const errors: string[] = []
 
-  for (let i = 0; i < raw.length; i++) {
-    const row = raw[i]!
-    const weekStart = String(row['Week Start (maandag)'] ?? '').trim()
-    if (!weekStart || !/^\d{4}-\d{2}-\d{2}$/.test(weekStart)) {
-      if (weekStart) errors.push(`Rij ${i + 2}: ongeldige datum "${weekStart}"`)
+  for (let r = 2; r < raw.length; r++) {
+    const row = raw[r] as unknown[]
+    const procName = String(row[0] ?? '').trim()
+    if (!procName) continue
+
+    const proc = procMap.get(procName.toLowerCase())
+    if (!proc) {
+      errors.push(`Rij ${r + 1}: onbekend proces "${procName}"`)
       continue
     }
 
-    for (const [colName, value] of Object.entries(row)) {
-      if (colName === 'Week Start (maandag)') continue
-      const vol = Number(value)
-      if (!value || value === '' || isNaN(vol) || vol === 0) continue
-
-      const dt = dtMap.get(colName.toLowerCase())
-      if (!dt) {
-        errors.push(`Rij ${i + 2}: onbekend proces "${colName}"`)
-        continue
-      }
+    for (let c = 0; c < weekDates.length; c++) {
+      const val = row[c + 1] // +1 because column 0 is process name
+      const vol = Number(val)
+      if (val === '' || val == null || isNaN(vol) || vol === 0) continue
 
       if (vol < 0) {
-        errors.push(`Rij ${i + 2}: negatief volume voor "${colName}"`)
+        errors.push(`Rij ${r + 1}, ${weekDates[c]}: negatief volume`)
         continue
       }
 
       entries.push({
-        weekStart,
-        demandTypeId: dt.id,
-        demandTypeName: dt.name,
+        weekStart: weekDates[c]!,
+        demandTypeId: proc.id,
+        demandTypeName: proc.name,
         volume: vol,
       })
     }
@@ -819,11 +860,23 @@ interface Step2Props {
 }
 
 function Step2({ entries, uniqueWeeks, uniqueProcesses }: Step2Props) {
-  // Build lookup: weekStart -> processName -> volume
+  // Build lookup: processName -> weekStart -> volume (transposed)
   const lookup = new Map<string, Map<string, number>>()
   for (const e of entries) {
-    if (!lookup.has(e.weekStart)) lookup.set(e.weekStart, new Map())
-    lookup.get(e.weekStart)!.set(e.demandTypeName, e.volume)
+    if (!lookup.has(e.demandTypeName)) lookup.set(e.demandTypeName, new Map())
+    lookup.get(e.demandTypeName)!.set(e.weekStart, e.volume)
+  }
+
+  // Format week labels
+  const months = ['jan', 'feb', 'mrt', 'apr', 'mei', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec']
+  const weekLabel = (iso: string) => {
+    const d = new Date(iso)
+    const wk = Math.ceil(((d.getTime() - new Date(d.getFullYear(), 0, 1).getTime()) / 86400000 + 1) / 7)
+    return `Wk${wk}`
+  }
+  const weekSub = (iso: string) => {
+    const d = new Date(iso)
+    return `${d.getDate()} ${months[d.getMonth()]}`
   }
 
   return (
@@ -843,7 +896,7 @@ function Step2({ entries, uniqueWeeks, uniqueProcesses }: Step2Props) {
         <strong>{uniqueProcesses.length}</strong> processen
       </div>
 
-      {/* Preview table */}
+      {/* Preview table — processes as ROWS, weeks as COLUMNS */}
       <div style={{
         overflowX: 'auto',
         borderRadius: 8,
@@ -864,12 +917,16 @@ function Step2({ entries, uniqueWeeks, uniqueProcesses }: Step2Props) {
                 color: 'var(--muted-foreground)',
                 borderBottom: '1px solid var(--border)',
                 whiteSpace: 'nowrap',
-                minWidth: 100,
+                minWidth: 140,
+                position: 'sticky',
+                left: 0,
+                background: 'var(--muted)',
+                zIndex: 1,
               }}>
-                Week
+                Proces
               </th>
-              {uniqueProcesses.map((p) => (
-                <th key={p} style={{
+              {uniqueWeeks.map((w) => (
+                <th key={w} style={{
                   padding: '8px 12px',
                   textAlign: 'right',
                   fontWeight: 700,
@@ -878,38 +935,44 @@ function Step2({ entries, uniqueWeeks, uniqueProcesses }: Step2Props) {
                   whiteSpace: 'nowrap',
                   minWidth: 80,
                 }}>
-                  {p}
+                  <div>{weekLabel(w)}</div>
+                  <div style={{ fontSize: 10, fontWeight: 400 }}>{weekSub(w)}</div>
                 </th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {uniqueWeeks.map((week, idx) => {
-              const weekMap = lookup.get(week)
+            {uniqueProcesses.map((proc, idx) => {
+              const procMap = lookup.get(proc)
               return (
                 <tr
-                  key={week}
+                  key={proc}
                   style={{
-                    background: idx % 2 === 0 ? 'transparent' : 'var(--muted)',
+                    background: idx % 2 === 0 ? 'transparent' : 'rgba(99,102,241,0.02)',
                   }}
                 >
                   <td style={{
                     padding: '7px 12px',
                     color: 'var(--foreground)',
                     fontWeight: 600,
-                    borderBottom: idx < uniqueWeeks.length - 1 ? '1px solid var(--border)' : 'none',
+                    borderBottom: idx < uniqueProcesses.length - 1 ? '1px solid var(--border)' : 'none',
                     whiteSpace: 'nowrap',
+                    position: 'sticky',
+                    left: 0,
+                    background: idx % 2 === 0 ? 'var(--card)' : 'rgba(99,102,241,0.02)',
+                    zIndex: 1,
                   }}>
-                    {formatDate(week)}
+                    {proc}
                   </td>
-                  {uniqueProcesses.map((p) => {
-                    const val = weekMap?.get(p)
+                  {uniqueWeeks.map((w) => {
+                    const val = procMap?.get(w)
                     return (
-                      <td key={p} style={{
+                      <td key={w} style={{
                         padding: '7px 12px',
                         textAlign: 'right',
+                        fontFamily: 'var(--font-mono)',
                         color: val != null ? 'var(--foreground)' : 'var(--muted-foreground)',
-                        borderBottom: idx < uniqueWeeks.length - 1 ? '1px solid var(--border)' : 'none',
+                        borderBottom: idx < uniqueProcesses.length - 1 ? '1px solid var(--border)' : 'none',
                       }}>
                         {val != null ? val.toLocaleString('nl-NL') : '—'}
                       </td>
