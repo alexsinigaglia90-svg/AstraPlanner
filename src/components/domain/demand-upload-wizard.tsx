@@ -197,7 +197,7 @@ function parseFilledTemplate(
       }
 
       const periodStart = periodDates[c]!
-      const periodEnd = mode === 'day' ? periodStart : addDays(periodStart, 6)
+      const periodEnd = mode === 'day' ? addDays(periodStart, 1) : addDays(periodStart, 6)
 
       entries.push({
         periodStart,
@@ -332,7 +332,7 @@ export function DemandUploadWizard({ open, onClose, siteId, onImported }: Demand
   const uniquePeriods = [...new Set(entries.map((e) => e.periodStart))].sort()
   const uniqueProcesses = [...new Set(entries.map((e) => e.demandTypeName))]
   const canProceedToStep2 = entries.length > 0
-  const isDayMode = entries.length > 0 && entries[0]!.periodStart === entries[0]!.periodEnd
+  const isDayMode = entries.length > 0 && entries[0]!.periodEnd === addDays(entries[0]!.periodStart, 1)
 
   if (!open) return null
 
