@@ -289,12 +289,25 @@ export const demandRouter = router({
         await admin.from('demand_forecast_history').insert(historyRows)
       }
 
-      // ── Upsert forecasts ──────────────────────────────────────────────
-      const { data, error } = await ctx.supabase
+      // ── Delete existing forecasts for these periods, then insert fresh ──
+      // The unique index uses COALESCE which doesn't work with Supabase upsert.
+      // Delete-then-insert is simpler and more reliable.
+      for (const f of input.forecasts) {
+        await admin
+          .from('demand_forecast')
+          .delete()
+          .eq('organization_id', ctx.organizationId)
+          .eq('site_id', f.site_id)
+          .eq('demand_type_id', f.demand_type_id)
+          .eq('period_start', f.period_start)
+          .eq('period_end', f.period_end)
+          .is('plan_version_id', null)
+      }
+
+      const { data, error } = await admin
         .from('demand_forecast')
-        .upsert(
+        .insert(
           input.forecasts.map((f) => ({
-            ...(f.id ? { id: f.id } : {}),
             site_id: f.site_id,
             demand_type_id: f.demand_type_id,
             period_start: f.period_start,
@@ -302,10 +315,9 @@ export const demandRouter = router({
             volume: f.volume,
             source: f.source,
             organization_id: ctx.organizationId,
-          })),
-          { onConflict: 'organization_id,site_id,demand_type_id,period_start,period_end,plan_version_id' }
+          }))
         )
-        .select('id, demand_type_id, period_start, volume')
+        .select('id')
 
       if (error) {
         throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: error.message })
