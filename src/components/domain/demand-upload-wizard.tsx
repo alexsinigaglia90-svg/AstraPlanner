@@ -1,11 +1,12 @@
 'use client'
 
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, Upload, Download, Check, AlertCircle, FileSpreadsheet } from 'lucide-react'
 import { bouncy, snappy, scalePress } from '@/lib/motion'
 import { trpc } from '@/lib/trpc/client'
 import { useToast } from '@/components/domain/toast'
+import { useSiteStore } from '@/stores/site-store'
 import * as XLSX from 'xlsx'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -181,10 +182,20 @@ export function DemandUploadWizard({
   const [parseErrors, setParseErrors] = useState<string[]>([])
   const [isImporting, setIsImporting] = useState(false)
 
-  const { data: demandTypes = [] } = trpc.demand.listDemandTypes.useQuery(
-    {},
-    { enabled: open },
+  const { activeSiteId } = useSiteStore()
+
+  const processesQuery = trpc.org.listProcesses.useQuery(
+    { site_id: activeSiteId ?? siteId },
+    { enabled: open && !!(activeSiteId ?? siteId) },
   )
+
+  // Use processes for template columns — mapped to demand types at import time
+  const demandTypes = useMemo(() =>
+    (processesQuery.data ?? []).map((p) => ({ id: p.id, name: p.name })),
+    [processesQuery.data],
+  )
+
+  const upsertDemandType = trpc.demand.upsertDemandType.useMutation()
 
   const bulkUpsert = trpc.demand.bulkUpsert.useMutation()
 
@@ -253,15 +264,40 @@ export function DemandUploadWizard({
     if (entries.length === 0) return
     setIsImporting(true)
     try {
-      const forecasts = entries.map((e) => ({
-        demand_type_id: e.demandTypeId,
-        site_id: siteId,
-        volume: e.volume,
-        period_start: e.weekStart,
-        period_end: addDays(e.weekStart, 6),
-        demand_source: 'csv_upload' as const,
-        source: 'csv_upload' as const,
-      }))
+      // Auto-create demand types for each unique process (1:1 mapping)
+      const uniqueProcessIds = [...new Set(entries.map((e) => e.demandTypeId))]
+      const processMap = new Map(demandTypes.map((p) => [p.id, p]))
+      const demandTypeIdMap = new Map<string, string>() // processId → demandTypeId
+
+      for (const processId of uniqueProcessIds) {
+        const proc = processMap.get(processId)
+        if (!proc) continue
+        // Create/upsert a 1:1 demand type for this process
+        const result = await upsertDemandType.mutateAsync({
+          name: proc.name,
+          unit_of_measure: 'units',
+          process_mappings: [{ process_id: processId, conversion_ratio: 1 }],
+        })
+        demandTypeIdMap.set(processId, result.id)
+      }
+
+      const forecasts = entries
+        .filter((e) => demandTypeIdMap.has(e.demandTypeId))
+        .map((e) => ({
+          demand_type_id: demandTypeIdMap.get(e.demandTypeId)!,
+          site_id: siteId,
+          volume: e.volume,
+          period_start: e.weekStart,
+          period_end: addDays(e.weekStart, 6),
+          source: 'csv_upload' as const,
+        }))
+
+      if (forecasts.length === 0) {
+        toast.showError('Geen geldige entries om te importeren')
+        setIsImporting(false)
+        return
+      }
+
       const result = await bulkUpsert.mutateAsync({ forecasts })
       toast.showSuccess(`${result.upserted} demand entries geïmporteerd`)
       onImported()
