@@ -204,9 +204,10 @@ function parseFilledTemplate(
       for (let c = 0; c < periodDates.length; c++) {
         const val = row[c + 1]
         const vol = Number(val)
-        if (val === '' || val == null || isNaN(vol) || vol === 0) continue
+        if (val === '' || val == null) continue
+        const pVol = isNaN(vol) ? 0 : vol
 
-        if (vol < 0) {
+        if (pVol < 0) {
           errors.push(`Rij ${r + 1}, ${periodDates[c]}: negatief volume`)
           continue
         }
@@ -219,7 +220,7 @@ function parseFilledTemplate(
           periodEnd,
           demandTypeId: `__pending__:${procName.toLowerCase()}`,
           demandTypeName: procName,
-          volume: parsedVol,
+          volume: pVol,
         })
       }
       continue
