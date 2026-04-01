@@ -63,12 +63,14 @@ export const demandRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const admin = createAdminClient()
+      const code = input.name.substring(0, 30).toUpperCase().replace(/\s+/g, '_').replace(/[^A-Z0-9_]/g, '')
       const { data, error } = await admin
         .from('demand_type')
         .upsert({
           ...(input.id ? { id: input.id } : {}),
           organization_id: ctx.organizationId,
           name: input.name,
+          code,
           unit_of_measure: input.unit_of_measure,
         })
         .select('id, name, unit_of_measure, updated_at')
