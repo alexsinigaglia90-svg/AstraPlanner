@@ -62,7 +62,8 @@ export const demandRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const { data, error } = await ctx.supabase
+      const admin = createAdminClient()
+      const { data, error } = await admin
         .from('demand_type')
         .upsert({
           ...(input.id ? { id: input.id } : {}),
@@ -79,13 +80,13 @@ export const demandRouter = router({
 
       if (input.process_mappings.length > 0) {
         if (input.id) {
-          await ctx.supabase
+          await admin
             .from('demand_type_process_mapping')
             .delete()
             .eq('demand_type_id', data.id)
         }
 
-        const { error: mappingError } = await ctx.supabase
+        const { error: mappingError } = await admin
           .from('demand_type_process_mapping')
           .insert(
             input.process_mappings.map((pm) => ({
