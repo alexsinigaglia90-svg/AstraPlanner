@@ -72,7 +72,8 @@ export const demandRouter = router({
           name: input.name,
           code,
           unit_of_measure: input.unit_of_measure,
-        })
+          category: 'outbound',
+        }, { onConflict: 'organization_id,code' })
         .select('id, name, unit_of_measure, updated_at')
         .single()
 
