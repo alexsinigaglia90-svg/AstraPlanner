@@ -82,12 +82,11 @@ export const demandRouter = router({
       }
 
       if (input.process_mappings.length > 0) {
-        if (input.id) {
-          await admin
-            .from('demand_type_process_mapping')
-            .delete()
-            .eq('demand_type_id', data.id)
-        }
+        // Always delete old mappings first, then re-insert
+        await admin
+          .from('demand_type_process_mapping')
+          .delete()
+          .eq('demand_type_id', data.id)
 
         const { error: mappingError } = await admin
           .from('demand_type_process_mapping')
