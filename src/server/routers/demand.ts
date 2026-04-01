@@ -400,6 +400,64 @@ export const demandRouter = router({
       return { deleted: count ?? 0 }
     }),
 
+  // ── Bulk upsert process-based demand (used by upload wizard) ─────────
+
+  bulkUpsertProcessDemand: plannerProcedure
+    .input(
+      z.object({
+        forecasts: z.array(
+          z.object({
+            process_id: z.string().uuid(),
+            site_id: z.string().uuid(),
+            period_start: z.string(),
+            period_end: z.string(),
+            volume: z.number().min(0).max(999999),
+            unit_of_measure: z.string(),
+            source: sourceEnum,
+          })
+        ).min(1).max(500),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const admin = createAdminClient()
+
+      // Delete existing records for these process/period combos, then insert fresh
+      for (const f of input.forecasts) {
+        await admin
+          .from('demand_forecast')
+          .delete()
+          .eq('organization_id', ctx.organizationId)
+          .eq('site_id', f.site_id)
+          .eq('process_id', f.process_id)
+          .eq('period_start', f.period_start)
+          .is('plan_version_id', null)
+      }
+
+      const { data, error } = await admin
+        .from('demand_forecast')
+        .insert(
+          input.forecasts.map((f) => ({
+            organization_id: ctx.organizationId,
+            site_id: f.site_id,
+            process_id: f.process_id,
+            demand_type_id: null,
+            period_start: f.period_start,
+            period_end: f.period_end,
+            volume: f.volume,
+            unit_of_measure: f.unit_of_measure,
+            source: f.source,
+            plan_version_id: null,
+          }))
+        )
+        .select('id')
+
+      if (error) {
+        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: error.message })
+      }
+
+      return { upserted: data?.length ?? 0 }
+    }),
+
   // ── Process-based demand (direct entry, no demand types) ──────────────
 
   listProcessDemand: plannerProcedure

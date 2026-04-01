@@ -24,6 +24,13 @@ export interface ParsedDemand {
   volume: number
 }
 
+/** Process names found in the template that don't exist in AstraPlanner yet. */
+export interface ParseResult {
+  entries: ParsedDemand[]
+  errors: string[]
+  unknownProcessNames: string[]
+}
+
 interface DemandUploadWizardProps {
   open: boolean
   onClose: () => void
@@ -148,12 +155,12 @@ function downloadDemandTemplate(
 function parseFilledTemplate(
   wb: XLSX.WorkBook,
   processes: Array<{ id: string; name: string }>,
-): { entries: ParsedDemand[]; errors: string[] } {
+): ParseResult {
   const sheet = wb.Sheets['Demand'] ?? wb.Sheets[wb.SheetNames[0]!]
-  if (!sheet) return { entries: [], errors: ['Geen "Demand" tabblad gevonden'] }
+  if (!sheet) return { entries: [], errors: ['Geen "Demand" tabblad gevonden'], unknownProcessNames: [] }
 
   const raw = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: '' }) as unknown[][]
-  if (raw.length < 3) return { entries: [], errors: ['Template bevat te weinig rijen'] }
+  if (raw.length < 3) return { entries: [], errors: ['Template bevat te weinig rijen'], unknownProcessNames: [] }
 
   const dateRow = raw[1] as string[]
   const modeRow = raw[2] as string[]
@@ -168,12 +175,13 @@ function parseFilledTemplate(
   }
 
   if (periodDates.length === 0) {
-    return { entries: [], errors: ['Geen geldige datums gevonden in rij 2.'] }
+    return { entries: [], errors: ['Geen geldige datums gevonden in rij 2.'], unknownProcessNames: [] }
   }
 
   const procMap = new Map(processes.map((p) => [p.name.toLowerCase(), p]))
   const entries: ParsedDemand[] = []
   const errors: string[] = []
+  const unknownSet = new Set<string>()
 
   for (let r = dataStartRow; r < raw.length; r++) {
     const row = raw[r] as unknown[]
@@ -182,7 +190,31 @@ function parseFilledTemplate(
 
     const proc = procMap.get(procName.toLowerCase())
     if (!proc) {
-      errors.push(`Rij ${r + 1}: onbekend proces "${procName}"`)
+      // Collect unknown process names for auto-creation instead of skipping
+      unknownSet.add(procName)
+
+      // Still parse entries — use a placeholder ID that will be resolved after auto-creation
+      for (let c = 0; c < periodDates.length; c++) {
+        const val = row[c + 1]
+        const vol = Number(val)
+        if (val === '' || val == null || isNaN(vol) || vol === 0) continue
+
+        if (vol < 0) {
+          errors.push(`Rij ${r + 1}, ${periodDates[c]}: negatief volume`)
+          continue
+        }
+
+        const periodStart = periodDates[c]!
+        const periodEnd = mode === 'day' ? addDays(periodStart, 1) : addDays(periodStart, 6)
+
+        entries.push({
+          periodStart,
+          periodEnd,
+          demandTypeId: `__pending__:${procName.toLowerCase()}`,
+          demandTypeName: procName,
+          volume: vol,
+        })
+      }
       continue
     }
 
@@ -209,7 +241,7 @@ function parseFilledTemplate(
     }
   }
 
-  return { entries, errors }
+  return { entries, errors, unknownProcessNames: [...unknownSet] }
 }
 
 // ── Styles ────────────────────────────────────────────────────────────────────
@@ -240,6 +272,7 @@ export function DemandUploadWizard({ open, onClose, siteId, onImported }: Demand
   const [uploadedFile, setUploadedFile] = useState<File | null>(null)
   const [entries, setEntries] = useState<ParsedDemand[]>([])
   const [parseErrors, setParseErrors] = useState<string[]>([])
+  const [unknownProcessNames, setUnknownProcessNames] = useState<string[]>([])
   const [isImporting, setIsImporting] = useState(false)
   const [planMode, setPlanMode] = useState<PlanMode>('week')
   const [dayWeekCount, setDayWeekCount] = useState(1)
@@ -255,12 +288,16 @@ export function DemandUploadWizard({ open, onClose, siteId, onImported }: Demand
     (processesQuery.data ?? []).map((p) => ({ id: p.id, name: p.name })),
     [processesQuery.data],
   )
-  const upsertDemandType = trpc.demand.upsertDemandType.useMutation()
-  const bulkUpsert = trpc.demand.bulkUpsert.useMutation()
+  const departmentsQuery = trpc.org.listDepartments.useQuery(
+    { site_id: activeSiteId ?? siteId },
+    { enabled: open && !!(activeSiteId ?? siteId) },
+  )
+  const upsertProcess = trpc.org.upsertProcess.useMutation()
+  const bulkUpsertProcessDemand = trpc.demand.bulkUpsertProcessDemand.useMutation()
 
   const handleClose = useCallback(() => {
     setStep(1); setIsDragging(false); setUploadedFile(null)
-    setEntries([]); setParseErrors([]); setIsImporting(false)
+    setEntries([]); setParseErrors([]); setUnknownProcessNames([]); setIsImporting(false)
     setPlanMode('week'); setDayWeekCount(1); setWorkDayPreset('ma-vr')
     onClose()
   }, [onClose])
@@ -275,7 +312,10 @@ export function DemandUploadWizard({ open, onClose, siteId, onImported }: Demand
         const data = new Uint8Array(e.target!.result as ArrayBuffer)
         const wb = XLSX.read(data, { type: 'array' })
         const result = parseFilledTemplate(wb, demandTypes)
-        setUploadedFile(file); setEntries(result.entries); setParseErrors(result.errors)
+        setUploadedFile(file)
+        setEntries(result.entries)
+        setParseErrors(result.errors)
+        setUnknownProcessNames(result.unknownProcessNames)
       } catch { setParseErrors(['Kon het bestand niet lezen.']) }
     }
     reader.readAsArrayBuffer(file)
@@ -294,40 +334,68 @@ export function DemandUploadWizard({ open, onClose, siteId, onImported }: Demand
     if (entries.length === 0) return
     setIsImporting(true)
     try {
-      const uniqueProcessIds = [...new Set(entries.map((e) => e.demandTypeId))]
-      const processMap = new Map(demandTypes.map((p) => [p.id, p]))
-      const demandTypeIdMap = new Map<string, string>()
+      // ── Step 1: Auto-create missing processes ──────────────────────────
+      const departments = departmentsQuery.data ?? []
+      const newProcessIdMap = new Map<string, string>() // lowercased name -> new process id
 
-      for (const processId of uniqueProcessIds) {
-        const proc = processMap.get(processId); if (!proc) continue
-        const result = await upsertDemandType.mutateAsync({
-          name: proc.name, unit_of_measure: 'units',
-          process_mappings: [{ process_id: processId, conversion_ratio: 1 }],
-        })
-        demandTypeIdMap.set(processId, result.id)
+      if (unknownProcessNames.length > 0) {
+        if (departments.length === 0) {
+          toast.showError('Kan processen niet aanmaken: geen afdelingen gevonden voor deze locatie')
+          setIsImporting(false)
+          return
+        }
+        const defaultDeptId = departments[0]!.id
+
+        for (const procName of unknownProcessNames) {
+          const created = await upsertProcess.mutateAsync({
+            name: procName,
+            department_id: defaultDeptId,
+            process_type: 'productive',
+          })
+          newProcessIdMap.set(procName.toLowerCase(), created.id)
+        }
+
+        // Refetch processes so the grid picks up new ones
+        await processesQuery.refetch()
       }
 
-      const forecasts = entries
-        .filter((e) => demandTypeIdMap.has(e.demandTypeId))
-        .map((e) => ({
-          demand_type_id: demandTypeIdMap.get(e.demandTypeId)!,
-          site_id: siteId, volume: e.volume,
-          period_start: e.periodStart, period_end: e.periodEnd,
-          source: 'csv_upload' as const,
-        }))
+      // ── Step 2: Resolve placeholder IDs for auto-created processes ─────
+      const resolvedEntries = entries.map((e) => {
+        let processId = e.demandTypeId
+        // Resolve pending placeholder IDs from auto-created processes
+        if (processId.startsWith('__pending__:')) {
+          const lowerName = processId.replace('__pending__:', '')
+          processId = newProcessIdMap.get(lowerName) ?? ''
+        }
+        return { ...e, resolvedProcessId: processId }
+      }).filter((e) => e.resolvedProcessId !== '')
+
+      // ── Step 3: Insert forecasts with process_id directly ──────────────
+      const forecasts = resolvedEntries.map((e) => ({
+        process_id: e.resolvedProcessId,
+        site_id: siteId,
+        volume: e.volume,
+        period_start: e.periodStart,
+        period_end: e.periodEnd,
+        unit_of_measure: 'units',
+        source: 'csv_upload' as const,
+      }))
 
       if (forecasts.length === 0) {
         toast.showError('Geen geldige entries om te importeren'); setIsImporting(false); return
       }
 
-      const result = await bulkUpsert.mutateAsync({ forecasts })
-      toast.showSuccess(`${result.upserted} demand entries geimporteerd`)
+      const result = await bulkUpsertProcessDemand.mutateAsync({ forecasts })
+      const autoCreatedMsg = unknownProcessNames.length > 0
+        ? ` (${unknownProcessNames.length} processen aangemaakt)`
+        : ''
+      toast.showSuccess(`${result.upserted} demand entries geimporteerd${autoCreatedMsg}`)
       onImported(); handleClose()
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Import mislukt'
       toast.showError(`Fout bij importeren: ${msg}`)
     } finally { setIsImporting(false) }
-  }, [entries, siteId, demandTypes, upsertDemandType, bulkUpsert, toast, onImported, handleClose])
+  }, [entries, siteId, unknownProcessNames, departmentsQuery.data, upsertProcess, bulkUpsertProcessDemand, processesQuery, toast, onImported, handleClose])
 
   const uniquePeriods = [...new Set(entries.map((e) => e.periodStart))].sort()
   const uniqueProcesses = [...new Set(entries.map((e) => e.demandTypeName))]
@@ -377,7 +445,7 @@ export function DemandUploadWizard({ open, onClose, siteId, onImported }: Demand
                 <motion.div key="step1" initial={{ opacity: 0, x: -16 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 16 }} transition={snappy}>
                   <Step1
                     demandTypes={demandTypes} isDragging={isDragging} uploadedFile={uploadedFile}
-                    entries={entries} parseErrors={parseErrors} fileInputRef={fileInputRef}
+                    entries={entries} parseErrors={parseErrors} unknownProcessNames={unknownProcessNames} fileInputRef={fileInputRef}
                     planMode={planMode} dayWeekCount={dayWeekCount} workDayPreset={workDayPreset}
                     onPlanModeChange={setPlanMode} onDayWeekCountChange={setDayWeekCount}
                     onWorkDayPresetChange={setWorkDayPreset}

@@ -28,6 +28,7 @@ export interface Step1Props {
   uploadedFile: File | null
   entries: ParsedDemand[]
   parseErrors: string[]
+  unknownProcessNames: string[]
   fileInputRef: React.RefObject<HTMLInputElement | null>
   planMode: PlanMode
   dayWeekCount: number
@@ -51,6 +52,7 @@ export function Step1({
   uploadedFile,
   entries,
   parseErrors,
+  unknownProcessNames,
   fileInputRef,
   planMode,
   dayWeekCount,
@@ -344,6 +346,54 @@ export function Step1({
                   paddingLeft: 20,
                 }}>
                   + {parseErrors.length - 5} meer...
+                </div>
+              )}
+            </div>
+          )}
+          {unknownProcessNames.length > 0 && (
+            <div style={{
+              padding: '10px 14px',
+              borderRadius: 8,
+              background: 'rgba(99,102,241,0.08)',
+              border: '1px solid rgba(99,102,241,0.25)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 4,
+            }}>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                marginBottom: 2,
+              }}>
+                <AlertCircle size={14} color="#6366f1" />
+                <span style={{
+                  fontFamily: 'var(--font-body)',
+                  fontSize: 13,
+                  color: '#6366f1',
+                  fontWeight: 600,
+                }}>
+                  {unknownProcessNames.length} nieuw{unknownProcessNames.length > 1 ? 'e' : ''} proces{unknownProcessNames.length > 1 ? 'sen' : ''} — worden automatisch aangemaakt
+                </span>
+              </div>
+              {unknownProcessNames.slice(0, 5).map((name, i) => (
+                <div key={i} style={{
+                  fontFamily: 'var(--font-body)',
+                  fontSize: 12,
+                  color: 'var(--muted-foreground)',
+                  paddingLeft: 20,
+                }}>
+                  {name}
+                </div>
+              ))}
+              {unknownProcessNames.length > 5 && (
+                <div style={{
+                  fontFamily: 'var(--font-body)',
+                  fontSize: 12,
+                  color: 'var(--muted-foreground)',
+                  paddingLeft: 20,
+                }}>
+                  + {unknownProcessNames.length - 5} meer...
                 </div>
               )}
             </div>
