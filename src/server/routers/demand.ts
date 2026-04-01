@@ -564,24 +564,58 @@ export const demandRouter = router({
         .lt('period_start', input.week_start)
         .order('period_start')
 
-      // Calculate distribution ratios
-      let ratios: number[]
-      const prevTotal = (prevWeek ?? []).reduce((s, r) => s + Number(r.volume), 0)
+      // Check if day-level records already exist for this week
+      // (e.g. from an upload). If so, scale them proportionally to match the new total.
+      const { data: existingDays } = await admin
+        .from('demand_forecast')
+        .select('id, period_start, volume')
+        .eq('organization_id', ctx.organizationId)
+        .eq('site_id', input.site_id)
+        .eq('process_id', input.process_id)
+        .gte('period_start', input.week_start)
+        .lt('period_start', new Date(monday.getTime() + 7 * 86400000).toISOString().split('T')[0]!)
+        .is('plan_version_id', null)
 
-      if (prevWeek && prevWeek.length === 7 && prevTotal > 0) {
-        // Smart distribute: use previous week's pattern
-        ratios = prevWeek.map((r) => Number(r.volume) / prevTotal)
+      const existingTotal = (existingDays ?? []).reduce((s, r) => s + Number(r.volume), 0)
+
+      let ratios: number[]
+      if (existingDays && existingDays.length > 0 && existingTotal > 0) {
+        // Scale existing day pattern proportionally to new total
+        // This preserves the uploaded day-level distribution
+        const dayMap = new Map((existingDays).map(d => [
+          (d.period_start as string).split('T')[0], Number(d.volume)
+        ]))
+        ratios = Array.from({ length: 7 }, (_, i) => {
+          const date = new Date(monday)
+          date.setUTCDate(date.getUTCDate() + i)
+          const dateStr = date.toISOString().split('T')[0]!
+          return (dayMap.get(dateStr) ?? 0) / existingTotal
+        })
       } else {
-        // Default: even over Mon-Fri, 0 on Sat/Sun
-        ratios = [0.2, 0.2, 0.2, 0.2, 0.2, 0, 0]
+        // No existing data — use previous week pattern or even distribution
+        const prevTotal = (prevWeek ?? []).reduce((s, r) => s + Number(r.volume), 0)
+
+        if (prevWeek && prevWeek.length === 7 && prevTotal > 0) {
+          ratios = prevWeek.map((r) => Number(r.volume) / prevTotal)
+        } else {
+          ratios = [0.2, 0.2, 0.2, 0.2, 0.2, 0, 0]
+        }
       }
 
-      // Upsert 7 day records (select + update/insert pattern for NULL plan_version_id)
+      // Upsert 7 day records
       for (let i = 0; i < 7; i++) {
         const date = new Date(monday)
         date.setUTCDate(date.getUTCDate() + i)
         const dateStr = date.toISOString().split('T')[0]!
-        const dayVolume = Math.round(input.volume * ratios[i]!)
+        // Distribute volume proportionally, correct rounding on last non-zero day
+        let dayVolume: number
+        if (i < 6) {
+          dayVolume = Math.round(input.volume * ratios[i]!)
+        } else {
+          // Last day gets the remainder to ensure exact total
+          const sumSoFar = Array.from({ length: 6 }, (_, j) => Math.round(input.volume * ratios[j]!)).reduce((a, b) => a + b, 0)
+          dayVolume = input.volume - sumSoFar
+        }
 
         const { data: existing } = await admin
           .from('demand_forecast')
