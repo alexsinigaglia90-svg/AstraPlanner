@@ -421,7 +421,11 @@ export const demandRouter = router({
     .mutation(async ({ ctx, input }) => {
       const admin = createAdminClient()
 
-      // Delete existing records for these process/period combos, then insert fresh
+      // Split into updates (volume > 0) and deletes (volume = 0)
+      const toInsert = input.forecasts.filter((f) => f.volume > 0)
+      const toDelete = input.forecasts.filter((f) => f.volume === 0)
+
+      // Delete existing records for ALL entries first (both inserts and explicit deletes)
       for (const f of input.forecasts) {
         await admin
           .from('demand_forecast')
@@ -433,29 +437,34 @@ export const demandRouter = router({
           .is('plan_version_id', null)
       }
 
-      const { data, error } = await admin
-        .from('demand_forecast')
-        .insert(
-          input.forecasts.map((f) => ({
-            organization_id: ctx.organizationId,
-            site_id: f.site_id,
-            process_id: f.process_id,
-            demand_type_id: null,
-            period_start: f.period_start,
-            period_end: f.period_end,
-            volume: f.volume,
-            unit_of_measure: f.unit_of_measure,
-            source: f.source,
-            plan_version_id: null,
-          }))
-        )
-        .select('id')
+      // Insert only non-zero volumes
+      let insertedCount = 0
+      if (toInsert.length > 0) {
+        const { data, error } = await admin
+          .from('demand_forecast')
+          .insert(
+            toInsert.map((f) => ({
+              organization_id: ctx.organizationId,
+              site_id: f.site_id,
+              process_id: f.process_id,
+              demand_type_id: null,
+              period_start: f.period_start,
+              period_end: f.period_end,
+              volume: f.volume,
+              unit_of_measure: f.unit_of_measure,
+              source: f.source,
+              plan_version_id: null,
+            }))
+          )
+          .select('id')
 
-      if (error) {
-        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: error.message })
+        if (error) {
+          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: error.message })
+        }
+        insertedCount = data?.length ?? 0
       }
 
-      return { upserted: data?.length ?? 0 }
+      return { upserted: insertedCount, deleted: toDelete.length }
     }),
 
   // ── Process-based demand (direct entry, no demand types) ──────────────
