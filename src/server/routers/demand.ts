@@ -215,6 +215,78 @@ export const demandRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      const admin = createAdminClient()
+
+      // ── Fetch existing forecasts to track changes ──────────────────────
+      const lookupKeys = input.forecasts.map((f) => ({
+        site_id: f.site_id,
+        demand_type_id: f.demand_type_id,
+        period_start: f.period_start,
+      }))
+
+      // Fetch existing records for these site/type/period combos
+      const siteIds = [...new Set(lookupKeys.map((k) => k.site_id))]
+      const typeIds = [...new Set(lookupKeys.map((k) => k.demand_type_id))]
+      const periodStarts = [...new Set(lookupKeys.map((k) => k.period_start))]
+
+      const { data: existingData } = await admin
+        .from('demand_forecast')
+        .select('id, demand_type_id, site_id, period_start, volume')
+        .eq('organization_id', ctx.organizationId)
+        .in('site_id', siteIds)
+        .in('demand_type_id', typeIds)
+        .in('period_start', periodStarts)
+
+      const existingMap = new Map<string, { id: string; volume: unknown }>();
+      for (const row of existingData ?? []) {
+        const key = `${row.demand_type_id}:${row.period_start}`
+        existingMap.set(key, { id: row.id, volume: row.volume })
+      }
+
+      // ── Build history rows for changed forecasts ───────────────────────
+      const historyRows: Array<{
+        organization_id: string
+        demand_forecast_id: string
+        demand_type_id: string
+        site_id: string
+        period_start: string
+        volume_old: number
+        volume_new: number
+        change_pct: number | null
+        weeks_ahead: number
+        changed_by: string
+      }> = []
+
+      for (const forecast of input.forecasts) {
+        const existing = existingMap.get(`${forecast.demand_type_id}:${forecast.period_start}`)
+        if (existing && Number(existing.volume) !== forecast.volume) {
+          const oldVol = Number(existing.volume)
+          const weeksAhead = Math.max(0, Math.round(
+            (new Date(forecast.period_start).getTime() - Date.now()) / (7 * 86400000)
+          ))
+          historyRows.push({
+            organization_id: ctx.organizationId,
+            demand_forecast_id: existing.id,
+            demand_type_id: forecast.demand_type_id,
+            site_id: forecast.site_id,
+            period_start: forecast.period_start,
+            volume_old: oldVol,
+            volume_new: forecast.volume,
+            change_pct: oldVol > 0
+              ? Math.round(((forecast.volume - oldVol) / oldVol) * 10000) / 100
+              : null,
+            weeks_ahead: weeksAhead,
+            changed_by: ctx.user.id,
+          })
+        }
+      }
+
+      // Insert history rows before upserting (so demand_forecast_id still valid)
+      if (historyRows.length > 0) {
+        await admin.from('demand_forecast_history').insert(historyRows)
+      }
+
+      // ── Upsert forecasts ──────────────────────────────────────────────
       const { data, error } = await ctx.supabase
         .from('demand_forecast')
         .upsert(
@@ -547,5 +619,61 @@ export const demandRouter = router({
         .eq('organization_id', ctx.organizationId)
       assertNoError(error, 'deleteTemplate')
       return { deleted: true }
+    }),
+
+  // ── Demand Trends (aggregated from history) ───────────────────────────
+
+  getDemandTrends: viewerProcedure
+    .input(z.object({
+      site_id: z.string().uuid(),
+      process_id: z.string().uuid().optional(),
+    }))
+    .query(async ({ ctx, input }) => {
+      const admin = createAdminClient()
+      const { data, error } = await admin
+        .from('demand_forecast_history')
+        .select('weeks_ahead, change_pct, period_start, volume_old, volume_new, demand_type_id')
+        .eq('organization_id', ctx.organizationId)
+        .eq('site_id', input.site_id)
+        .order('changed_at', { ascending: false })
+        .limit(500)
+
+      assertNoError(error, 'getDemandTrends')
+
+      // Aggregate: average change_pct per weeks_ahead bucket
+      const buckets = new Map<number, { totalPct: number; count: number }>()
+      for (const row of data ?? []) {
+        const r = row as Record<string, unknown>
+        const wa = r.weeks_ahead as number
+        const pct = r.change_pct as number | null
+        if (wa == null || pct == null) continue
+        const bucket = buckets.get(wa) ?? { totalPct: 0, count: 0 }
+        bucket.totalPct += pct
+        bucket.count++
+        buckets.set(wa, bucket)
+      }
+
+      const trends = Array.from(buckets.entries())
+        .map(([weeksAhead, b]) => ({
+          weeksAhead,
+          avgChangePct: Math.round((b.totalPct / b.count) * 100) / 100,
+          sampleSize: b.count,
+        }))
+        .sort((a, b) => b.weeksAhead - a.weeksAhead)
+
+      return {
+        trends,
+        totalChanges: (data ?? []).length,
+        recentChanges: (data ?? []).slice(0, 20).map((row) => {
+          const r = row as Record<string, unknown>
+          return {
+            periodStart: r.period_start as string,
+            volumeOld: r.volume_old as number,
+            volumeNew: r.volume_new as number,
+            changePct: r.change_pct as number | null,
+            weeksAhead: r.weeks_ahead as number,
+          }
+        }),
+      }
     }),
 })
