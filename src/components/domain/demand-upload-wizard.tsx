@@ -473,7 +473,7 @@ export function DemandUploadWizard({ open, onClose, siteId, onImported }: Demand
           </div>
 
           {/* Body */}
-          <div style={{ padding: '20px 24px', flex: 1, overflowY: 'auto', maxHeight: 480 }}>
+          <div style={{ padding: '16px 24px', flex: 1, overflowY: 'auto', maxHeight: 'calc(90vh - 160px)' }}>
             <AnimatePresence mode="wait">
               {step === 1 ? (
                 <motion.div key="step1" initial={{ opacity: 0, x: -16 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 16 }} transition={snappy}>

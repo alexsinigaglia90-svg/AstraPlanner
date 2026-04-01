@@ -49,7 +49,7 @@ const sectionLabel: React.CSSProperties = {
   textTransform: 'uppercase',
   letterSpacing: '0.06em',
   color: 'var(--muted-foreground)',
-  marginBottom: 8,
+  marginBottom: 4,
 }
 
 const glassCard = (extraBorder?: string): React.CSSProperties => ({
@@ -57,8 +57,8 @@ const glassCard = (extraBorder?: string): React.CSSProperties => ({
   backdropFilter: 'blur(12px)',
   WebkitBackdropFilter: 'blur(12px)',
   border: extraBorder ?? '1px solid rgba(99,102,241,0.1)',
-  borderRadius: 16,
-  boxShadow: '0 8px 32px rgba(99,102,241,0.08)',
+  borderRadius: 12,
+  boxShadow: '0 4px 20px rgba(99,102,241,0.06)',
 })
 
 // ── Day abbreviation data ────────────────────────────────────────────────────
