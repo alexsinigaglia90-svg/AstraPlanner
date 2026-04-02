@@ -6,6 +6,7 @@ import { trpc } from '@/lib/trpc/client'
 import { containerStagger, fadeInUp, bouncy } from '@/lib/motion'
 import { useToast } from '@/components/domain/toast'
 import { useDemoStore } from '@/hooks/use-demo'
+import { demoWorkloadRows } from '@/components/onboarding/demo-seed-demand'
 import { KpiHeroCard } from '@/components/domain/kpi-hero-card'
 import { CoverageHeatmap } from '@/components/domain/coverage-heatmap'
 import { GapDrilldown } from '@/components/domain/gap-drilldown'
@@ -54,11 +55,13 @@ export function FteDashboard({ siteId, weekRange }: FteDashboardProps) {
 
   // ── Data fetching ────────────────────────────────────────────────────────
 
-  const { data: workloadData } = trpc.workload.getForPlan.useQuery({
+  const { data: liveWorkloadData } = trpc.workload.getForPlan.useQuery({
     site_id: siteId,
     period_start: weekRange.start,
     period_end: weekRange.end,
   }, { enabled: !isDemo })
+
+  const workloadData = isDemo ? demoWorkloadRows : liveWorkloadData
 
   const computeMutation = trpc.workload.compute.useMutation({
     onMutate: () => {

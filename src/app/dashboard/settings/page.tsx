@@ -4,9 +4,10 @@ import { useState } from 'react'
 import { motion } from 'framer-motion'
 import {
   Building2, Globe, CreditCard, Clock, DollarSign,
-  MapPin, Users, GitBranch, Check, X, Pencil,
+  MapPin, Users, GitBranch, Check, X, Pencil, Presentation,
 } from 'lucide-react'
 import { trpc } from '@/lib/trpc/client'
+import { createClient } from '@/lib/supabase/client'
 import { fadeInUp, containerStagger, scalePress } from '@/lib/motion'
 import { AnimatedCounter } from '@/components/domain/animated-counter'
 import { SlideOver } from '@/components/domain/slide-over'
@@ -166,9 +167,127 @@ const PLAN_FEATURES: Record<string, string[]> = {
 }
 
 // ── Main page ─────────────────────────────────────────────────────────────────
+// ── Demo mode toggle card ────────────────────────────────────────────────────
+
+function DemoModeCard({
+  isDemo,
+  setDemo,
+  showSuccess,
+  showError,
+}: {
+  isDemo: boolean
+  setDemo: (val: boolean) => void
+  showSuccess: (msg: string) => void
+  showError: (msg: string) => void
+}) {
+  const toggleMutation = trpc.onboarding.toggleDemoMode.useMutation({
+    onSuccess: async (data) => {
+      const supabase = createClient()
+      await supabase.auth.refreshSession()
+      const entering = data.mode === 'demo'
+      setDemo(entering)
+      showSuccess(entering ? 'Demo modus geactiveerd' : 'Demo modus uitgeschakeld')
+      if (!entering) {
+        // Force page reload to reset all demo state
+        window.location.reload()
+      }
+    },
+    onError: (err) => {
+      showError(`Demo toggle mislukt: ${err.message}`)
+    },
+  })
+
+  return (
+    <motion.div
+      variants={fadeInUp}
+      style={{
+        backgroundColor: 'var(--card)',
+        border: `1px solid ${isDemo ? 'rgba(99,102,241,0.3)' : 'var(--border)'}`,
+        borderRadius: 'var(--radius-lg)',
+        boxShadow: 'var(--elevation-1)',
+        padding: '24px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: '16px',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+        <div
+          style={{
+            width: '34px',
+            height: '34px',
+            borderRadius: 'var(--radius-sm)',
+            backgroundColor: isDemo ? 'rgba(99,102,241,0.12)' : 'rgba(148,163,184,0.10)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <Presentation size={17} style={{ color: isDemo ? 'var(--primary)' : 'var(--muted-foreground)' }} />
+        </div>
+        <div>
+          <h2
+            style={{
+              fontFamily: 'var(--font-display)',
+              fontSize: '16px',
+              fontWeight: 700,
+              color: 'var(--foreground)',
+              margin: 0,
+            }}
+          >
+            Demo Modus
+          </h2>
+          <p
+            style={{
+              fontFamily: 'var(--font-body)',
+              fontSize: '12px',
+              color: 'var(--muted-foreground)',
+              margin: '2px 0 0',
+            }}
+          >
+            {isDemo
+              ? 'Actief — je ziet demodata met 28 medewerkers en 3 planscenario\u2019s'
+              : 'Schakel in om de demo met voorbeelddata te bekijken'}
+          </p>
+        </div>
+      </div>
+
+      <motion.button
+        variants={scalePress}
+        whileTap="press"
+        onClick={() => toggleMutation.mutate()}
+        disabled={toggleMutation.isPending}
+        style={{
+          padding: '8px 18px',
+          borderRadius: 'var(--radius-sm)',
+          border: isDemo ? '1px solid var(--border)' : 'none',
+          background: isDemo
+            ? 'transparent'
+            : 'linear-gradient(135deg, #6366F1, #8B5CF6)',
+          color: isDemo ? 'var(--muted-foreground)' : '#fff',
+          fontFamily: 'var(--font-body)',
+          fontSize: '13px',
+          fontWeight: 600,
+          cursor: toggleMutation.isPending ? 'not-allowed' : 'pointer',
+          opacity: toggleMutation.isPending ? 0.6 : 1,
+          whiteSpace: 'nowrap' as const,
+        }}
+      >
+        {toggleMutation.isPending
+          ? 'Even geduld...'
+          : isDemo
+            ? 'Uitschakelen'
+            : 'Demo starten'}
+      </motion.button>
+    </motion.div>
+  )
+}
+
 export default function OrgSettingsPage() {
   const isDemo = useDemoStore((s) => s.isDemo)
-  const { showError } = useToast()
+  const setDemo = useDemoStore((s) => s.setDemo)
+  const { showError, showSuccess } = useToast()
 
   const { data: liveData, isLoading: liveLoading, error } = trpc.org.getOrganization.useQuery(
     undefined,
@@ -575,6 +694,9 @@ export default function OrgSettingsPage() {
             </div>
           </motion.div>
         </div>
+
+        {/* ── Demo mode toggle ─────────────────────────────────────────── */}
+        <DemoModeCard isDemo={isDemo} setDemo={setDemo} showSuccess={showSuccess} showError={showError} />
 
         {/* Mutation error */}
         {mutation.error && (

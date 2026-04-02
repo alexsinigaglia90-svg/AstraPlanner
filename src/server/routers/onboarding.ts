@@ -108,6 +108,28 @@ export const onboardingRouter = router({
     return { mode: 'demo' }
   }),
 
+  /** Toggle demo mode for any authenticated user (including those with an org) */
+  toggleDemoMode: authenticatedProcedure.mutation(async ({ ctx }) => {
+    const admin = createAdminClient()
+    const isCurrentlyDemo = ctx.user.app_metadata?.mode === 'demo'
+
+    const { error } = await admin.auth.admin.updateUserById(ctx.user.id, {
+      app_metadata: {
+        ...ctx.user.app_metadata,
+        mode: isCurrentlyDemo ? null : 'demo',
+      },
+    })
+
+    if (error) {
+      throw new TRPCError({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: `Failed to toggle demo mode: ${error.message}`,
+      })
+    }
+
+    return { mode: isCurrentlyDemo ? null : 'demo' }
+  }),
+
   exitDemoMode: authenticatedProcedure.mutation(async ({ ctx }) => {
     const admin = createAdminClient()
 

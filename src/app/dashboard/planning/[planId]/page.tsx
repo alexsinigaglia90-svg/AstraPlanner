@@ -12,6 +12,11 @@ import { PlanGrid } from '@/components/domain/plan-grid'
 import { PlanCoverageBar } from '@/components/domain/plan-coverage-bar'
 import { AssignmentEditor } from '@/components/domain/assignment-editor'
 import { useSiteStore } from '@/stores/site-store'
+import { useDemoStore } from '@/hooks/use-demo'
+import { useDemoPlanData } from '@/hooks/use-demo-plan-data'
+import { demoEmployees } from '@/components/onboarding/demo-seed-employees'
+import { demoProcesses, demoDepartments, DEMO_SITE_AMS } from '@/components/onboarding/demo-seed-processes'
+import { demoShifts } from '@/components/onboarding/demo-seed'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -145,6 +150,8 @@ export default function PlanDetailPage() {
   const utils = trpc.useUtils()
 
   const { activeSiteId } = useSiteStore()
+  const isDemo = useDemoStore((s) => s.isDemo)
+  const demoPlan = useDemoPlanData(isDemo ? planId : null)
   const [pendingAction, setPendingAction] = useState<string | null>(null)
   const [selectedCell, setSelectedCell] = useState<{
     empId: string; empName: string; date: string; shiftId: string; shiftName: string
@@ -153,31 +160,54 @@ export default function PlanDetailPage() {
   // ── Data query ───────────────────────────────────────────────────────────
 
   const {
-    data: plan,
-    isLoading,
-    error,
+    data: livePlan,
+    isLoading: liveLoading,
+    error: liveError,
   } = trpc.planning.getPlanVersion.useQuery(
     { id: planId },
-    { enabled: !!planId },
+    { enabled: !!planId && !isDemo },
   )
+
+  const plan = isDemo ? demoPlan : livePlan
+  const isLoading = isDemo ? false : liveLoading
+  const error = isDemo ? null : liveError
 
   // ── Grid data queries ───────────────────────────────────────────────────
 
   const employeesQ = trpc.workforce.listEmployees.useQuery(
     { site_id: activeSiteId!, limit: 999 },
-    { enabled: !!activeSiteId },
+    { enabled: !!activeSiteId && !isDemo },
   )
   const processesQ = trpc.org.listProcesses.useQuery(
     { site_id: activeSiteId! },
-    { enabled: !!activeSiteId },
+    { enabled: !!activeSiteId && !isDemo },
   )
   const departmentsQ = trpc.org.listDepartments.useQuery(
     { site_id: activeSiteId! },
-    { enabled: !!activeSiteId },
+    { enabled: !!activeSiteId && !isDemo },
   )
   const shiftsQ = trpc.org.listShifts.useQuery(
     { site_id: activeSiteId! },
-    { enabled: !!activeSiteId },
+    { enabled: !!activeSiteId && !isDemo },
+  )
+
+  // ── Demo data ──────────────────────────────────────────────────────────
+
+  const demoEmps = useMemo(() =>
+    isDemo ? demoEmployees.filter((e) => e.home_site_id === DEMO_SITE_AMS) : [],
+    [isDemo],
+  )
+  const demoDepts = useMemo(() =>
+    isDemo ? demoDepartments.filter((d) => d.site_id === DEMO_SITE_AMS) : [],
+    [isDemo],
+  )
+  const demoProcs = useMemo(() =>
+    isDemo ? demoProcesses : [],
+    [isDemo],
+  )
+  const demoShiftsAms = useMemo(() =>
+    isDemo ? demoShifts.filter((s) => s.site_id === DEMO_SITE_AMS) : [],
+    [isDemo],
   )
 
   // ── Mutations ────────────────────────────────────────────────────────────
@@ -508,13 +538,21 @@ export default function PlanDetailPage() {
       <motion.div variants={fadeInUp}>
         <PlanGrid
           assignments={plan.assignments}
-          employees={(employeesQ.data?.items ?? []) as Array<{ id: string; first_name: string; last_name: string; department_id: string | null }>}
-          processes={(processesQ.data ?? []) as Array<{ id: string; name: string; department_id: string }>}
-          departments={(departmentsQ.data ?? []) as Array<{ id: string; name: string; color: string }>}
-          shifts={(shiftsQ.data ?? []) as Array<{ id: string; name: string }>}
+          employees={isDemo
+            ? (demoEmps as Array<{ id: string; first_name: string; last_name: string; department_id: string | null }>)
+            : (employeesQ.data?.items ?? []) as Array<{ id: string; first_name: string; last_name: string; department_id: string | null }>}
+          processes={isDemo
+            ? (demoProcs as Array<{ id: string; name: string; department_id: string }>)
+            : (processesQ.data ?? []) as Array<{ id: string; name: string; department_id: string }>}
+          departments={isDemo
+            ? (demoDepts as Array<{ id: string; name: string; color: string }>)
+            : (departmentsQ.data ?? []) as Array<{ id: string; name: string; color: string }>}
+          shifts={isDemo
+            ? (demoShiftsAms as Array<{ id: string; name: string }>)
+            : (shiftsQ.data ?? []) as Array<{ id: string; name: string }>}
           weekStart={plan.plan_period_start}
           workDays={[1, 2, 3, 4, 5]}
-          isEditable={status === 'draft' || status === 'optimized'}
+          isEditable={!isDemo && (status === 'draft' || status === 'optimized')}
           onCellClick={handleCellClick}
         />
       </motion.div>
@@ -523,8 +561,12 @@ export default function PlanDetailPage() {
       <motion.div variants={fadeInUp}>
         <PlanCoverageBar
           assignments={plan.assignments}
-          processes={(processesQ.data ?? []) as Array<{ id: string; name: string; department_id: string }>}
-          departments={(departmentsQ.data ?? []) as Array<{ id: string; name: string; color: string }>}
+          processes={isDemo
+            ? (demoProcs as Array<{ id: string; name: string; department_id: string }>)
+            : (processesQ.data ?? []) as Array<{ id: string; name: string; department_id: string }>}
+          departments={isDemo
+            ? (demoDepts as Array<{ id: string; name: string; color: string }>)
+            : (departmentsQ.data ?? []) as Array<{ id: string; name: string; color: string }>}
           demandByProcess={null}
         />
       </motion.div>

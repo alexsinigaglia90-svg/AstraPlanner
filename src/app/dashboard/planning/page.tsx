@@ -6,6 +6,9 @@ import { Calendar, Plus } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { trpc } from '@/lib/trpc/client'
 import { useSiteStore } from '@/stores/site-store'
+import { useDemoStore } from '@/hooks/use-demo'
+import { useDemoGuard } from '@/hooks/use-demo-guard'
+import { useDemoPlanList } from '@/hooks/use-demo-plan-data'
 import { fadeInUp, containerStagger, scalePress, bouncy } from '@/lib/motion'
 import { CreatePlanWizard } from '@/components/domain/create-plan-wizard'
 
@@ -272,17 +275,20 @@ function PlanCard({
 export default function PlanningPage() {
   const router = useRouter()
   const { activeSiteId } = useSiteStore()
+  const isDemo = useDemoStore((s) => s.isDemo)
+  const { demoToast } = useDemoGuard()
+  const demoPlans = useDemoPlanList()
   const [statusFilter, setStatusFilter] = useState<PlanStatus | 'all'>('all')
   const [wizardOpen, setWizardOpen] = useState(false)
 
   const plansQuery = trpc.planning.listPlanVersions.useQuery(
     { site_id: activeSiteId! },
-    { enabled: !!activeSiteId }
+    { enabled: !!activeSiteId && !isDemo }
   )
 
-  const plans = plansQuery.data ?? []
-  const isLoading = plansQuery.isLoading
-  const error = plansQuery.error
+  const plans = isDemo ? demoPlans : (plansQuery.data ?? [])
+  const isLoading = isDemo ? false : plansQuery.isLoading
+  const error = isDemo ? null : plansQuery.error
 
   const filteredPlans =
     statusFilter === 'all'
@@ -358,7 +364,7 @@ export default function PlanningPage() {
         <motion.button
           variants={scalePress}
           whileTap="press"
-          onClick={() => setWizardOpen(true)}
+          onClick={() => isDemo ? demoToast() : setWizardOpen(true)}
           style={{
             display: 'flex',
             alignItems: 'center',

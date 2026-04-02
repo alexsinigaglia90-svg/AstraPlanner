@@ -10,6 +10,8 @@ import { SiteSelector } from './site-selector'
 import { DemandGridCell } from './demand-grid-cell'
 import { SmartIcon } from './smart-icon'
 import { useDemoStore } from '@/hooks/use-demo'
+import { demoProcesses } from '@/components/onboarding/demo-seed-processes'
+import { demoDemandForecasts } from '@/components/onboarding/demo-seed-demand'
 import { useToast } from '@/components/domain/toast'
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -217,7 +219,7 @@ export function DemandGrid({ siteId, weekRange, onWeekRangeChange }: DemandGridP
     { site_id: siteId },
     { enabled: !isDemo && !!siteId },
   )
-  const allProcesses = isDemo ? [] : liveAllProcesses
+  const allProcesses = isDemo ? demoProcesses : liveAllProcesses
 
   const { data: liveForecasts = [] } = trpc.demand.listProcessDemand.useQuery(
     {
@@ -227,7 +229,7 @@ export function DemandGrid({ siteId, weekRange, onWeekRangeChange }: DemandGridP
     },
     { enabled: !isDemo && !!siteId },
   )
-  const forecasts = isDemo ? [] : liveForecasts
+  const forecasts = isDemo ? demoDemandForecasts : liveForecasts
 
   const upsertDayMutation = trpc.demand.upsertProcessForecast.useMutation({
     onSuccess: () => {

@@ -6,10 +6,12 @@ import { Sparkles } from 'lucide-react'
 import { trpc } from '@/lib/trpc/client'
 import { createClient } from '@/lib/supabase/client'
 import { useDemoStore } from '@/hooks/use-demo'
+import { useDemoScenarioStore } from '@/stores/demo-scenario-store'
 import { bouncy } from '@/lib/motion'
 
 export function DemoBanner() {
   const isDemo = useDemoStore((s) => s.isDemo)
+  const isPresenting = useDemoScenarioStore((s) => s.isPresenting)
   const setDemo = useDemoStore((s) => s.setDemo)
   const router = useRouter()
 
@@ -29,7 +31,7 @@ export function DemoBanner() {
 
   return (
     <AnimatePresence>
-      {isDemo && (
+      {isDemo && !isPresenting && (
         <motion.div
           initial={{ opacity: 0, y: 40 }}
           animate={{ opacity: 1, y: 0 }}

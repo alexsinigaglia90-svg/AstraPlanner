@@ -1,33 +1,77 @@
 /**
  * Demo seed data for AstraPlanner's demo mode.
- * Shapes match tRPC router responses exactly (org.ts + workforce.ts).
+ *
+ * This is the barrel file — re-exports expanded data from split modules
+ * while maintaining backward compatibility for all existing imports.
  */
 
-// ── ID constants ──────────────────────────────────────────────────────────────
+// ── Re-export: IDs & processes ───────────────────────────────────────────────
+
+export {
+  DEMO_SITE_AMS,
+  DEMO_SITE_RTM,
+  DEPT_INBOUND_AMS,
+  DEPT_OUTBOUND_AMS,
+  DEPT_INBOUND_RTM,
+  DEPT_VAS_AMS,
+  DEPT_SHIPPING_AMS,
+  ROLE_ORDERPICKER,
+  ROLE_TEAMLEIDER,
+  ROLE_LOG_MED,
+  ROLE_INPAKKER,
+  ROLE_VERZENDMEDEWERKER,
+  PROC_ORDER_PICKING,
+  PROC_INBOUND,
+  PROC_PACKING,
+  PROC_VAS,
+  PROC_SHIPPING,
+  PROC_RETURNS,
+  demoDepartments,
+  demoDepartmentsBySite,
+  demoRoles,
+  demoProcesses,
+} from './demo-seed-processes'
+
+// ── Re-export: employees ─────────────────────────────────────────────────────
+
+export {
+  demoEmployees,
+  demoEmployeesBySite,
+} from './demo-seed-employees'
+
+// ── Re-export: demand & workload ─────────────────────────────────────────────
+
+export {
+  demoDemandForecasts,
+  demoWorkloadRows,
+  demoHeatmapCells,
+  DEMO_WEEKS,
+  DEMO_WEEK_10,
+  DEMO_WEEK_11,
+  DEMO_WEEK_12,
+  DEMO_WEEK_13,
+} from './demo-seed-demand'
+
+// ── Re-export: plans & scenarios ─────────────────────────────────────────────
+
+export {
+  demoPlanVersions,
+  demoPlanNormal,
+  demoPlanPeak,
+  demoPlanAbsence,
+  getDemoPlan,
+  DEMO_PLAN_NORMAL,
+  DEMO_PLAN_PEAK,
+  DEMO_PLAN_ABSENCE,
+} from './demo-seed-plans'
+
+// ── ID constant (backward compat) ───────────────────────────────────────────
+
+import { DEMO_SITE_AMS, DEMO_SITE_RTM } from './demo-seed-processes'
 
 export const DEMO_ORG_ID = 'demo-org-00000000-0000-0000-0000-000000000001'
-export const DEMO_SITE_AMS = 'demo-site-0000-0000-0000-000000000001'
-export const DEMO_SITE_RTM = 'demo-site-0000-0000-0000-000000000002'
 
-const DEPT_INBOUND_AMS = 'demo-dept-0000-0000-0000-000000000001'
-const DEPT_OUTBOUND_AMS = 'demo-dept-0000-0000-0000-000000000002'
-const DEPT_INBOUND_RTM = 'demo-dept-0000-0000-0000-000000000003'
-
-const SHIFT_AMS_OCHTEND = 'demo-shft-0000-0000-0000-000000000001'
-const SHIFT_AMS_MIDDAG = 'demo-shft-0000-0000-0000-000000000002'
-const SHIFT_AMS_NACHT = 'demo-shft-0000-0000-0000-000000000003'
-const SHIFT_RTM_OCHTEND = 'demo-shft-0000-0000-0000-000000000004'
-const SHIFT_RTM_MIDDAG = 'demo-shft-0000-0000-0000-000000000005'
-const SHIFT_RTM_NACHT = 'demo-shft-0000-0000-0000-000000000006'
-
-const ROLE_ORDERPICKER = 'demo-role-0000-0000-0000-000000000001'
-const ROLE_TEAMLEIDER = 'demo-role-0000-0000-0000-000000000002'
-const ROLE_LOG_MED = 'demo-role-0000-0000-0000-000000000003'
-
-const PROC_ORDER_PICKING = 'demo-proc-0000-0000-0000-000000000001'
-const PROC_INBOUND = 'demo-proc-0000-0000-0000-000000000002'
-
-// ── Organization ──────────────────────────────────────────────────────────────
+// ── Organization ─────────────────────────────────────────────────────────────
 
 export const demoOrganization = {
   id: DEMO_ORG_ID,
@@ -47,7 +91,7 @@ export const demoOrganization = {
   updated_at: '2025-01-01T00:00:00.000Z',
 }
 
-// ── Sites ─────────────────────────────────────────────────────────────────────
+// ── Sites ────────────────────────────────────────────────────────────────────
 
 export const demoSites = [
   {
@@ -114,12 +158,12 @@ export const demoSites = [
   },
 ]
 
-// ── Shifts ────────────────────────────────────────────────────────────────────
+// ── Shifts ───────────────────────────────────────────────────────────────────
 
 export const demoShifts = [
   // Amsterdam DC
   {
-    id: SHIFT_AMS_OCHTEND,
+    id: 'demo-shft-0000-0000-0000-000000000001',
     name: 'Ochtend',
     code: 'AMS_OCHTEND',
     start_time: '06:00',
@@ -133,7 +177,7 @@ export const demoShifts = [
     site_id: DEMO_SITE_AMS,
   },
   {
-    id: SHIFT_AMS_MIDDAG,
+    id: 'demo-shft-0000-0000-0000-000000000002',
     name: 'Middag',
     code: 'AMS_MIDDAG',
     start_time: '14:00',
@@ -147,7 +191,7 @@ export const demoShifts = [
     site_id: DEMO_SITE_AMS,
   },
   {
-    id: SHIFT_AMS_NACHT,
+    id: 'demo-shft-0000-0000-0000-000000000003',
     name: 'Nacht',
     code: 'AMS_NACHT',
     start_time: '22:00',
@@ -162,7 +206,7 @@ export const demoShifts = [
   },
   // Rotterdam Hub
   {
-    id: SHIFT_RTM_OCHTEND,
+    id: 'demo-shft-0000-0000-0000-000000000004',
     name: 'Ochtend',
     code: 'RTM_OCHTEND',
     start_time: '06:00',
@@ -176,7 +220,7 @@ export const demoShifts = [
     site_id: DEMO_SITE_RTM,
   },
   {
-    id: SHIFT_RTM_MIDDAG,
+    id: 'demo-shft-0000-0000-0000-000000000005',
     name: 'Middag',
     code: 'RTM_MIDDAG',
     start_time: '14:00',
@@ -190,7 +234,7 @@ export const demoShifts = [
     site_id: DEMO_SITE_RTM,
   },
   {
-    id: SHIFT_RTM_NACHT,
+    id: 'demo-shft-0000-0000-0000-000000000006',
     name: 'Nacht',
     code: 'RTM_NACHT',
     start_time: '22:00',
@@ -205,408 +249,19 @@ export const demoShifts = [
   },
 ]
 
-// ── Roles (job roles) ─────────────────────────────────────────────────────────
-
-export const demoRoles = [
-  {
-    id: ROLE_ORDERPICKER,
-    name: 'Orderpicker',
-    code: 'ORDERPICKER',
-    color: 'indigo',
-  },
-  {
-    id: ROLE_TEAMLEIDER,
-    name: 'Teamleider',
-    code: 'TEAMLEIDER',
-    color: 'emerald',
-  },
-  {
-    id: ROLE_LOG_MED,
-    name: 'Logistiek Medewerker',
-    code: 'LOG_MED',
-    color: 'amber',
-  },
-]
-
-// ── Departments ───────────────────────────────────────────────────────────────
-
-export const demoDepartments = [
-  {
-    id: DEPT_INBOUND_AMS,
-    name: 'Inbound',
-    code: 'INBOUND',
-    color: 'indigo',
-    site_id: DEMO_SITE_AMS,
-    process_count: 1,
-  },
-  {
-    id: DEPT_OUTBOUND_AMS,
-    name: 'Outbound',
-    code: 'OUTBOUND',
-    color: 'amber',
-    site_id: DEMO_SITE_AMS,
-    process_count: 1,
-  },
-  {
-    id: DEPT_INBOUND_RTM,
-    name: 'Inbound',
-    code: 'INBOUND',
-    color: 'emerald',
-    site_id: DEMO_SITE_RTM,
-    process_count: 0,
-  },
-]
-
-// ── Processes ─────────────────────────────────────────────────────────────────
-
-export const demoProcesses = [
-  {
-    id: PROC_ORDER_PICKING,
-    name: 'Order Picking',
-    code: 'ORDER_PICKING',
-    unit_of_measure: 'lines',
-    norm_uph: 120,
-    department_id: DEPT_OUTBOUND_AMS,
-    process_type: 'productive',
-    support_type: null,
-    parent_process_id: null,
-    support_ratio_self: 1,
-    support_ratio_parent: 1,
-    fixed_headcount: null,
-    support_method: null,
-    support_config_json: {},
-    priority: 'critical',
-    min_skill_level: 2,
-    certifications_required: [],
-    conversion_input_uom: null,
-    conversion_output_qty: null,
-    restrict_to_trained: true,
-    min_staffing: 3,
-    max_staffing: 20,
-    frequency_type: 'daily',
-    frequency_days: null,
-    frequency_count: null,
-    duration_type: 'full_shift',
-    duration_hours: null,
-  },
-  {
-    id: PROC_INBOUND,
-    name: 'Inbound Receiving',
-    code: 'INBOUND_RECEIVING',
-    unit_of_measure: 'pallets',
-    norm_uph: 25,
-    department_id: DEPT_INBOUND_AMS,
-    process_type: 'productive',
-    support_type: null,
-    parent_process_id: null,
-    support_ratio_self: 1,
-    support_ratio_parent: 1,
-    fixed_headcount: null,
-    support_method: null,
-    support_config_json: {},
-    priority: 'important',
-    min_skill_level: 1,
-    certifications_required: [],
-    conversion_input_uom: null,
-    conversion_output_qty: null,
-    restrict_to_trained: false,
-    min_staffing: 2,
-    max_staffing: 10,
-    frequency_type: 'daily',
-    frequency_days: null,
-    frequency_count: null,
-    duration_type: 'full_shift',
-    duration_hours: null,
-  },
-]
-
-// ── Equipment ─────────────────────────────────────────────────────────────────
+// ── Equipment ────────────────────────────────────────────────────────────────
 
 export const demoEquipment = [
-  {
-    id: 'demo-equip-000-0000-0000-000000000001',
-    name: 'Reachtruck',
-    code: 'REACHTRUCK',
-    site_id: DEMO_SITE_AMS,
-    quantity: 6,
-    status: 'active',
-  },
-  {
-    id: 'demo-equip-000-0000-0000-000000000002',
-    name: 'Orderpicktruck',
-    code: 'ORDERPICKTRUCK',
-    site_id: DEMO_SITE_AMS,
-    quantity: 12,
-    status: 'active',
-  },
-  {
-    id: 'demo-equip-000-0000-0000-000000000003',
-    name: 'Handpallettruck',
-    code: 'HANDPALLETTRUCK',
-    site_id: DEMO_SITE_AMS,
-    quantity: 20,
-    status: 'active',
-  },
-  {
-    id: 'demo-equip-000-0000-0000-000000000004',
-    name: 'Orderpicktruck',
-    code: 'ORDERPICKTRUCK',
-    site_id: DEMO_SITE_RTM,
-    quantity: 8,
-    status: 'active',
-  },
-  {
-    id: 'demo-equip-000-0000-0000-000000000005',
-    name: 'Handpallettruck',
-    code: 'HANDPALLETTRUCK',
-    site_id: DEMO_SITE_RTM,
-    quantity: 15,
-    status: 'active',
-  },
+  { id: 'demo-equip-000-0000-0000-000000000001', name: 'Reachtruck', code: 'REACHTRUCK', site_id: DEMO_SITE_AMS, quantity: 6, status: 'active' },
+  { id: 'demo-equip-000-0000-0000-000000000002', name: 'Orderpicktruck', code: 'ORDERPICKTRUCK', site_id: DEMO_SITE_AMS, quantity: 12, status: 'active' },
+  { id: 'demo-equip-000-0000-0000-000000000003', name: 'Handpallettruck', code: 'HANDPALLETTRUCK', site_id: DEMO_SITE_AMS, quantity: 20, status: 'active' },
+  { id: 'demo-equip-000-0000-0000-000000000004', name: 'Orderpicktruck', code: 'ORDERPICKTRUCK', site_id: DEMO_SITE_RTM, quantity: 8, status: 'active' },
+  { id: 'demo-equip-000-0000-0000-000000000005', name: 'Handpallettruck', code: 'HANDPALLETTRUCK', site_id: DEMO_SITE_RTM, quantity: 15, status: 'active' },
 ]
 
-// ── Employees ─────────────────────────────────────────────────────────────────
-
-export const demoEmployees = [
-  {
-    id: 'demo-emp-0000-0000-0000-000000000001',
-    employee_number: 'AMS-001',
-    first_name: 'Lars',
-    last_name: 'van den Berg',
-    email: 'l.vandenberg@astrademo.nl',
-    contract_type: 'full_time',
-    weekly_hours_contracted: 40,
-    home_site_id: DEMO_SITE_AMS,
-    department_id: DEPT_OUTBOUND_AMS,
-    crew_id: null,
-    job_role_id: ROLE_ORDERPICKER,
-    hourly_rate: 14.5,
-    status: 'active',
-    is_multi_site_eligible: false,
-    skill_count: 2,
-    skills: [
-      { id: 'demo-skl-001', process_id: PROC_ORDER_PICKING, process_name: 'Order Picking', proficiency_level: 4, certification_date: null, expiry_date: null, last_practiced_date: null },
-      { id: 'demo-skl-002', process_id: PROC_INBOUND, process_name: 'Inbound Receiving', proficiency_level: 2, certification_date: null, expiry_date: null, last_practiced_date: null },
-    ],
-    availability_overrides: [],
-    preferences_json: {},
-  },
-  {
-    id: 'demo-emp-0000-0000-0000-000000000002',
-    employee_number: 'AMS-002',
-    first_name: 'Sanne',
-    last_name: 'Bakker',
-    email: 's.bakker@astrademo.nl',
-    contract_type: 'full_time',
-    weekly_hours_contracted: 40,
-    home_site_id: DEMO_SITE_AMS,
-    department_id: DEPT_OUTBOUND_AMS,
-    crew_id: null,
-    job_role_id: ROLE_TEAMLEIDER,
-    hourly_rate: 18.0,
-    status: 'active',
-    is_multi_site_eligible: true,
-    skill_count: 2,
-    skills: [
-      { id: 'demo-skl-003', process_id: PROC_ORDER_PICKING, process_name: 'Order Picking', proficiency_level: 5, certification_date: null, expiry_date: null, last_practiced_date: null },
-      { id: 'demo-skl-004', process_id: PROC_INBOUND, process_name: 'Inbound Receiving', proficiency_level: 4, certification_date: null, expiry_date: null, last_practiced_date: null },
-    ],
-    availability_overrides: [],
-    preferences_json: {},
-  },
-  {
-    id: 'demo-emp-0000-0000-0000-000000000003',
-    employee_number: 'AMS-003',
-    first_name: 'Joost',
-    last_name: 'Hendriks',
-    email: 'j.hendriks@astrademo.nl',
-    contract_type: 'part_time',
-    weekly_hours_contracted: 24,
-    home_site_id: DEMO_SITE_AMS,
-    department_id: DEPT_INBOUND_AMS,
-    crew_id: null,
-    job_role_id: ROLE_LOG_MED,
-    hourly_rate: 13.5,
-    status: 'active',
-    is_multi_site_eligible: false,
-    skill_count: 1,
-    skills: [
-      { id: 'demo-skl-005', process_id: PROC_INBOUND, process_name: 'Inbound Receiving', proficiency_level: 3, certification_date: null, expiry_date: null, last_practiced_date: null },
-    ],
-    availability_overrides: [],
-    preferences_json: {},
-  },
-  {
-    id: 'demo-emp-0000-0000-0000-000000000004',
-    employee_number: 'AMS-004',
-    first_name: 'Femke',
-    last_name: 'de Vries',
-    email: 'f.devries@astrademo.nl',
-    contract_type: 'full_time',
-    weekly_hours_contracted: 40,
-    home_site_id: DEMO_SITE_AMS,
-    department_id: DEPT_OUTBOUND_AMS,
-    crew_id: null,
-    job_role_id: ROLE_ORDERPICKER,
-    hourly_rate: 14.5,
-    status: 'active',
-    is_multi_site_eligible: false,
-    skill_count: 1,
-    skills: [
-      { id: 'demo-skl-006', process_id: PROC_ORDER_PICKING, process_name: 'Order Picking', proficiency_level: 3, certification_date: null, expiry_date: null, last_practiced_date: null },
-    ],
-    availability_overrides: [],
-    preferences_json: {},
-  },
-  {
-    id: 'demo-emp-0000-0000-0000-000000000005',
-    employee_number: 'AMS-005',
-    first_name: 'Daan',
-    last_name: 'Meijer',
-    email: 'd.meijer@astrademo.nl',
-    contract_type: 'full_time',
-    weekly_hours_contracted: 40,
-    home_site_id: DEMO_SITE_AMS,
-    department_id: DEPT_OUTBOUND_AMS,
-    crew_id: null,
-    job_role_id: ROLE_ORDERPICKER,
-    hourly_rate: 14.5,
-    status: 'active',
-    is_multi_site_eligible: false,
-    skill_count: 2,
-    skills: [
-      { id: 'demo-skl-007', process_id: PROC_ORDER_PICKING, process_name: 'Order Picking', proficiency_level: 4, certification_date: null, expiry_date: null, last_practiced_date: null },
-      { id: 'demo-skl-008', process_id: PROC_INBOUND, process_name: 'Inbound Receiving', proficiency_level: 2, certification_date: null, expiry_date: null, last_practiced_date: null },
-    ],
-    availability_overrides: [],
-    preferences_json: {},
-  },
-  {
-    id: 'demo-emp-0000-0000-0000-000000000006',
-    employee_number: 'RTM-001',
-    first_name: 'Nina',
-    last_name: 'Smit',
-    email: 'n.smit@astrademo.nl',
-    contract_type: 'full_time',
-    weekly_hours_contracted: 40,
-    home_site_id: DEMO_SITE_RTM,
-    department_id: DEPT_INBOUND_RTM,
-    crew_id: null,
-    job_role_id: ROLE_TEAMLEIDER,
-    hourly_rate: 18.5,
-    status: 'active',
-    is_multi_site_eligible: true,
-    skill_count: 1,
-    skills: [
-      { id: 'demo-skl-009', process_id: PROC_INBOUND, process_name: 'Inbound Receiving', proficiency_level: 5, certification_date: null, expiry_date: null, last_practiced_date: null },
-    ],
-    availability_overrides: [],
-    preferences_json: {},
-  },
-  {
-    id: 'demo-emp-0000-0000-0000-000000000007',
-    employee_number: 'RTM-002',
-    first_name: 'Tom',
-    last_name: 'Janssen',
-    email: 't.janssen@astrademo.nl',
-    contract_type: 'full_time',
-    weekly_hours_contracted: 40,
-    home_site_id: DEMO_SITE_RTM,
-    department_id: DEPT_INBOUND_RTM,
-    crew_id: null,
-    job_role_id: ROLE_LOG_MED,
-    hourly_rate: 13.5,
-    status: 'active',
-    is_multi_site_eligible: false,
-    skill_count: 1,
-    skills: [
-      { id: 'demo-skl-010', process_id: PROC_INBOUND, process_name: 'Inbound Receiving', proficiency_level: 3, certification_date: null, expiry_date: null, last_practiced_date: null },
-    ],
-    availability_overrides: [],
-    preferences_json: {},
-  },
-  {
-    id: 'demo-emp-0000-0000-0000-000000000008',
-    employee_number: 'RTM-003',
-    first_name: 'Anouk',
-    last_name: 'Visser',
-    email: 'a.visser@astrademo.nl',
-    contract_type: 'flex',
-    weekly_hours_contracted: 20,
-    home_site_id: DEMO_SITE_RTM,
-    department_id: DEPT_INBOUND_RTM,
-    crew_id: null,
-    job_role_id: ROLE_LOG_MED,
-    hourly_rate: 13.5,
-    status: 'active',
-    is_multi_site_eligible: false,
-    skill_count: 1,
-    skills: [
-      { id: 'demo-skl-011', process_id: PROC_INBOUND, process_name: 'Inbound Receiving', proficiency_level: 2, certification_date: null, expiry_date: null, last_practiced_date: null },
-    ],
-    availability_overrides: [],
-    preferences_json: {},
-  },
-  {
-    id: 'demo-emp-0000-0000-0000-000000000009',
-    employee_number: 'AMS-006',
-    first_name: 'Bram',
-    last_name: 'Lammers',
-    email: 'b.lammers@astrademo.nl',
-    contract_type: 'part_time',
-    weekly_hours_contracted: 32,
-    home_site_id: DEMO_SITE_AMS,
-    department_id: DEPT_INBOUND_AMS,
-    crew_id: null,
-    job_role_id: ROLE_LOG_MED,
-    hourly_rate: 13.5,
-    status: 'active',
-    is_multi_site_eligible: false,
-    skill_count: 1,
-    skills: [
-      { id: 'demo-skl-012', process_id: PROC_INBOUND, process_name: 'Inbound Receiving', proficiency_level: 3, certification_date: null, expiry_date: null, last_practiced_date: null },
-    ],
-    availability_overrides: [],
-    preferences_json: {},
-  },
-  {
-    id: 'demo-emp-0000-0000-0000-000000000010',
-    employee_number: 'AMS-007',
-    first_name: 'Eva',
-    last_name: 'Koopman',
-    email: 'e.koopman@astrademo.nl',
-    contract_type: 'full_time',
-    weekly_hours_contracted: 40,
-    home_site_id: DEMO_SITE_AMS,
-    department_id: DEPT_OUTBOUND_AMS,
-    crew_id: null,
-    job_role_id: ROLE_ORDERPICKER,
-    hourly_rate: 14.5,
-    status: 'active',
-    is_multi_site_eligible: true,
-    skill_count: 2,
-    skills: [
-      { id: 'demo-skl-013', process_id: PROC_ORDER_PICKING, process_name: 'Order Picking', proficiency_level: 4, certification_date: null, expiry_date: null, last_practiced_date: null },
-      { id: 'demo-skl-014', process_id: PROC_INBOUND, process_name: 'Inbound Receiving', proficiency_level: 3, certification_date: null, expiry_date: null, last_practiced_date: null },
-    ],
-    availability_overrides: [],
-    preferences_json: {},
-  },
-]
-
-// ── Convenient groupings ───────────────────────────────────────────────────────
-
-export const demoEmployeesBysite = {
-  [DEMO_SITE_AMS]: demoEmployees.filter((e) => e.home_site_id === DEMO_SITE_AMS),
-  [DEMO_SITE_RTM]: demoEmployees.filter((e) => e.home_site_id === DEMO_SITE_RTM),
-}
+// ── Convenient groupings ─────────────────────────────────────────────────────
 
 export const demoShiftsBySite = {
   [DEMO_SITE_AMS]: demoShifts.filter((s) => s.site_id === DEMO_SITE_AMS),
   [DEMO_SITE_RTM]: demoShifts.filter((s) => s.site_id === DEMO_SITE_RTM),
-}
-
-export const demoDepartmentsBySite = {
-  [DEMO_SITE_AMS]: demoDepartments.filter((d) => d.site_id === DEMO_SITE_AMS),
-  [DEMO_SITE_RTM]: demoDepartments.filter((d) => d.site_id === DEMO_SITE_RTM),
 }
