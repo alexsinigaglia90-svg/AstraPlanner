@@ -32,20 +32,24 @@ function getMondayOfWeek(year: number, week: number): Date {
 /** Returns the Monday of the current ISO week. */
 function getISOWeekStart(): Date {
   const now = new Date()
-  const day = now.getDay() || 7
-  const monday = new Date(now)
-  monday.setDate(now.getDate() - day + 1)
-  monday.setHours(0, 0, 0, 0)
-  return monday
+  // Use UTC to avoid timezone offset issues
+  const utcNow = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()))
+  const day = utcNow.getUTCDay() || 7
+  utcNow.setUTCDate(utcNow.getUTCDate() - day + 1)
+  return utcNow
 }
 
 function toISO(date: Date): string {
-  return date.toISOString().split('T')[0] as string
+  // Always use UTC components to avoid timezone shift
+  const y = date.getUTCFullYear()
+  const m = String(date.getUTCMonth() + 1).padStart(2, '0')
+  const d = String(date.getUTCDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
 }
 
 function addWeeks(date: Date, weeks: number): Date {
   const d = new Date(date)
-  d.setDate(d.getDate() + weeks * 7)
+  d.setUTCDate(d.getUTCDate() + weeks * 7)
   return d
 }
 
@@ -60,8 +64,8 @@ export function WeekRangePicker({ value, onChange }: WeekRangePickerProps) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
-  const startDate = new Date(value.start + 'T00:00:00')
-  const endDate = new Date(value.end + 'T00:00:00')
+  const startDate = new Date(value.start + 'T00:00:00Z')
+  const endDate = new Date(value.end + 'T00:00:00Z')
   const startWeek = getISOWeekNumber(startDate)
   const endWeek = getISOWeekNumber(endDate)
 
