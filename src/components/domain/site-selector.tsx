@@ -20,10 +20,15 @@ export function SiteSelector() {
   const ref = useRef<HTMLDivElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
 
-  // Auto-select first site if none selected (prefer Amsterdam DC in demo)
+  // Auto-select first site if none selected, or force demo site when entering demo mode
   useEffect(() => {
-    if (!activeSiteId && sites && sites.length > 0) {
-      setActiveSite(isDemo ? DEMO_SITE_AMS : sites[0]!.id)
+    if (isDemo) {
+      // Always ensure demo site is active when in demo mode
+      if (activeSiteId !== DEMO_SITE_AMS) {
+        setActiveSite(DEMO_SITE_AMS)
+      }
+    } else if (!activeSiteId && sites && sites.length > 0) {
+      setActiveSite(sites[0]!.id)
     }
   }, [activeSiteId, sites, setActiveSite, isDemo])
 
