@@ -104,11 +104,9 @@ export function DemoPresenterBar() {
       setScenario(step.scenario)
     }
 
-    // Navigate if not already on the step route
-    if (pathname !== step.route) {
-      router.push(step.route)
-    }
-  }, [isPresenting, currentStep, step, pathname, router, setScenario])
+    // Always navigate on step change — router.push is a no-op if already there
+    router.push(step.route)
+  }, [isPresenting, currentStep]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Keyboard shortcuts ────────────────────────────────────────────────
 
