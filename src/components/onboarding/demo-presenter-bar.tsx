@@ -2,8 +2,8 @@
 
 import { useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ChevronLeft, ChevronRight, X, Play, Presentation } from 'lucide-react'
-import { useRouter, usePathname } from 'next/navigation'
+import { ChevronLeft, ChevronRight, X, Presentation } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 import { useDemoStore } from '@/hooks/use-demo'
 import { useDemoScenarioStore, TOTAL_STEPS } from '@/stores/demo-scenario-store'
 import { DEMO_STEPS } from './demo-step-config'
@@ -34,21 +34,50 @@ function StepDots({ current, total }: { current: number; total: number }) {
   )
 }
 
+// ── Navigate to a step (imperative) ──────────────────────────────────────────
+
+function navigateToStep(stepIndex: number) {
+  const step = DEMO_STEPS[stepIndex]
+  if (!step) return
+
+  // Set scenario in store
+  const store = useDemoScenarioStore.getState()
+  if (step.scenario) {
+    store.setScenario(step.scenario)
+  }
+
+  // Use window.location for reliable navigation
+  const currentPath = window.location.pathname
+  if (currentPath !== step.route) {
+    window.location.href = step.route
+  }
+}
+
 // ── Start button (shown when not presenting) ─────────────────────────────────
 
 export function DemoPresenterStartButton() {
   const isDemo = useDemoStore((s) => s.isDemo)
   const isPresenting = useDemoScenarioStore((s) => s.isPresenting)
-  const startPresentation = useDemoScenarioStore((s) => s.startPresentation)
+  const router = useRouter()
 
   if (!isDemo || isPresenting) return null
+
+  function handleStart() {
+    const store = useDemoScenarioStore.getState()
+    store.startPresentation()
+    // Navigate to first step
+    const firstStep = DEMO_STEPS[0]
+    if (firstStep && window.location.pathname !== firstStep.route) {
+      router.push(firstStep.route)
+    }
+  }
 
   return (
     <motion.button
       initial={{ opacity: 0, scale: 0.9 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ ...bouncy, delay: 0.5 }}
-      onClick={startPresentation}
+      onClick={handleStart}
       whileHover={{ scale: 1.05 }}
       whileTap={{ scale: 0.95 }}
       style={{
@@ -83,54 +112,59 @@ export function DemoPresenterBar() {
   const isDemo = useDemoStore((s) => s.isDemo)
   const isPresenting = useDemoScenarioStore((s) => s.isPresenting)
   const currentStep = useDemoScenarioStore((s) => s.currentStep)
-  const nextStep = useDemoScenarioStore((s) => s.nextStep)
-  const prevStep = useDemoScenarioStore((s) => s.prevStep)
   const stopPresentation = useDemoScenarioStore((s) => s.stopPresentation)
-  const setScenario = useDemoScenarioStore((s) => s.setScenario)
-  const router = useRouter()
-  const pathname = usePathname()
 
   const step = DEMO_STEPS[currentStep]
   const isFirst = currentStep === 0
   const isLast = currentStep === TOTAL_STEPS - 1
 
-  // ── Navigate to step route ────────────────────────────────────────────
+  // ── Step navigation (imperative, no useEffect) ────────────────────────
 
-  useEffect(() => {
-    if (!isPresenting || !step) return
+  const goNext = useCallback(() => {
+    if (currentStep >= TOTAL_STEPS - 1) return
+    const next = currentStep + 1
+    useDemoScenarioStore.getState().goToStep(next)
+    navigateToStep(next)
+  }, [currentStep])
 
-    // Set scenario if step defines one
-    if (step.scenario) {
-      setScenario(step.scenario)
-    }
-
-    // Always navigate on step change — router.push is a no-op if already there
-    router.push(step.route)
-  }, [isPresenting, currentStep]) // eslint-disable-line react-hooks/exhaustive-deps
+  const goPrev = useCallback(() => {
+    if (currentStep <= 0) return
+    const prev = currentStep - 1
+    useDemoScenarioStore.getState().goToStep(prev)
+    navigateToStep(prev)
+  }, [currentStep])
 
   // ── Keyboard shortcuts ────────────────────────────────────────────────
 
-  const handleKeyDown = useCallback(
-    (e: KeyboardEvent) => {
-      if (!isPresenting) return
+  useEffect(() => {
+    if (!isPresenting) return
+
+    function handleKeyDown(e: KeyboardEvent) {
       if (e.key === 'ArrowRight' || e.key === ' ') {
         e.preventDefault()
-        nextStep()
+        const cur = useDemoScenarioStore.getState().currentStep
+        if (cur < TOTAL_STEPS - 1) {
+          const next = cur + 1
+          useDemoScenarioStore.getState().goToStep(next)
+          navigateToStep(next)
+        }
       } else if (e.key === 'ArrowLeft') {
         e.preventDefault()
-        prevStep()
+        const cur = useDemoScenarioStore.getState().currentStep
+        if (cur > 0) {
+          const prev = cur - 1
+          useDemoScenarioStore.getState().goToStep(prev)
+          navigateToStep(prev)
+        }
       } else if (e.key === 'Escape') {
         e.preventDefault()
-        stopPresentation()
+        useDemoScenarioStore.getState().stopPresentation()
       }
-    },
-    [isPresenting, nextStep, prevStep, stopPresentation],
-  )
+    }
 
-  useEffect(() => {
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [handleKeyDown])
+  }, [isPresenting])
 
   // ── Render ────────────────────────────────────────────────────────────
 
@@ -254,7 +288,7 @@ export function DemoPresenterBar() {
           {/* Navigation buttons */}
           <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
             <motion.button
-              onClick={prevStep}
+              onClick={goPrev}
               disabled={isFirst}
               whileHover={isFirst ? undefined : { scale: 1.08 }}
               whileTap={isFirst ? undefined : { scale: 0.92 }}
@@ -275,7 +309,7 @@ export function DemoPresenterBar() {
               <ChevronLeft size={16} />
             </motion.button>
             <motion.button
-              onClick={nextStep}
+              onClick={goNext}
               disabled={isLast}
               whileHover={isLast ? undefined : { scale: 1.08 }}
               whileTap={isLast ? undefined : { scale: 0.92 }}

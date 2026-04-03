@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
 
 export type DemoScenario = 'normal' | 'peak' | 'absence'
 
@@ -20,21 +21,28 @@ interface DemoScenarioState {
 
 export const TOTAL_STEPS = 13
 
-export const useDemoScenarioStore = create<DemoScenarioState>((set) => ({
-  currentStep: 0,
-  isPresenting: false,
-  activeScenario: 'normal',
+export const useDemoScenarioStore = create<DemoScenarioState>()(
+  persist(
+    (set) => ({
+      currentStep: 0,
+      isPresenting: false,
+      activeScenario: 'normal',
 
-  nextStep: () =>
-    set((s) => ({ currentStep: Math.min(s.currentStep + 1, TOTAL_STEPS - 1) })),
-  prevStep: () =>
-    set((s) => ({ currentStep: Math.max(s.currentStep - 1, 0) })),
-  goToStep: (n) =>
-    set({ currentStep: Math.max(0, Math.min(n, TOTAL_STEPS - 1)) }),
-  startPresentation: () =>
-    set({ isPresenting: true, currentStep: 0 }),
-  stopPresentation: () =>
-    set({ isPresenting: false }),
-  setScenario: (s) =>
-    set({ activeScenario: s }),
-}))
+      nextStep: () =>
+        set((s) => ({ currentStep: Math.min(s.currentStep + 1, TOTAL_STEPS - 1) })),
+      prevStep: () =>
+        set((s) => ({ currentStep: Math.max(s.currentStep - 1, 0) })),
+      goToStep: (n) =>
+        set({ currentStep: Math.max(0, Math.min(n, TOTAL_STEPS - 1)) }),
+      startPresentation: () =>
+        set({ isPresenting: true, currentStep: 0 }),
+      stopPresentation: () =>
+        set({ isPresenting: false, currentStep: 0 }),
+      setScenario: (s) =>
+        set({ activeScenario: s }),
+    }),
+    {
+      name: 'astraplanner-demo-presenter',
+    },
+  ),
+)
