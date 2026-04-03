@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Upload } from 'lucide-react'
 import { containerStagger, fadeInUp, bouncy, scalePress } from '@/lib/motion'
@@ -52,10 +52,15 @@ export default function DemandPage() {
   const siteId = activeSiteId ?? ''
   const isDemo = useDemoStore((s) => s.isDemo)
 
-  const [weekRange, setWeekRange] = useState<{ start: string; end: string }>(
-    () => isDemo ? { start: DEMO_WEEK_10, end: DEMO_WEEK_13 } : getDefaultWeekRange()
-  )
+  const [weekRange, setWeekRange] = useState<{ start: string; end: string }>(getDefaultWeekRange)
   const [activeTab, setActiveTab] = useState<Tab>('invoer')
+
+  // Force demo week range when demo mode activates (after DemoProvider resolves)
+  useEffect(() => {
+    if (isDemo) {
+      setWeekRange({ start: DEMO_WEEK_10, end: DEMO_WEEK_13 })
+    }
+  }, [isDemo])
   const [uploadOpen, setUploadOpen] = useState(false)
 
   // Wait for site to be selected

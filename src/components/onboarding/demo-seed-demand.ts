@@ -153,35 +153,39 @@ interface DemoWorkloadRow {
   process: { name: string; category: string | null; process_type: string | null }
 }
 
-// Available FTE per day (based on 20 AMS employees, 3 shifts × 8h each)
-// Normal: ~14 FTE/day available (some part-time/flex)
-// Reduced in wk13 due to 3 absences: ~11.5 FTE/day
-const BASE_FTE_AVAILABLE = 14
-const ABSENCE_FTE_AVAILABLE = 11.5
-
-// FTE distribution per process (proportional to staffing needs)
-// These ratios determine how available FTE is spread across processes
-const FTE_SHARE: Record<string, number> = {
-  [PROC_ORDER_PICKING]: 0.30,
-  [PROC_PACKING]:       0.22,
-  [PROC_INBOUND]:       0.15,
-  [PROC_VAS]:           0.10,
-  [PROC_SHIPPING]:      0.15,
-  [PROC_RETURNS]:       0.08,
+// FTE available per process per day — calibrated so coverage is:
+// Wk10-11 (normal): ~90-100%
+// Wk12 (peak): ~65-80% (demand doubles, staff stays same)
+// Wk13 (absence): ~75-85% (3 people absent)
+//
+// These values represent how many FTE are assigned to each process
+// across all 3 shifts combined on a normal work day.
+const BASE_FTE_PER_PROCESS: Record<string, number> = {
+  [PROC_ORDER_PICKING]: 4.5,   // ~6 orderpickers across shifts
+  [PROC_PACKING]:       3.2,   // ~3 inpakkers + TL support
+  [PROC_INBOUND]:       2.0,   // ~4 log. medewerkers across shifts
+  [PROC_VAS]:           1.5,   // ~2 people, VAS is lighter
+  [PROC_SHIPPING]:      2.5,   // ~3 verzendmedewerkers
+  [PROC_RETURNS]:       1.2,   // ~1-2 people
 }
+
+// Absence week: reduce by ~20% (3 out of 20 employees absent)
+const ABSENCE_REDUCTION = 0.80
 
 function generateWorkload(): DemoWorkloadRow[] {
   const result: DemoWorkloadRow[] = []
 
   for (const proc of PROCESSES) {
     const vols = WEEKLY_VOLUMES[proc.id]!
-    const share = FTE_SHARE[proc.id] ?? 0.1
+    const baseFte = BASE_FTE_PER_PROCESS[proc.id] ?? 1.5
 
     for (let wi = 0; wi < 4; wi++) {
       const weekDays = days(DEMO_WEEKS[wi]!)
       const weekVol = vols[wi]!
       const isAbsenceWeek = wi === 3
-      const dailyFtePool = isAbsenceWeek ? ABSENCE_FTE_AVAILABLE : BASE_FTE_AVAILABLE
+      const fteAvailable = Math.round(
+        baseFte * (isAbsenceWeek ? ABSENCE_REDUCTION : 1) * 10,
+      ) / 10
 
       for (let di = 0; di < 7; di++) {
         const dayVol = Math.round(weekVol * DAY_WEIGHTS[di]!)
@@ -189,7 +193,6 @@ function generateWorkload(): DemoWorkloadRow[] {
 
         const hoursNeeded = dayVol / proc.norm_uph
         const fteNeeded = hoursNeeded / 8 // 8-hour shift
-        const fteAvailable = Math.round(dailyFtePool * share * 10) / 10
         const hoursAvailable = fteAvailable * 8
         const coveragePct = fteNeeded > 0
           ? Math.min(Math.round((fteAvailable / fteNeeded) * 100), 200)
