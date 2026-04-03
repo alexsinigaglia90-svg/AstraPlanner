@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { Users } from 'lucide-react'
 import { trpc } from '@/lib/trpc/client'
+import { useDemoStore } from '@/hooks/use-demo'
 import { fadeInUp, containerStagger } from '@/lib/motion'
 
 const ROLE_OPTIONS = [
@@ -47,8 +48,12 @@ function roleBadgeColor(role: string): { bg: string; color: string } {
 }
 
 export default function TeamSettingsPage() {
+  const isDemo = useDemoStore((s) => s.isDemo)
   const utils = trpc.useUtils()
-  const { data, isLoading } = trpc.admin.listJoinRequests.useQuery()
+  const { data, isLoading } = trpc.admin.listJoinRequests.useQuery(
+    undefined,
+    { enabled: !isDemo },
+  )
 
   const [selectedRoles, setSelectedRoles] = useState<Record<string, string>>({})
 

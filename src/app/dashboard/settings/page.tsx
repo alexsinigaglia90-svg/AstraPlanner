@@ -186,11 +186,8 @@ function DemoModeCard({
       await supabase.auth.refreshSession()
       const entering = data.mode === 'demo'
       setDemo(entering)
-      showSuccess(entering ? 'Demo modus geactiveerd' : 'Demo modus uitgeschakeld')
-      if (!entering) {
-        // Force page reload to reset all demo state
-        window.location.reload()
-      }
+      // Always reload to reset all cached queries, site store, and component state
+      window.location.href = entering ? '/dashboard' : '/dashboard/settings'
     },
     onError: (err) => {
       showError(`Demo toggle mislukt: ${err.message}`)
