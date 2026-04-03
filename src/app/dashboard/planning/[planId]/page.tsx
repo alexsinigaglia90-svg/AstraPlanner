@@ -14,9 +14,11 @@ import { AssignmentEditor } from '@/components/domain/assignment-editor'
 import { useSiteStore } from '@/stores/site-store'
 import { useDemoStore } from '@/hooks/use-demo'
 import { useDemoPlanData } from '@/hooks/use-demo-plan-data'
+import { useDemoSolver } from '@/hooks/use-demo-solver'
 import { demoEmployees } from '@/components/onboarding/demo-seed-employees'
 import { demoProcesses, demoDepartments, DEMO_SITE_AMS } from '@/components/onboarding/demo-seed-processes'
 import { demoShifts } from '@/components/onboarding/demo-seed'
+import { DemoSolverAnimation } from '@/components/onboarding/demo-solver-animation'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -152,7 +154,9 @@ export default function PlanDetailPage() {
   const { activeSiteId } = useSiteStore()
   const isDemo = useDemoStore((s) => s.isDemo)
   const demoPlan = useDemoPlanData(isDemo ? planId : null)
+  const demoSolver = useDemoSolver()
   const [pendingAction, setPendingAction] = useState<string | null>(null)
+  const [showSolverAnim, setShowSolverAnim] = useState(false)
   const [selectedCell, setSelectedCell] = useState<{
     empId: string; empName: string; date: string; shiftId: string; shiftName: string
   } | null>(null)
@@ -246,6 +250,14 @@ export default function PlanDetailPage() {
 
   const handleAction = useCallback(
     (action: string) => {
+      if (isDemo && (action === 'optimize' || action === 'reoptimize')) {
+        // Run the real solver client-side against demo data
+        setShowSolverAnim(true)
+        const weekStart = plan?.plan_period_start ?? '2026-03-02'
+        demoSolver.solve(weekStart)
+        return
+      }
+
       setPendingAction(action)
 
       switch (action) {
@@ -282,15 +294,49 @@ export default function PlanDetailPage() {
           break
       }
     },
-    [planId, optimizeMutation, transitionMutation],
+    [planId, isDemo, plan, demoSolver, optimizeMutation, transitionMutation],
   )
 
-  // ── Derived: metrics ─────────────────────────────────────────────────────
+  // ── Derived: metrics (prefer live solver result over static) ────────────
 
+  // ── Transform solver assignments to PlanGrid format ──────────────────
+
+  const solverAssignments = useMemo(() => {
+    if (!demoSolver.result) return null
+    return demoSolver.result.assignments.map((a, i) => {
+      // time_slot_id format: "2026-03-02_demo-shft-..."
+      const parts = a.time_slot_id.split('_')
+      const date = parts[0] ?? ''
+      const shiftId = parts.slice(1).join('_')
+      return {
+        id: `solver-asg-${i}`,
+        employee_id: a.employee_id,
+        process_id: a.process_id,
+        shift_pattern_id: shiftId || a.shift_pattern_id,
+        assignment_date: date,
+        scheduled_hours: a.scheduled_hours,
+        assignment_source: a.assignment_source,
+        cost_estimate: a.cost_estimate,
+      }
+    })
+  }, [demoSolver.result])
+
+  // Use solver result assignments if available, else plan's static ones
+  const displayAssignments = solverAssignments ?? plan?.assignments ?? []
+
+  const solverMetrics = demoSolver.result?.metrics
   const metrics = useMemo<SummaryMetrics | null>(() => {
+    if (solverMetrics) {
+      return {
+        total_cost: solverMetrics.total_cost,
+        coverage_percentage: solverMetrics.coverage_percentage,
+        overtime_hours: solverMetrics.overtime_hours,
+        solve_time_ms: solverMetrics.solve_time_ms,
+      }
+    }
     if (!plan?.summary_metrics_json) return null
     return plan.summary_metrics_json as SummaryMetrics
-  }, [plan?.summary_metrics_json])
+  }, [plan?.summary_metrics_json, solverMetrics])
 
   const weekNum = useMemo(() => {
     if (!plan?.plan_period_start) return '—'
@@ -317,7 +363,7 @@ export default function PlanDetailPage() {
 
   const selectedAssignment = useMemo(() => {
     if (!selectedCell || !plan) return null
-    const match = plan.assignments.find(
+    const match = displayAssignments.find(
       (a) =>
         a.employee_id === selectedCell.empId &&
         a.assignment_date === selectedCell.date &&
@@ -486,6 +532,18 @@ export default function PlanDetailPage() {
         })}
       </motion.div>
 
+      {/* ── Solver animation (demo mode) ─────────────────────────────── */}
+      {isDemo && showSolverAnim && (
+        <motion.div variants={fadeInUp}>
+          <DemoSolverAnimation
+            active={demoSolver.solving || !!demoSolver.result}
+            solveTimeMs={demoSolver.result?.metrics.solve_time_ms ?? 1200}
+            coveragePct={demoSolver.result?.metrics.coverage_percentage ?? 0}
+            onComplete={() => setShowSolverAnim(false)}
+          />
+        </motion.div>
+      )}
+
       {/* ── KPI Hero Cards row ─────────────────────────────────────────── */}
       <div
         style={{
@@ -537,7 +595,7 @@ export default function PlanDetailPage() {
       {/* ── Assignment Heatmap Grid ────────────────────────────────────── */}
       <motion.div variants={fadeInUp}>
         <PlanGrid
-          assignments={plan.assignments}
+          assignments={displayAssignments}
           employees={isDemo
             ? (demoEmps as Array<{ id: string; first_name: string; last_name: string; department_id: string | null }>)
             : (employeesQ.data?.items ?? []) as Array<{ id: string; first_name: string; last_name: string; department_id: string | null }>}

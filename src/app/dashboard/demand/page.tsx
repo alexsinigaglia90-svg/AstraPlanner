@@ -9,6 +9,8 @@ import { FteDashboard } from '@/components/domain/fte-dashboard'
 import { DemandUploadWizard } from '@/components/domain/demand-upload-wizard'
 import { getDefaultWeekRange } from '@/components/domain/week-range-picker'
 import { useSiteStore } from '@/stores/site-store'
+import { useDemoStore } from '@/hooks/use-demo'
+import { DEMO_WEEK_10, DEMO_WEEK_13 } from '@/components/onboarding/demo-seed-demand'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -48,9 +50,10 @@ const tabContentVariants = {
 export default function DemandPage() {
   const { activeSiteId } = useSiteStore()
   const siteId = activeSiteId ?? ''
+  const isDemo = useDemoStore((s) => s.isDemo)
 
   const [weekRange, setWeekRange] = useState<{ start: string; end: string }>(
-    getDefaultWeekRange
+    () => isDemo ? { start: DEMO_WEEK_10, end: DEMO_WEEK_13 } : getDefaultWeekRange()
   )
   const [activeTab, setActiveTab] = useState<Tab>('invoer')
   const [uploadOpen, setUploadOpen] = useState(false)

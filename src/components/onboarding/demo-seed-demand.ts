@@ -69,7 +69,7 @@ const PROCESSES: ProcessMeta[] = [
 // ── Weekly demand volumes ────────────────────────────────────────────────────
 // Key: processId → [wk10, wk11, wk12_PEAK, wk13_absence]
 
-const WEEKLY_VOLUMES: Record<string, [number, number, number, number]> = {
+export const WEEKLY_VOLUMES: Record<string, [number, number, number, number]> = {
   [PROC_ORDER_PICKING]: [14400, 15000, 32000, 16000],
   [PROC_PACKING]:       [10000, 10500, 24000, 11000],
   [PROC_INBOUND]:       [500,   520,   600,   480],
