@@ -9,6 +9,7 @@ import { scenarioRouter } from './scenario'
 import { wizardRouter } from './wizard'
 import { onboardingRouter } from './onboarding'
 import { absenceRouter } from './absence'
+import { insightsRouter } from './insights'
 
 export const appRouter = router({
   admin: adminRouter,
@@ -21,6 +22,7 @@ export const appRouter = router({
   wizard: wizardRouter,
   onboarding: onboardingRouter,
   absence: absenceRouter,
+  insights: insightsRouter,
 })
 
 export type AppRouter = typeof appRouter
