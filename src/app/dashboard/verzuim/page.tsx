@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, lazy, Suspense } from 'react'
 import { motion } from 'framer-motion'
 import { HeartPulse, Plus } from 'lucide-react'
 import { trpc } from '@/lib/trpc/client'
@@ -9,6 +9,8 @@ import { useDemoStore } from '@/hooks/use-demo'
 import { useToast } from '@/components/domain/toast'
 import { bouncy } from '@/lib/motion'
 import { AbsenceWizard } from '@/components/domain/absence-wizard'
+
+const InsightsTab = lazy(() => import('@/components/domain/insights-tab').then(m => ({ default: m.InsightsTab })))
 
 // ── Hold-to-Confirm Button ───────────────────────────────────────────────────
 
@@ -102,6 +104,7 @@ export default function VerzuimPage() {
   const isDemo = useDemoStore((s) => s.isDemo)
   const toast = useToast()
   const [wizardOpen, setWizardOpen] = useState(false)
+  const [activeTab, setActiveTab] = useState<'overzicht' | 'insights'>('overzicht')
 
   // Fetch active absences — wrapped in try-safe query
   const activeQuery = trpc.absence.listActive.useQuery(
@@ -170,6 +173,47 @@ export default function VerzuimPage() {
         </motion.button>
       </motion.div>
 
+      {/* Tab Bar */}
+      <div style={{ display: 'flex', gap: 0, marginBottom: 24, borderBottom: '2px solid #E5E7EB', position: 'relative' }}>
+        {(['overzicht', 'insights'] as const).map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            style={{
+              padding: '10px 24px',
+              fontSize: 13,
+              fontWeight: activeTab === tab ? 700 : 500,
+              color: activeTab === tab ? '#6366F1' : '#9CA3AF',
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              fontFamily: 'var(--font-body)',
+              position: 'relative',
+              transition: 'color 0.2s',
+            }}
+          >
+            {tab === 'overzicht' ? 'Overzicht' : 'Insights'}
+            {activeTab === tab && (
+              <motion.div
+                layoutId="verzuim-tab-indicator"
+                style={{
+                  position: 'absolute',
+                  bottom: -2,
+                  left: 0,
+                  right: 0,
+                  height: 2,
+                  background: '#6366F1',
+                  borderRadius: 1,
+                }}
+                transition={bouncy}
+              />
+            )}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === 'overzicht' && (
+      <>
       {/* KPI */}
       <div style={{
         display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 32,
@@ -279,6 +323,20 @@ export default function VerzuimPage() {
           siteId={activeSiteId}
           onSaved={() => void activeQuery.refetch()}
         />
+      )}
+      </>
+      )}
+
+      {activeTab === 'insights' && (
+        <Suspense fallback={
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {[1, 2, 3].map((i) => (
+              <div key={i} style={{ height: 200, borderRadius: 20, background: 'rgba(100,116,139,0.06)' }} />
+            ))}
+          </div>
+        }>
+          <InsightsTab />
+        </Suspense>
       )}
     </div>
   )
