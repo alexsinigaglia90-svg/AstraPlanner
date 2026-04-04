@@ -392,12 +392,61 @@ export const planningRouter = router({
       const siteWide = allWorkloadRows.filter((w) => w.plan_version_id === null || w.plan_version_id === undefined)
       const workloadSource = planSpecific.length > 0 ? planSpecific : siteWide
 
-      const workloadRows: WorkloadRow[] = workloadSource.map((w) => ({
+      let workloadRows: WorkloadRow[] = workloadSource.map((w) => ({
         process_id: w.process_id as string,
         fte_needed: Number(w.fte_needed) || null,
         period_start: w.period_start as string,
         period_end: w.period_end as string,
       }))
+
+      // Fallback: if workload_plan is empty, derive demand directly from demand_forecast
+      if (workloadRows.length === 0) {
+        const { data: forecastRows, error: forecastErr } = await admin
+          .from('demand_forecast')
+          .select('process_id, volume, period_start, period_end')
+          .eq('site_id', siteId)
+          .not('process_id', 'is', null)
+          .gte('period_start', periodStart)
+          .lte('period_start', periodEnd)
+
+        if (!forecastErr && forecastRows && forecastRows.length > 0) {
+          // Also fetch process UPH to convert volume → FTE
+          const { data: ppsRows } = await admin
+            .from('process_productivity_standard')
+            .select('process_id, units_per_hour')
+            .eq('organization_id', orgId)
+
+          const uphMap = new Map<string, number>()
+          for (const p of (ppsRows ?? []) as Array<Record<string, unknown>>) {
+            uphMap.set(p.process_id as string, Number(p.units_per_hour) || 0)
+          }
+
+          // Standard hours per shift for FTE conversion
+          const avgShiftHours = shiftDefs.length > 0
+            ? shiftDefs.reduce((sum, s) => sum + s.duration_hours, 0) / shiftDefs.length
+            : 8
+
+          workloadRows = (forecastRows as Array<Record<string, unknown>>)
+            .filter((f) => f.process_id)
+            .map((f) => {
+              const volume = Number(f.volume) || 0
+              const uph = uphMap.get(f.process_id as string) || 0
+              // If UPH is known, convert volume→hours→FTE; otherwise treat volume as direct FTE
+              const fte = uph > 0 ? volume / uph / avgShiftHours : volume
+              return {
+                process_id: f.process_id as string,
+                fte_needed: fte > 0 ? fte : null,
+                period_start: f.period_start as string,
+                period_end: f.period_end as string,
+              }
+            })
+
+          console.log('[solver] Fallback: using demand_forecast directly', {
+            forecastCount: forecastRows.length,
+            workloadRowsGenerated: workloadRows.length,
+          })
+        }
+      }
 
       const demand = buildProcessDemand(workloadRows, allTimeSlots)
 
@@ -410,7 +459,7 @@ export const planningRouter = router({
         hourly_rate: (e.hourly_rate as number | null),
         home_site_id: e.home_site_id as string,
         is_multi_site_eligible: e.is_multi_site_eligible as boolean,
-        crew_id: null,
+        crew_id: (e.crew_id as string | null) ?? null,
         job_role_hourly_rate: ((e.job_role as Record<string, unknown> | null)?.hourly_rate as number | null) ?? null,
       }))
 
@@ -440,6 +489,7 @@ export const planningRouter = router({
         [], // overrides — we fetch them above but not yet integrated
         new Map(), // existing hours this week
         new Map(), // consecutive days worked
+        allTimeSlots, // fallback availability when no rotation exists
       )
 
       // Build constraints from labor rules

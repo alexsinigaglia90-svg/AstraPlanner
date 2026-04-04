@@ -205,6 +205,11 @@ export function buildProcessDemand(
 
 /**
  * Assembles EmployeeRecord[] from raw DB data.
+ *
+ * When an employee has no rotation-based availability, we fall back to
+ * making them available for every time slot in `fallbackTimeSlots`.
+ * This ensures the solver can still assign employees who simply don't
+ * have a rotation schedule configured yet.
  */
 export function buildEmployeeRecords(
   employees: RawEmployee[],
@@ -213,6 +218,7 @@ export function buildEmployeeRecords(
   overrides: OverrideRow[],
   existingHours: Map<string, number>,
   consecutiveDays: Map<string, number>,
+  fallbackTimeSlots: TimeSlot[] = [],
 ): EmployeeRecord[] {
   // Index skills by employee
   const skillsByEmployee = new Map<string, RawSkill[]>()
@@ -252,10 +258,20 @@ export function buildEmployeeRecords(
 
     // Availability from rotation
     const rotSlots = rotByEmployee.get(emp.id) ?? []
-    const availability: AvailabilityWindow[] = rotSlots.map((r) => ({
-      start: toTimestamp(r.date, r.start_time),
-      end: toTimestamp(r.date, r.end_time),
-    }))
+    let availability: AvailabilityWindow[]
+
+    if (rotSlots.length > 0) {
+      availability = rotSlots.map((r) => ({
+        start: toTimestamp(r.date, r.start_time),
+        end: toTimestamp(r.date, r.end_time),
+      }))
+    } else {
+      // Fallback: employee is available for all time slots in the period
+      availability = fallbackTimeSlots.map((ts) => ({
+        start: ts.period_start,
+        end: ts.period_end,
+      }))
+    }
 
     // Subtract overrides (except extra_availability) from availability
     const empOverrides = overridesByEmployee.get(emp.id) ?? []
