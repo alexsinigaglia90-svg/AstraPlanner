@@ -315,7 +315,16 @@ export default function VerzuimPage() {
         </div>
       )}
 
-      {/* Wizard */}
+      </>
+      )}
+
+      {activeTab === 'insights' && (
+        <Suspense fallback={<InsightsSkeleton />}>
+          <InsightsTab />
+        </Suspense>
+      )}
+
+      {/* Wizard — always rendered so it works on both tabs */}
       {activeSiteId && (
         <AbsenceWizard
           open={wizardOpen}
@@ -324,20 +333,136 @@ export default function VerzuimPage() {
           onSaved={() => void activeQuery.refetch()}
         />
       )}
-      </>
-      )}
-
-      {activeTab === 'insights' && (
-        <Suspense fallback={
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            {[1, 2, 3].map((i) => (
-              <div key={i} style={{ height: 200, borderRadius: 20, background: 'rgba(100,116,139,0.06)' }} />
-            ))}
-          </div>
-        }>
-          <InsightsTab />
-        </Suspense>
-      )}
     </div>
+  )
+}
+
+// ── Premium Skeleton ────────────────────────────────────────────────────────
+
+function InsightsSkeleton() {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {/* Row 1: two hero cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+        <SkeletonCard height={260}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
+            <SkeletonCircle size={140} />
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <SkeletonLine width="60%" />
+              <SkeletonLine width="80%" />
+              <SkeletonLine width="70%" />
+              <SkeletonLine width="50%" />
+              <SkeletonLine width="65%" />
+            </div>
+          </div>
+        </SkeletonCard>
+        <SkeletonCard height={260}>
+          <SkeletonLine width="40%" height={14} />
+          <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <SkeletonBlock height={56} />
+            <SkeletonBlock height={56} />
+            <SkeletonBlock height={44} />
+          </div>
+        </SkeletonCard>
+      </div>
+      {/* Row 2: three charts */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
+        <SkeletonCard height={200}>
+          <SkeletonLine width="35%" height={12} />
+          <div style={{ marginTop: 12 }}>
+            <SkeletonBlock height={130} />
+          </div>
+        </SkeletonCard>
+        <SkeletonCard height={200}>
+          <SkeletonLine width="45%" height={12} />
+          <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <SkeletonLine width="85%" height={14} />
+            <SkeletonLine width="60%" height={14} />
+            <SkeletonLine width="70%" height={14} />
+          </div>
+        </SkeletonCard>
+        <SkeletonCard height={200}>
+          <SkeletonLine width="30%" height={12} />
+          <div style={{ marginTop: 12 }}>
+            <SkeletonBlock height={130} />
+          </div>
+        </SkeletonCard>
+      </div>
+      {/* Row 3: signal feed */}
+      <SkeletonCard height={110}>
+        <SkeletonLine width="25%" height={12} />
+        <div style={{ marginTop: 12, display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10 }}>
+          {[1, 2, 3, 4, 5].map((i) => (
+            <SkeletonBlock key={i} height={60} />
+          ))}
+        </div>
+      </SkeletonCard>
+    </div>
+  )
+}
+
+function SkeletonCard({ height, children }: { height: number; children: React.ReactNode }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      style={{
+        background: 'rgba(255,255,255,0.72)',
+        backdropFilter: 'blur(16px)',
+        border: '1px solid rgba(255,255,255,0.6)',
+        borderRadius: 20,
+        padding: 20,
+        minHeight: height,
+        overflow: 'hidden',
+      }}
+    >
+      {children}
+    </motion.div>
+  )
+}
+
+function SkeletonLine({ width = '100%', height = 10 }: { width?: string; height?: number }) {
+  return (
+    <motion.div
+      animate={{ opacity: [0.3, 0.6, 0.3] }}
+      transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
+      style={{
+        width,
+        height,
+        borderRadius: 6,
+        background: 'linear-gradient(90deg, rgba(99,102,241,0.08) 0%, rgba(99,102,241,0.15) 50%, rgba(99,102,241,0.08) 100%)',
+      }}
+    />
+  )
+}
+
+function SkeletonBlock({ height }: { height: number }) {
+  return (
+    <motion.div
+      animate={{ opacity: [0.3, 0.6, 0.3] }}
+      transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut', delay: Math.random() * 0.5 }}
+      style={{
+        width: '100%',
+        height,
+        borderRadius: 12,
+        background: 'linear-gradient(90deg, rgba(99,102,241,0.06) 0%, rgba(99,102,241,0.12) 50%, rgba(99,102,241,0.06) 100%)',
+      }}
+    />
+  )
+}
+
+function SkeletonCircle({ size }: { size: number }) {
+  return (
+    <motion.div
+      animate={{ opacity: [0.3, 0.6, 0.3] }}
+      transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
+      style={{
+        width: size,
+        height: size,
+        borderRadius: '50%',
+        background: 'linear-gradient(135deg, rgba(99,102,241,0.06) 0%, rgba(99,102,241,0.12) 50%, rgba(99,102,241,0.06) 100%)',
+        flexShrink: 0,
+      }}
+    />
   )
 }
