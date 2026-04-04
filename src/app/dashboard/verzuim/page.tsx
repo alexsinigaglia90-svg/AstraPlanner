@@ -103,6 +103,7 @@ export default function VerzuimPage() {
   const { activeSiteId } = useSiteStore()
   const isDemo = useDemoStore((s) => s.isDemo)
   const toast = useToast()
+  const utils = trpc.useUtils()
   const [wizardOpen, setWizardOpen] = useState(false)
   const [activeTab, setActiveTab] = useState<'overzicht' | 'insights'>('overzicht')
 
@@ -112,10 +113,13 @@ export default function VerzuimPage() {
     { enabled: !!activeSiteId && !isDemo, retry: false },
   )
 
+  const invalidateInsights = () => void utils.insights.invalidate()
+
   const recover = trpc.absence.reportRecovered.useMutation({
     onSuccess: () => {
       toast.showSuccess('Herstelmelding verwerkt')
       void activeQuery.refetch()
+      invalidateInsights()
     },
     onError: (err: { message: string }) => toast.showError(err.message),
   })
@@ -330,7 +334,7 @@ export default function VerzuimPage() {
           open={wizardOpen}
           onClose={() => setWizardOpen(false)}
           siteId={activeSiteId}
-          onSaved={() => void activeQuery.refetch()}
+          onSaved={() => { void activeQuery.refetch(); invalidateInsights() }}
         />
       )}
     </div>
