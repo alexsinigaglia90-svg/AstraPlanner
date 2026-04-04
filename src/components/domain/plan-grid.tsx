@@ -44,12 +44,12 @@ function fmtTime(t?: string): string {
 }
 
 
-/** Background opacity per shift — strong contrast between early and late starts */
+/** Background opacity per shift — bold contrast between early and late starts */
 function shiftBgAlpha(startTime?: string): number {
-  if (!startTime) return 0.05
+  if (!startTime) return 0.06
   const hour = parseInt(startTime.slice(0, 2), 10)
-  // Strong differentiation: 06:00→0.04, 11:00→0.12, 14:00→0.16, 22:00→0.22
-  return 0.04 + (hour / 24) * 0.20
+  // Bold: 06:00→0.06, 11:00→0.20, 14:00→0.27, 22:00→0.40
+  return 0.06 + (hour / 24) * 0.38
 }
 
 // ── Types ──────────────────────────────────────────────────────────────────
