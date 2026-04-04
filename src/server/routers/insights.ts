@@ -16,6 +16,40 @@ function assertNoError(error: { message: string } | null, label: string): void {
   }
 }
 
+// ── Shared helpers ──────────────────────────────────────────────────────────
+
+async function getLatestSignals(admin: ReturnType<typeof createAdminClient>, orgId: string) {
+  const { data, error } = await admin
+    .from('external_signal')
+    .select('*')
+    .or(`organization_id.eq.${orgId},organization_id.is.null`)
+    .order('fetched_at', { ascending: false })
+    .limit(50)
+  assertNoError(error, 'getLatestSignals')
+  const seen = new Map<string, ExternalSignal>()
+  for (const row of data ?? []) {
+    const key = `${row.source}:${row.signal_type}:${row.region ?? 'all'}`
+    if (!seen.has(key)) seen.set(key, row as unknown as ExternalSignal)
+  }
+  return Array.from(seen.values())
+}
+
+async function getAbsenceStats(admin: ReturnType<typeof createAdminClient>, orgId: string) {
+  const today = new Date().toISOString().slice(0, 10)
+  const [absResult, empResult] = await Promise.all([
+    admin.from('employee_availability_override')
+      .select('id', { count: 'exact', head: true })
+      .eq('organization_id', orgId).eq('override_type', 'absence')
+      .neq('status', 'cancelled').gte('end_date', today),
+    admin.from('employee')
+      .select('id', { count: 'exact', head: true })
+      .eq('organization_id', orgId),
+  ])
+  const total = empResult.count ?? 0
+  const active = absResult.count ?? 0
+  return { active, total, pct: total > 0 ? (active / total) * 100 : 0 }
+}
+
 export const insightsRouter = router({
   /** Get latest external signals from DB */
   getSignals: supervisorProcedure
@@ -363,6 +397,131 @@ export const insightsRouter = router({
 
       const riskRadar = calculateRiskRadar(latestSignals, currentPct, null)
       return generateStaticInsights(latestSignals, riskRadar, currentPct, sectorPct)
+    }),
+
+  /** Combined dashboard endpoint — single round-trip for all insights data */
+  getDashboard: supervisorProcedure
+    .input(z.object({ site_id: z.string().uuid() }))
+    .query(async ({ ctx, input }) => {
+      const admin = createAdminClient()
+      const today = new Date().toISOString().slice(0, 10)
+
+      // 1. Parallel: signals, absence stats, departments, all absences (for trend), CBS
+      const [signals, absenceStats, deptResult, allAbsences, cbsResult, histAbsences] = await Promise.all([
+        getLatestSignals(admin, ctx.organizationId),
+        getAbsenceStats(admin, ctx.organizationId),
+        admin.from('department').select('id, name')
+          .eq('site_id', input.site_id).eq('organization_id', ctx.organizationId),
+        // Get ALL absences for last 12 months in ONE query (not 12 separate)
+        admin.from('employee_availability_override')
+          .select('id, employee_id, start_date, end_date, override_type, status')
+          .eq('organization_id', ctx.organizationId)
+          .eq('override_type', 'absence')
+          .neq('status', 'cancelled')
+          .gte('end_date', new Date(new Date().getFullYear(), new Date().getMonth() - 11, 1).toISOString().slice(0, 10)),
+        admin.from('external_signal').select('value, period_start')
+          .eq('source', 'cbs').eq('signal_type', 'sector_verzuim_pct')
+          .order('period_start', { ascending: true }).limit(8),
+        // Historical same-week-last-year
+        (() => {
+          const oneYearAgo = new Date()
+          oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1)
+          const weekLater = new Date(oneYearAgo)
+          weekLater.setDate(weekLater.getDate() + 7)
+          return admin.from('employee_availability_override')
+            .select('id', { count: 'exact', head: true })
+            .eq('organization_id', ctx.organizationId)
+            .eq('override_type', 'absence')
+            .neq('status', 'cancelled')
+            .gte('end_date', oneYearAgo.toISOString().slice(0, 10))
+            .lte('start_date', weekLater.toISOString().slice(0, 10))
+        })(),
+      ])
+
+      const departments = deptResult.data ?? []
+      const absences = allAbsences.data ?? []
+      const cbsSignals = cbsResult.data ?? []
+      const sectorAvg = signals.find((s) => s.source === 'cbs')?.value ?? 4.8
+      const historicalPct = absenceStats.total > 0
+        ? ((histAbsences.count ?? 0) / absenceStats.total) * 100
+        : null
+
+      // 2. Risk Radar (pure computation, no DB)
+      const riskRadar = calculateRiskRadar(signals, absenceStats.pct, historicalPct)
+
+      // 3. Static Insights (pure computation, no DB)
+      const staticInsights = generateStaticInsights(signals, riskRadar, absenceStats.pct, sectorAvg)
+
+      // 4. Trend — compute from the single absences query (no N+1!)
+      const now = new Date()
+      const internal: Array<{ month: string; value: number }> = []
+      for (let i = 11; i >= 0; i--) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+        const monthStart = d.toISOString().slice(0, 10)
+        const monthEnd = new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().slice(0, 10)
+        const monthLabel = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+        const count = absences.filter((a) => a.start_date <= monthEnd && a.end_date >= monthStart).length
+        const pct = absenceStats.total > 0 ? (count / absenceStats.total) * 100 : 0
+        internal.push({ month: monthLabel, value: Math.round(pct * 10) / 10 })
+      }
+      const national = internal.map((point) => {
+        const cbs = cbsSignals.find((s) => s.period_start?.startsWith(point.month.slice(0, 4)))
+        return { month: point.month, value: cbs ? Number(cbs.value) : 4.8 }
+      })
+
+      // 5. Benchmark — compute from employees already fetched + absences
+      const empByDept = new Map<string, string[]>()
+      // Need employee→department mapping — one extra query but batched
+      const { data: empDeptData } = await admin.from('employee')
+        .select('id, department_id')
+        .eq('organization_id', ctx.organizationId)
+      for (const emp of empDeptData ?? []) {
+        if (emp.department_id) {
+          const arr = empByDept.get(emp.department_id) ?? []
+          arr.push(emp.id)
+          empByDept.set(emp.department_id, arr)
+        }
+      }
+      const activeAbsenceEmployees = new Set(
+        absences.filter((a) => a.end_date >= today).map((a) => a.employee_id)
+      )
+      const deptBenchmarks = departments.map((dept: { id: string; name: string }) => {
+        const deptEmpIds = empByDept.get(dept.id) ?? []
+        const deptAbsent = deptEmpIds.filter((id) => activeAbsenceEmployees.has(id)).length
+        const pct = deptEmpIds.length > 0 ? Math.round((deptAbsent / deptEmpIds.length) * 1000) / 10 : 0
+        const diff = pct - sectorAvg
+        const status = diff > 1.5 ? 'above' as const : diff > -0.5 ? 'within' as const : 'below' as const
+        return { department_id: dept.id, department_name: dept.name, absence_pct: pct, status }
+      })
+
+      // 6. Impact Flow — pure computation from signals + departments
+      const activeSources = new Map<string, number>()
+      for (const s of signals) {
+        if (s.severity && s.severity !== 'low' && !activeSources.has(s.source)) {
+          activeSources.set(s.source, s.value)
+        }
+      }
+      const sourceLabels: Record<string, string> = { rivm: 'Griep', pollen: 'Pollen', knmi: 'Weer', vakanties: 'Vakantie', cbs: 'Benchmark' }
+      const sourceNodes = Array.from(activeSources.keys()).map((src) => ({ name: sourceLabels[src] ?? src, category: 'source' as const }))
+      const targetNodes = departments.map((d: { name: string }) => ({ name: d.name, category: 'target' as const }))
+      const flowLinks: Array<{ source: number; target: number; value: number }> = []
+      const sourceKeys = Array.from(activeSources.keys())
+      for (let si = 0; si < sourceNodes.length; si++) {
+        const sv = activeSources.get(sourceKeys[si]!) ?? 50
+        for (let ti = 0; ti < targetNodes.length; ti++) {
+          const base = sv / Math.max(targetNodes.length, 1)
+          flowLinks.push({ source: si, target: sourceNodes.length + ti, value: Math.max(1, Math.round(base + base * 0.3 * (Math.sin(si * 7 + ti * 13) + 0.5))) })
+        }
+      }
+
+      return {
+        signals,
+        riskRadar,
+        staticInsights,
+        trend: { internal, national },
+        benchmark: { departments: deptBenchmarks, sectorAvg },
+        impactFlow: { nodes: [...sourceNodes, ...targetNodes], links: flowLinks },
+      }
     }),
 
   /** Trigger manual data refresh -- fetches all sources, writes to DB */

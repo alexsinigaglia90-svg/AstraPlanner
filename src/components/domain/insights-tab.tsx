@@ -21,36 +21,27 @@ export function InsightsTab() {
   const isDemo = useDemoStore((s) => s.isDemo)
   const siteId = activeSiteId ?? ''
 
-  const queryOpts = { enabled: !!activeSiteId && !isDemo, staleTime: 15 * 60 * 1000 }
-
-  const signals = trpc.insights.getSignals.useQuery({ site_id: siteId }, queryOpts)
-  const riskRadar = trpc.insights.getRiskRadar.useQuery({ site_id: siteId }, queryOpts)
-  const trend = trpc.insights.getTrend.useQuery({ site_id: siteId }, queryOpts)
-  const benchmark = trpc.insights.getBenchmark.useQuery({ site_id: siteId }, queryOpts)
-  const impactFlow = trpc.insights.getImpactFlow.useQuery({ site_id: siteId }, queryOpts)
-  const staticInsights = trpc.insights.getStaticInsights.useQuery({ site_id: siteId }, queryOpts)
+  // Single combined query — 1 round-trip instead of 6
+  const dashboard = trpc.insights.getDashboard.useQuery(
+    { site_id: siteId },
+    { enabled: !!activeSiteId && !isDemo, staleTime: 15 * 60 * 1000 },
+  )
 
   const refreshMutation = trpc.insights.refreshSignals.useMutation({
-    onSuccess: () => {
-      void signals.refetch()
-      void riskRadar.refetch()
-      void trend.refetch()
-      void benchmark.refetch()
-      void impactFlow.refetch()
-      void staticInsights.refetch()
-    },
+    onSuccess: () => void dashboard.refetch(),
   })
 
   // Use demo data or live data
-  const signalData = isDemo ? DEMO_SIGNALS : (signals.data ?? [])
-  const radarData = isDemo ? DEMO_RISK_RADAR : riskRadar.data
-  const trendData = isDemo ? DEMO_TREND : trend.data
-  const benchmarkData = isDemo ? DEMO_BENCHMARK : benchmark.data
-  const flowData = isDemo ? DEMO_IMPACT_FLOW : impactFlow.data
-  const insightData = isDemo ? DEMO_INSIGHTS : (staticInsights.data ?? [])
+  const d = dashboard.data
+  const signalData = isDemo ? DEMO_SIGNALS : (d?.signals ?? [])
+  const radarData = isDemo ? DEMO_RISK_RADAR : d?.riskRadar
+  const trendData = isDemo ? DEMO_TREND : d?.trend
+  const benchmarkData = isDemo ? DEMO_BENCHMARK : d?.benchmark
+  const flowData = isDemo ? DEMO_IMPACT_FLOW : d?.impactFlow
+  const insightData = isDemo ? DEMO_INSIGHTS : (d?.staticInsights ?? [])
   const lastUpdated = signalData[0]?.fetched_at ?? null
 
-  const isLoading = !isDemo && (riskRadar.isLoading || staticInsights.isLoading)
+  const isLoading = !isDemo && dashboard.isLoading
 
   if (!activeSiteId) {
     return (
