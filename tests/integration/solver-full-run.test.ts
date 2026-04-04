@@ -37,6 +37,7 @@ function buildRealisticInput(): SolverInput {
       required_fte: 2,
       min_skill_level: 1,        // low threshold so all skill levels qualify
       required_certifications: [] as string[],
+      max_capacity: null,
     }))
   )
 
@@ -91,6 +92,12 @@ function buildRealisticInput(): SolverInput {
       minimize_overtime_weight: 0.1,
     },
     time_budget_seconds: 30,
+    solver_config: {
+      mode: 'balanced',
+      departments: [],
+      processes: [],
+      training_slots: {},
+    },
   }
 }
 

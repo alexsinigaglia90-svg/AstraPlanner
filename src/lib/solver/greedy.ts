@@ -6,6 +6,7 @@ import type {
   TimeSlot,
   EmployeeRecord,
   ProcessDemand,
+  SolverMode,
 } from '@/types/solver'
 import { checkSkillEligibility } from '@/lib/solver/constraints'
 import { calculateAssignmentCost, isNightHours, isWeekendDay } from '@/lib/solver/cost'
@@ -45,6 +46,10 @@ export function solveGreedy(
   laborRules: LaborRules = NL_DEFAULTS,
 ): SolverOutput {
   const startTime = performance.now()
+
+  // 0. Resolve solver mode and precompute maxRate for balanced/training scoring
+  const mode: SolverMode = input.solver_config?.mode ?? 'balanced'
+  const maxRate = Math.max(...input.employees.map(e => e.hourly_rate), 1)
 
   // 1. Initialise employee state
   const empState = new Map<string, EmployeeState>()
@@ -91,6 +96,13 @@ export function solveGreedy(
     employeeLookup.set(emp.id, emp)
   }
 
+  // 4b. Track process+slot capacity usage
+  const processSlotCount = new Map<string, number>()
+  for (const locked of input.locked_assignments) {
+    const key = `${locked.process_id}::${locked.time_slot_id}`
+    processSlotCount.set(key, (processSlotCount.get(key) ?? 0) + 1)
+  }
+
   // 5. For each demand slot, find and assign candidates
   for (const demand of sortedDemand) {
     const demandKey = `${demand.process_id}::${demand.time_slot_id}`
@@ -98,6 +110,11 @@ export function solveGreedy(
     const needed = Math.max(0, demand.required_fte - alreadyAssigned)
 
     if (needed === 0) continue
+
+    // Capacity constraint: skip if already at max_capacity
+    const capacityKey = `${demand.process_id}::${demand.time_slot_id}`
+    const currentCount = processSlotCount.get(capacityKey) ?? 0
+    if (demand.max_capacity !== null && demand.max_capacity !== undefined && currentCount >= demand.max_capacity) continue
 
     const slot = slotLookup.get(demand.time_slot_id)
     if (!slot) continue
@@ -113,13 +130,17 @@ export function solveGreedy(
     )
 
     // 5c+d. Score and sort
-    const scored = scoreCandidates(candidates, demand, empState)
+    const scored = scoreCandidates(candidates, demand, empState, mode, maxRate)
     scored.sort((a, b) => b.score - a.score)
 
     // 5e. Assign top N
     let assignedCount = 0
     for (const candidate of scored) {
       if (assignedCount >= needed) break
+
+      // Re-check capacity before each assignment
+      const curCount = processSlotCount.get(capacityKey) ?? 0
+      if (demand.max_capacity !== null && demand.max_capacity !== undefined && curCount >= demand.max_capacity) break
 
       const state = empState.get(candidate.employee.id)!
       const isOvertime =
@@ -154,6 +175,7 @@ export function solveGreedy(
       assignments.push(assignment)
       state.weekHours += shiftHours
       state.assignedSlots.add(demand.time_slot_id)
+      processSlotCount.set(capacityKey, (processSlotCount.get(capacityKey) ?? 0) + 1)
       assignedCount++
     }
 
@@ -198,6 +220,14 @@ export function solveGreedy(
       solve_time_ms: solveTimeMs,
       optimality_gap: null,
       solver_strategy_used: 'greedy',
+    },
+    per_process: [],  // Will be populated by planning.ts from FTE engine
+    warnings: [],
+    solver_config: input.solver_config ?? {
+      mode: 'balanced',
+      departments: [],
+      processes: [],
+      training_slots: {},
     },
   }
 }
@@ -244,19 +274,25 @@ function scoreCandidates(
   candidates: EmployeeRecord[],
   demand: ProcessDemand,
   empState: Map<string, EmployeeState>,
+  mode: SolverMode = 'balanced',
+  maxRate: number = 1,
 ): ScoredCandidate[] {
   return candidates.map((emp) => {
     const skill = emp.skills.find((s) => s.process_id === demand.process_id)!
     const state = empState.get(emp.id)!
 
-    const skillScore = skill.productivity_multiplier
-    const overtimePenalty =
-      state.weekHours < emp.weekly_hours_contracted ? 1.0 : 0.7
-    const balanceFactor = Math.max(
-      0.3,
-      1 - (state.weekHours / emp.weekly_hours_contracted) * 0.3,
-    )
-    const score = skillScore * overtimePenalty * balanceFactor
+    let score: number
+
+    if (mode === 'performance') {
+      // Performance mode: pure productivity
+      score = skill.productivity_multiplier
+    } else {
+      // Balanced mode (and training mode uses same scoring for regular candidates)
+      const productivityComponent = skill.productivity_multiplier * 0.4
+      const costComponent = (1 - emp.hourly_rate / maxRate) * 0.3
+      const balanceComponent = Math.max(0.3, 1 - (state.weekHours / emp.weekly_hours_contracted) * 0.3) * 0.3
+      score = productivityComponent + costComponent + balanceComponent
+    }
 
     return { employee: emp, score, productivityMultiplier: skill.productivity_multiplier }
   })

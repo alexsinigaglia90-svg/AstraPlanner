@@ -24,6 +24,7 @@ function makeInput(overrides?: Partial<SolverInput>): SolverInput {
     required_fte: 2,
     min_skill_level: 3,
     required_certifications: [],
+    max_capacity: null,
   }
   const emp1: EmployeeRecord = {
     id: 'emp1',
@@ -83,6 +84,12 @@ function makeInput(overrides?: Partial<SolverInput>): SolverInput {
       minimize_overtime_weight: 0.1,
     },
     time_budget_seconds: 10,
+    solver_config: {
+      mode: 'balanced',
+      departments: [],
+      processes: [],
+      training_slots: {},
+    },
     ...overrides,
   }
 }
@@ -114,6 +121,7 @@ describe('solveHiGHS', () => {
           required_fte: 2,
           min_skill_level: 4,
           required_certifications: [],
+          max_capacity: null,
         },
       ],
     })
@@ -136,6 +144,7 @@ describe('solveHiGHS', () => {
           required_fte: 5,
           min_skill_level: 3,
           required_certifications: [],
+          max_capacity: null,
         },
       ],
     })

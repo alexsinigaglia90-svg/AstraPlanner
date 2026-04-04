@@ -565,6 +565,12 @@ export const planningRouter = router({
         locked_assignments: lockedAssignments,
         objective,
         time_budget_seconds: input.time_budget_seconds ?? 30,
+        solver_config: {
+          mode: 'balanced' as const,
+          departments: [],
+          processes: [],
+          training_slots: {},
+        },
       }
 
       // Debug: log solver input summary

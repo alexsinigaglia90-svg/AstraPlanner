@@ -19,6 +19,7 @@ const makeAssignment = (
   scheduled_hours: hours,
   cost_estimate: hours * 22.5,
   assignment_source: 'optimizer',
+  proficiency_level: 3,
 })
 
 const baseMetrics: SolverOutput['metrics'] = {
@@ -42,6 +43,14 @@ function makeOutput(
     unmet_demand: [],
     soft_constraint_violations: [],
     metrics: { ...baseMetrics, total_cost },
+    per_process: [],
+    warnings: [],
+    solver_config: {
+      mode: 'balanced',
+      departments: [],
+      processes: [],
+      training_slots: {},
+    },
   }
 }
 

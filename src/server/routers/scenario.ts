@@ -450,6 +450,12 @@ export const scenarioRouter = router({
         locked_assignments: [],
         objective,
         time_budget_seconds: input.time_budget_seconds ?? 30,
+        solver_config: {
+          mode: 'balanced' as const,
+          departments: [],
+          processes: [],
+          training_slots: {},
+        },
       }
 
       // h. Run solver

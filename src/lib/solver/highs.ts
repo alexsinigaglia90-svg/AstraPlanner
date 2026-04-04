@@ -236,6 +236,14 @@ export async function solveHiGHS(
       optimality_gap: result.Status === 'Optimal' ? 0 : null,
       solver_strategy_used: 'highs_mip',
     },
+    per_process: [],
+    warnings: [],
+    solver_config: input.solver_config ?? {
+      mode: 'balanced',
+      departments: [],
+      processes: [],
+      training_slots: {},
+    },
   }
 }
 
@@ -399,6 +407,14 @@ function buildEmptyResult(input: SolverInput, startTime: number): SolverOutput {
       solve_time_ms: performance.now() - startTime,
       optimality_gap: 0,
       solver_strategy_used: 'highs_mip',
+    },
+    per_process: [],
+    warnings: [],
+    solver_config: input.solver_config ?? {
+      mode: 'balanced',
+      departments: [],
+      processes: [],
+      training_slots: {},
     },
   }
 }

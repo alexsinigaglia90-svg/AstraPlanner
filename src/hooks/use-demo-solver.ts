@@ -84,6 +84,7 @@ function buildSolverInput(weekMonday: string): SolverInput {
         required_fte: Math.round(ftePerSlot * 10) / 10,
         min_skill_level: proc.min_skill_level ?? 1,
         required_certifications: [],
+        max_capacity: null,
       })
     }
   }
@@ -140,6 +141,12 @@ function buildSolverInput(weekMonday: string): SolverInput {
       minimize_overtime_weight: 0.1,
     },
     time_budget_seconds: 10,
+    solver_config: {
+      mode: 'balanced',
+      departments: [],
+      processes: [],
+      training_slots: {},
+    },
   }
 }
 

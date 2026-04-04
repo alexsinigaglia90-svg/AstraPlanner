@@ -173,6 +173,7 @@ export function buildProcessDemand(
           required_fte: ftePerSlot,
           min_skill_level: minSkillLevel,
           required_certifications: [],
+          max_capacity: null,
         })
       }
     } else {
@@ -191,6 +192,7 @@ export function buildProcessDemand(
           required_fte: ftePerSlot,
           min_skill_level: minSkillLevel,
           required_certifications: [],
+          max_capacity: null,
         })
       }
     }
