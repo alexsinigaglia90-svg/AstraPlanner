@@ -55,8 +55,11 @@ export function solveGreedy(
     })
   }
 
-  // 2. Copy locked assignments to output and update state
-  const assignments: Assignment[] = [...input.locked_assignments]
+  // 2. Copy locked assignments to output and update state (default proficiency_level if missing)
+  const assignments: Assignment[] = input.locked_assignments.map((la) => ({
+    ...la,
+    proficiency_level: la.proficiency_level ?? 3,
+  }))
   const slotLookup = new Map<string, TimeSlot>()
   for (const slot of input.time_slots) {
     slotLookup.set(slot.id, slot)
@@ -135,6 +138,8 @@ export function solveGreedy(
         laborRules,
       })
 
+      const skill = candidate.employee.skills.find((s) => s.process_id === demand.process_id)!
+
       const assignment: Assignment = {
         employee_id: candidate.employee.id,
         process_id: demand.process_id,
@@ -143,6 +148,7 @@ export function solveGreedy(
         scheduled_hours: shiftHours,
         cost_estimate: costEstimate,
         assignment_source: 'optimizer',
+        proficiency_level: skill.proficiency_level,
       }
 
       assignments.push(assignment)

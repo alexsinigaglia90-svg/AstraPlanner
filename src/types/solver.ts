@@ -83,6 +83,7 @@ export interface Assignment {
   scheduled_hours: number;
   cost_estimate: number;
   assignment_source: "optimizer" | "manual" | "swap" | "ai_suggested";
+  proficiency_level: number; // 1-5, employee's skill level for assigned process
 }
 
 export interface UnmetDemandSlot {
