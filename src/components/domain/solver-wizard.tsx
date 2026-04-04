@@ -173,20 +173,23 @@ export function SolverWizard({
   // ── Derived data ────────────────────────────────────────────────────────
 
   const filteredProcesses = useMemo(
-    () => processes.filter((p) => p.department_id && selectedDepts.has(p.department_id)),
+    () => processes.filter((p) =>
+      (p.department_id && selectedDepts.has(p.department_id)) || !p.department_id
+    ),
     [processes, selectedDepts],
   )
 
   const processesByDept = useMemo(() => {
     const map = new Map<string, Process[]>()
     for (const p of filteredProcesses) {
-      if (!p.department_id) continue
-      const list = map.get(p.department_id) ?? []
+      // Group by department_id, or under first selected department if unassigned
+      const key = p.department_id ?? [...selectedDepts][0] ?? '__site__'
+      const list = map.get(key) ?? []
       list.push(p)
-      map.set(p.department_id, list)
+      map.set(key, list)
     }
     return map
-  }, [filteredProcesses])
+  }, [filteredProcesses, selectedDepts])
 
   // When departments change, prune processes
   const activeProcIds = useMemo(() => {

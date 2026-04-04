@@ -323,10 +323,17 @@ export const planningRouter = router({
         fteByProcess.set(pid, (fteByProcess.get(pid) ?? 0) + 1)
       }
 
+      // Count processes per department (including unassigned as site-wide)
+      const allProcs = (procResult.data ?? []) as Array<Record<string, unknown>>
+      const allEmps = (empResult.data ?? []) as Array<Record<string, unknown>>
+      const unassignedProcs = allProcs.filter(p => !p.department_id)
+
       const departments = (deptResult.data ?? []).map(d => {
         const deptId = (d as Record<string, unknown>).id as string
-        const empCount = (empResult.data ?? []).filter(e => (e as Record<string, unknown>).department_id === deptId).length
-        const procCount = (procResult.data ?? []).filter(p => (p as Record<string, unknown>).department_id === deptId).length
+        const empCount = allEmps.filter(e => e.department_id === deptId).length
+        // Count dept-specific + unassigned (site-wide) processes
+        const deptProcs = allProcs.filter(p => p.department_id === deptId).length
+        const procCount = deptProcs + (deptProcs === 0 ? unassignedProcs.length : 0)
         return {
           id: deptId,
           name: (d as Record<string, unknown>).name as string,
