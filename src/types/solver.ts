@@ -22,6 +22,7 @@ export interface ProcessDemand {
   required_fte: number;
   min_skill_level: number; // 1-5
   required_certifications: string[]; // certification type IDs
+  max_capacity: number | null;  // max concurrent stations for this process
 }
 
 export interface EmployeeRecord {
@@ -102,6 +103,33 @@ export interface Violation {
 }
 
 // ---------------------------------------------------------------------------
+// Solver Configuration (Wizard output)
+// ---------------------------------------------------------------------------
+
+export type SolverMode = 'performance' | 'balanced' | 'training'
+
+export interface SolverConfig {
+  mode: SolverMode
+  departments: string[]
+  processes: string[]
+  training_slots: Record<string, number>
+}
+
+export interface ProcessFteMetrics {
+  process_id: string
+  process_name: string
+  day_volume: number
+  uph: number
+  operating_hours: number
+  baseline_fte: number
+  gross_fte: number
+  capped_fte: number
+  assigned_fte: number
+  training_fte: number
+  coverage_pct: number
+}
+
+// ---------------------------------------------------------------------------
 // Solver Input
 // ---------------------------------------------------------------------------
 
@@ -138,6 +166,9 @@ export interface SolverInput {
 
   /** Maximum time the solver may run (seconds) */
   time_budget_seconds: number;
+
+  /** Solver configuration from wizard */
+  solver_config: SolverConfig;
 }
 
 // ---------------------------------------------------------------------------
@@ -163,6 +194,15 @@ export interface SolverOutput {
     optimality_gap: number | null; // MIP: gap to proven optimal. Heuristics: null.
     solver_strategy_used: string; // 'greedy' | 'highs_mip'
   };
+
+  /** Per-process FTE breakdown */
+  per_process: ProcessFteMetrics[];
+
+  /** Warnings from FTE engine (capacity, training) */
+  warnings: string[];
+
+  /** Solver configuration used */
+  solver_config: SolverConfig;
 }
 
 // ---------------------------------------------------------------------------
