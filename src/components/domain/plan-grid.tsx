@@ -43,22 +43,13 @@ function fmtTime(t?: string): string {
   return t.slice(0, 5) // "HH:MM:SS" → "HH:MM"
 }
 
-/** Subtle left-border color per shift type based on start_time */
-function shiftAccent(startTime?: string): string {
-  if (!startTime) return 'transparent'
-  const hour = parseInt(startTime.slice(0, 2), 10)
-  if (hour >= 5 && hour < 12) return 'rgba(245,158,11,0.5)'    // Ochtend — warm amber
-  if (hour >= 12 && hour < 20) return 'rgba(99,102,241,0.45)'  // Middag — soft indigo
-  return 'rgba(100,116,139,0.5)'                                 // Nacht — slate
-}
 
-/** Background opacity multiplier per shift — lighter for morning, darker for afternoon/night */
+/** Background opacity per shift — scales with start hour for continuous differentiation */
 function shiftBgAlpha(startTime?: string): number {
   if (!startTime) return 0.045
   const hour = parseInt(startTime.slice(0, 2), 10)
-  if (hour >= 5 && hour < 12) return 0.035   // Ochtend — licht
-  if (hour >= 12 && hour < 20) return 0.08   // Middag — donkerder
-  return 0.11                                  // Nacht — donkerst
+  // Map hour to alpha: 05:00→0.03, 08:00→0.05, 11:00→0.08, 14:00→0.10, 22:00→0.12
+  return 0.03 + (hour / 24) * 0.10
 }
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -547,7 +538,6 @@ export function PlanGrid({
                     const cellBg = procDc
                       ? rgbaBg(procDc.main, shiftBgAlpha(shift?.start_time))
                       : 'transparent'
-                    const shiftBorder = assignment ? shiftAccent(shift?.start_time) : 'transparent'
 
                     return (
                       <td
@@ -558,7 +548,6 @@ export function PlanGrid({
                           padding: '4px 6px',
                           borderBottom: '1px solid rgba(0,0,0,0.04)',
                           borderRight: '1px solid rgba(0,0,0,0.03)',
-                          borderLeft: assignment ? `3px solid ${shiftBorder}` : 'none',
                           cursor: isEditable ? 'pointer' : 'default',
                           verticalAlign: 'middle',
                           backgroundColor: cellBg,
