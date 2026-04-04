@@ -9,7 +9,7 @@ import { containerStagger, fadeInUp, bouncy, scalePress } from '@/lib/motion'
 import { useToast } from '@/components/domain/toast'
 import { KpiHeroCard } from '@/components/domain/kpi-hero-card'
 import { PlanGrid } from '@/components/domain/plan-grid'
-import { PlanCoverageBar } from '@/components/domain/plan-coverage-bar'
+import { getDeptColor } from '@/components/domain/process-card'
 import { AssignmentEditor } from '@/components/domain/assignment-editor'
 import { AssignmentPopover } from '@/components/domain/assignment-popover'
 import { useSiteStore } from '@/stores/site-store'
@@ -30,6 +30,12 @@ function getWeekNumber(iso: string): number {
       (d.getTime() - new Date(d.getFullYear(), 0, 1).getTime()) / 86400000,
     ) + 1
   return Math.ceil(dayOfYear / 7)
+}
+
+function getCoverageColor(pct: number): string {
+  if (pct >= 90) return '#059669'
+  if (pct >= 70) return '#b45309'
+  return '#dc2626'
 }
 
 // ── Status config ────────────────────────────────────────────────────────────
@@ -362,6 +368,42 @@ export default function PlanDetailPage() {
     return map
   }, [plan?.demand])
 
+  // ── Process cards data for stats tab ────────────────────────────────────
+
+  const processCards = useMemo(() => {
+    const demandData = plan?.demand ?? []
+    if (demandData.length === 0 && displayAssignments.length === 0) return []
+
+    // Aggregate demand per process
+    const reqByProcess = new Map<string, number>()
+    for (const d of demandData) {
+      reqByProcess.set(d.process_id, (reqByProcess.get(d.process_id) ?? 0) + d.required_fte)
+    }
+
+    // Aggregate assignments per process
+    const assignedByProcess = new Map<string, number>()
+    const costByProcess = new Map<string, number>()
+    for (const a of displayAssignments) {
+      assignedByProcess.set(a.process_id, (assignedByProcess.get(a.process_id) ?? 0) + 1)
+      costByProcess.set(a.process_id, (costByProcess.get(a.process_id) ?? 0) + (a.cost_estimate ?? 0))
+    }
+
+    const procList = isDemo ? demoProcs : (processesQ.data ?? [])
+    const deptList = isDemo ? demoDepts : (departmentsQ.data ?? [])
+
+    return procList
+      .filter(p => reqByProcess.has(p.id) || assignedByProcess.has(p.id))
+      .map(p => {
+        const required = reqByProcess.get(p.id) ?? 0
+        const assigned = assignedByProcess.get(p.id) ?? 0
+        const cost = costByProcess.get(p.id) ?? 0
+        const coverage = required > 0 ? (assigned / required) * 100 : (assigned > 0 ? 100 : 0)
+        const dept = deptList.find(d => d.id === p.department_id)
+        return { process: p, required, assigned, cost, coverage: Math.min(coverage, 100), dept }
+      })
+      .sort((a, b) => a.coverage - b.coverage) // worst coverage first
+  }, [plan?.demand, displayAssignments, isDemo, demoProcs, processesQ.data, demoDepts, departmentsQ.data])
+
   // ── Cell click handler ──────────────────────────────────────────────────
 
   const handleCellClick = useCallback(
@@ -638,7 +680,7 @@ export default function PlanDetailPage() {
                 ? (demoShiftsAms as Array<{ id: string; name: string }>)
                 : (shiftsQ.data ?? []) as Array<{ id: string; name: string }>}
               weekStart={plan.plan_period_start}
-              workDays={[1, 2, 3, 4, 5]}
+              workDays={[1, 2, 3, 4, 5, 6, 7]}
               isEditable={!isDemo && (status === 'draft' || status === 'optimized')}
               demand={plan?.demand ?? []}
               onCellClick={handleCellClick}
