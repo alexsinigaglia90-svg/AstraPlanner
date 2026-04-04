@@ -156,6 +156,7 @@ export default function PlanDetailPage() {
   const isDemo = useDemoStore((s) => s.isDemo)
   const demoPlan = useDemoPlanData(isDemo ? planId : null)
   const demoSolver = useDemoSolver()
+  const [activeTab, setActiveTab] = useState<'planning' | 'stats'>('planning')
   const [pendingAction, setPendingAction] = useState<string | null>(null)
   const [showSolverAnim, setShowSolverAnim] = useState(false)
   const [selectedCell, setSelectedCell] = useState<{
@@ -585,102 +586,141 @@ export default function PlanDetailPage() {
         </motion.div>
       )}
 
-      {/* ── KPI Hero Cards row ─────────────────────────────────────────── */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(4, 1fr)',
-          gap: 16,
-        }}
-      >
-        <KpiHeroCard
-          label="Dekking"
-          value={metrics?.coverage_percentage ?? 0}
-          detail="Dekkingspercentage"
-          icon={<BarChart3 size={16} />}
-          gradientColors={['#6366F1', '#8B5CF6']}
-          delay={0}
-          suffix="%"
-          pulse={(metrics?.coverage_percentage ?? 100) < 70}
-        />
-        <KpiHeroCard
-          label="Totale Kosten"
-          value={metrics?.total_cost ?? 0}
-          detail="Berekende loonkosten"
-          icon={<Coins size={16} />}
-          gradientColors={['#10B981', '#059669']}
-          delay={0.05}
-          prefix="€"
-        />
-        <KpiHeroCard
-          label="Overuren"
-          value={metrics?.overtime_hours ?? 0}
-          detail="Extra uren boven contract"
-          icon={<Clock size={16} />}
-          gradientColors={['#F59E0B', '#EA580C']}
-          delay={0.1}
-          suffix="u"
-          pulse={(metrics?.overtime_hours ?? 0) > 0}
-        />
-        <KpiHeroCard
-          label="Oplostijd"
-          value={metrics?.solve_time_ms ? Math.round(metrics.solve_time_ms / 1000 * 10) / 10 : 0}
-          detail="Solver verwerkingstijd"
-          icon={<Zap size={16} />}
-          gradientColors={['#64748B', '#475569']}
-          delay={0.15}
-          suffix="s"
-        />
+      {/* ── Tab bar ──────────────────────────────────────── */}
+      <div style={{
+        display: 'flex',
+        gap: 0,
+        borderBottom: '2px solid var(--border)',
+      }}>
+        {(['planning', 'stats'] as const).map((tab) => {
+          const isActive = activeTab === tab
+          const label = tab === 'planning' ? 'Planning' : 'Statistieken'
+          return (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              style={{
+                padding: '8px 20px',
+                fontFamily: 'var(--font-body)',
+                fontSize: 13,
+                fontWeight: isActive ? 700 : 500,
+                color: isActive ? 'var(--primary)' : 'var(--muted-foreground)',
+                background: 'none',
+                border: 'none',
+                borderBottom: isActive ? '2px solid var(--primary)' : '2px solid transparent',
+                marginBottom: -2,
+                cursor: 'pointer',
+              }}
+            >
+              {label}
+            </button>
+          )
+        })}
       </div>
 
-      {/* ── Assignment Heatmap Grid ────────────────────────────────────── */}
-      <motion.div variants={fadeInUp}>
-        <PlanGrid
-          assignments={displayAssignments}
-          employees={isDemo
-            ? (demoEmps as Array<{ id: string; first_name: string; last_name: string; department_id: string | null }>)
-            : (employeesQ.data?.items ?? []) as Array<{ id: string; first_name: string; last_name: string; department_id: string | null }>}
-          processes={isDemo
-            ? (demoProcs as Array<{ id: string; name: string; department_id: string }>)
-            : (processesQ.data ?? []) as Array<{ id: string; name: string; department_id: string }>}
-          departments={isDemo
-            ? (demoDepts as Array<{ id: string; name: string; color: string }>)
-            : (departmentsQ.data ?? []) as Array<{ id: string; name: string; color: string }>}
-          shifts={isDemo
-            ? (demoShiftsAms as Array<{ id: string; name: string }>)
-            : (shiftsQ.data ?? []) as Array<{ id: string; name: string }>}
-          weekStart={plan.plan_period_start}
-          workDays={[1, 2, 3, 4, 5]}
-          isEditable={!isDemo && (status === 'draft' || status === 'optimized')}
-          demand={plan?.demand ?? []}
-          onCellClick={handleCellClick}
-        />
-      </motion.div>
+      {/* ── Tab content ───────────────────────────────────────────────── */}
+      {activeTab === 'planning' ? (
+        <>
+          {/* ── Assignment Heatmap Grid ────────────────────────────────── */}
+          <motion.div variants={fadeInUp}>
+            <PlanGrid
+              assignments={displayAssignments}
+              employees={isDemo
+                ? (demoEmps as Array<{ id: string; first_name: string; last_name: string; department_id: string | null }>)
+                : (employeesQ.data?.items ?? []) as Array<{ id: string; first_name: string; last_name: string; department_id: string | null }>}
+              processes={isDemo
+                ? (demoProcs as Array<{ id: string; name: string; department_id: string }>)
+                : (processesQ.data ?? []) as Array<{ id: string; name: string; department_id: string }>}
+              departments={isDemo
+                ? (demoDepts as Array<{ id: string; name: string; color: string }>)
+                : (departmentsQ.data ?? []) as Array<{ id: string; name: string; color: string }>}
+              shifts={isDemo
+                ? (demoShiftsAms as Array<{ id: string; name: string }>)
+                : (shiftsQ.data ?? []) as Array<{ id: string; name: string }>}
+              weekStart={plan.plan_period_start}
+              workDays={[1, 2, 3, 4, 5]}
+              isEditable={!isDemo && (status === 'draft' || status === 'optimized')}
+              demand={plan?.demand ?? []}
+              onCellClick={handleCellClick}
+            />
+          </motion.div>
 
-      {/* ── Coverage summary bar ────────────────────────────────────────── */}
-      <motion.div variants={fadeInUp}>
-        <PlanCoverageBar
-          assignments={plan.assignments}
-          processes={isDemo
-            ? (demoProcs as Array<{ id: string; name: string; department_id: string }>)
-            : (processesQ.data ?? []) as Array<{ id: string; name: string; department_id: string }>}
-          departments={isDemo
-            ? (demoDepts as Array<{ id: string; name: string; color: string }>)
-            : (departmentsQ.data ?? []) as Array<{ id: string; name: string; color: string }>}
-          demandByProcess={demandByProcess}
-        />
-      </motion.div>
+          {/* ── Assignment popover ──────────────────────────────────────── */}
+          {popoverData && (
+            <AssignmentPopover
+              assignment={popoverData.assignment}
+              anchorRect={popoverData.anchorRect}
+              isEditable={!isDemo && (status === 'draft' || status === 'optimized')}
+              onEdit={() => { setPopoverData(null) }}
+              onDelete={() => { setPopoverData(null) }}
+              onClose={() => setPopoverData(null)}
+            />
+          )}
+        </>
+      ) : (
+        <>
+          {/* ── KPI Hero Cards row ─────────────────────────────────────── */}
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(4, 1fr)',
+              gap: 16,
+            }}
+          >
+            <KpiHeroCard
+              label="Dekking"
+              value={metrics?.coverage_percentage ?? 0}
+              detail="Dekkingspercentage"
+              icon={<BarChart3 size={16} />}
+              gradientColors={['#6366F1', '#8B5CF6']}
+              delay={0}
+              suffix="%"
+              pulse={(metrics?.coverage_percentage ?? 100) < 70}
+            />
+            <KpiHeroCard
+              label="Totale Kosten"
+              value={metrics?.total_cost ?? 0}
+              detail="Berekende loonkosten"
+              icon={<Coins size={16} />}
+              gradientColors={['#10B981', '#059669']}
+              delay={0.05}
+              prefix="€"
+            />
+            <KpiHeroCard
+              label="Overuren"
+              value={metrics?.overtime_hours ?? 0}
+              detail="Extra uren boven contract"
+              icon={<Clock size={16} />}
+              gradientColors={['#F59E0B', '#EA580C']}
+              delay={0.1}
+              suffix="u"
+              pulse={(metrics?.overtime_hours ?? 0) > 0}
+            />
+            <KpiHeroCard
+              label="Oplostijd"
+              value={metrics?.solve_time_ms ? Math.round(metrics.solve_time_ms / 1000 * 10) / 10 : 0}
+              detail="Solver verwerkingstijd"
+              icon={<Zap size={16} />}
+              gradientColors={['#64748B', '#475569']}
+              delay={0.15}
+              suffix="s"
+            />
+          </div>
 
-      {/* ── Assignment popover ──────────────────────────────────────────── */}
-      {popoverData && (
-        <AssignmentPopover
-          assignment={popoverData.assignment}
-          anchorRect={popoverData.anchorRect}
-          isEditable={!isDemo && (status === 'draft' || status === 'optimized')}
-          onEdit={() => { setPopoverData(null) }}
-          onDelete={() => { setPopoverData(null) }}
-          onClose={() => setPopoverData(null)}
-        />
+          {/* ── Coverage summary bar ──────────────────────────────────── */}
+          <motion.div variants={fadeInUp}>
+            <PlanCoverageBar
+              assignments={plan.assignments}
+              processes={isDemo
+                ? (demoProcs as Array<{ id: string; name: string; department_id: string }>)
+                : (processesQ.data ?? []) as Array<{ id: string; name: string; department_id: string }>}
+              departments={isDemo
+                ? (demoDepts as Array<{ id: string; name: string; color: string }>)
+                : (departmentsQ.data ?? []) as Array<{ id: string; name: string; color: string }>}
+              demandByProcess={demandByProcess}
+            />
+          </motion.div>
+        </>
       )}
     </motion.div>
   )

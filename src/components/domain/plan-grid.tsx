@@ -299,7 +299,7 @@ export function PlanGrid({
     <div
       style={{
         overflow: 'auto',
-        maxHeight: 'calc(100vh - 400px)',
+        maxHeight: 'calc(100vh - 220px)',
         border: '1px solid var(--border)',
         borderRadius: 'var(--radius-md)',
         backgroundColor: 'var(--card)',
@@ -311,13 +311,13 @@ export function PlanGrid({
           borderCollapse: 'collapse',
           borderSpacing: 0,
           tableLayout: 'fixed',
-          minWidth: 185 + dayCols.length * 155,
+          minWidth: 160 + dayCols.length * 120,
         }}
       >
         <colgroup>
-          <col style={{ width: 185, minWidth: 185 }} />
+          <col style={{ width: 160, minWidth: 160 }} />
           {dayCols.map((col) => (
-            <col key={col.date} style={{ width: 155, minWidth: 155 }} />
+            <col key={col.date} style={{ width: 120, minWidth: 120 }} />
           ))}
         </colgroup>
 
@@ -351,12 +351,12 @@ export function PlanGrid({
                   position: 'sticky',
                   top: 0,
                   zIndex: 3,
-                  padding: '8px 6px',
+                  padding: '6px 4px',
                   backgroundColor: '#f8fafc',
                   borderBottom: '2px solid #e2e8f0',
                   color: 'var(--foreground)',
                   fontFamily: 'var(--font-display)',
-                  fontSize: 12,
+                  fontSize: 11,
                   fontWeight: 700,
                   textAlign: 'center',
                   whiteSpace: 'nowrap',
@@ -411,15 +411,15 @@ export function PlanGrid({
                       backgroundColor: '#fff',
                       borderRight: '1px solid #e2e8f0',
                       borderBottom: '1px solid rgba(0,0,0,0.04)',
-                      height: 48,
+                      height: 40,
                     }}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, overflow: 'hidden' }}>
                       {/* Initials avatar */}
                       <div
                         style={{
-                          width: 32,
-                          height: 32,
+                          width: 26,
+                          height: 26,
                           borderRadius: '50%',
                           background: `linear-gradient(135deg, ${dc.main}, ${rgbaBg(dc.main, 0.7)})`,
                           display: 'flex',
@@ -431,7 +431,7 @@ export function PlanGrid({
                         <span
                           style={{
                             color: '#fff',
-                            fontSize: 12,
+                            fontSize: 9,
                             fontWeight: 700,
                             fontFamily: 'var(--font-display)',
                             lineHeight: 1,
@@ -445,7 +445,7 @@ export function PlanGrid({
                         <div
                           style={{
                             color: '#1e293b',
-                            fontSize: 13,
+                            fontSize: 12,
                             fontWeight: 700,
                             fontFamily: 'var(--font-body)',
                             whiteSpace: 'nowrap',
@@ -499,8 +499,8 @@ export function PlanGrid({
                         key={col.date}
                         onClick={() => handleClick(emp.id, col.date, assignment ?? null)}
                         style={{
-                          height: 48,
-                          padding: '3px 6px',
+                          height: 40,
+                          padding: '4px 6px',
                           borderBottom: '1px solid rgba(0,0,0,0.04)',
                           borderRight: '1px solid rgba(0,0,0,0.03)',
                           cursor: isEditable ? 'pointer' : 'default',
@@ -543,7 +543,7 @@ export function PlanGrid({
                             >
                               <span
                                 style={{
-                                  fontSize: 11,
+                                  fontSize: 10,
                                   fontWeight: 700,
                                   color: procDc?.main ?? 'var(--foreground)',
                                   fontFamily: 'var(--font-body)',
@@ -568,8 +568,8 @@ export function PlanGrid({
                                     display: 'inline-flex',
                                     alignItems: 'center',
                                     justifyContent: 'center',
-                                    width: 16,
-                                    height: 16,
+                                    width: 14,
+                                    height: 14,
                                     borderRadius: '50%',
                                     backgroundColor: badge.bg,
                                     color: badge.color,
@@ -580,23 +580,6 @@ export function PlanGrid({
                                   }}
                                 >
                                   {profLevel}
-                                </span>
-                              )}
-                              {shift && (
-                                <span
-                                  style={{
-                                    fontSize: 8,
-                                    fontWeight: 600,
-                                    color: 'var(--muted-foreground)',
-                                    fontFamily: 'var(--font-mono)',
-                                    backgroundColor: 'rgba(0,0,0,0.04)',
-                                    borderRadius: 4,
-                                    padding: '1px 4px',
-                                    flexShrink: 0,
-                                    whiteSpace: 'nowrap',
-                                  }}
-                                >
-                                  {shift.name}
                                 </span>
                               )}
                             </div>
@@ -610,7 +593,7 @@ export function PlanGrid({
                               }}
                             >
                               {shift?.start_time && shift?.end_time
-                                ? `${fmtTime(shift.start_time)} – ${fmtTime(shift.end_time)} · ${assignment.scheduled_hours}u`
+                                ? `${fmtTime(shift.start_time).slice(0, 2)}-${fmtTime(shift.end_time).slice(0, 2)} · ${assignment.scheduled_hours}u`
                                 : `${assignment.scheduled_hours}u`}
                             </div>
                           </div>
@@ -693,7 +676,7 @@ export function PlanGrid({
                               color: coverageColor(pct),
                             }}
                           >
-                            {dt.assigned}/{dt.required}
+                            {dt.assigned}/{dt.required % 1 === 0 ? dt.required : dt.required.toFixed(1)}
                             {dt.required > 0 && (
                               <span style={{ marginLeft: 3, opacity: 0.7, fontSize: 9 }}>
                                 {Math.round(pct)}%
@@ -742,7 +725,7 @@ export function PlanGrid({
                                 color: 'var(--muted-foreground)',
                               }}
                             >
-                              {d.assigned}/{d.required}
+                              {d.assigned}/{d.required % 1 === 0 ? d.required : d.required.toFixed(1)}
                             </td>
                           ))}
                         </tr>
