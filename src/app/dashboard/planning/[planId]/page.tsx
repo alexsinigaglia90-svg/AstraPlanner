@@ -12,6 +12,7 @@ import { PlanGrid } from '@/components/domain/plan-grid'
 import { getDeptColor } from '@/components/domain/process-card'
 import { AssignmentEditor } from '@/components/domain/assignment-editor'
 import { AssignmentPopover } from '@/components/domain/assignment-popover'
+import { SolverWizard } from '@/components/domain/solver-wizard'
 import { useSiteStore } from '@/stores/site-store'
 import { useDemoStore } from '@/hooks/use-demo'
 import { useDemoPlanData } from '@/hooks/use-demo-plan-data'
@@ -168,6 +169,7 @@ export default function PlanDetailPage() {
   const [selectedCell, setSelectedCell] = useState<{
     empId: string; empName: string; date: string; shiftId: string; shiftName: string
   } | null>(null)
+  const [showWizard, setShowWizard] = useState(false)
   const [popoverData, setPopoverData] = useState<{
     assignment: Parameters<typeof AssignmentPopover>[0]['assignment']
     anchorRect: DOMRect
@@ -205,6 +207,11 @@ export default function PlanDetailPage() {
   const shiftsQ = trpc.org.listShifts.useQuery(
     { site_id: activeSiteId! },
     { enabled: !!activeSiteId && !isDemo },
+  )
+
+  const solverContextQ = trpc.planning.getSolverContext.useQuery(
+    { plan_version_id: planId },
+    { enabled: showWizard && !isDemo },
   )
 
   // ── Demo data ──────────────────────────────────────────────────────────
@@ -270,16 +277,16 @@ export default function PlanDetailPage() {
         return
       }
 
-      setPendingAction(action)
-
       switch (action) {
         case 'optimize':
         case 'reoptimize':
-          optimizeMutation.mutate({
-            plan_version_id: planId,
-            solver_strategy: 'greedy',
-          })
-          break
+          setShowWizard(true)
+          return
+      }
+
+      setPendingAction(action)
+
+      switch (action) {
         case 'propose':
           transitionMutation.mutate({
             plan_version_id: planId,
@@ -306,8 +313,25 @@ export default function PlanDetailPage() {
           break
       }
     },
-    [planId, isDemo, plan, demoSolver, optimizeMutation, transitionMutation],
+    [planId, isDemo, plan, demoSolver, transitionMutation],
   )
+
+  const handleSolverStart = useCallback((config: {
+    departments: string[]
+    processes: string[]
+    solver_mode: 'performance' | 'balanced' | 'training'
+    training_slots: Record<string, number>
+  }) => {
+    setShowWizard(false)
+    setPendingAction('optimize')
+    optimizeMutation.mutate({
+      plan_version_id: planId,
+      departments: config.departments,
+      processes: config.processes,
+      solver_mode: config.solver_mode,
+      training_slots: config.training_slots,
+    })
+  }, [planId, optimizeMutation])
 
   // ── Derived: metrics (prefer live solver result over static) ────────────
 
@@ -830,6 +854,16 @@ export default function PlanDetailPage() {
             )}
           </motion.div>
         </>
+      )}
+
+      {showWizard && !isDemo && solverContextQ.data && (
+        <SolverWizard
+          planVersionId={planId}
+          departments={solverContextQ.data.departments}
+          processes={solverContextQ.data.processes}
+          onStart={handleSolverStart}
+          onClose={() => setShowWizard(false)}
+        />
       )}
     </motion.div>
   )

@@ -265,13 +265,126 @@ export const planningRouter = router({
     }),
 
   // -------------------------------------------------------------------------
+  // getSolverContext  (viewer+)
+  // -------------------------------------------------------------------------
+  getSolverContext: viewerProcedure
+    .input(z.object({ plan_version_id: z.string().uuid() }))
+    .query(async ({ ctx, input }) => {
+      const admin = createAdminClient()
+      const orgId = ctx.organizationId
+
+      // Fetch plan to get site and period
+      const { data: planData, error: planErr } = await admin
+        .from('plan_version')
+        .select('site_id, plan_period_start, plan_period_end')
+        .eq('id', input.plan_version_id)
+        .eq('organization_id', orgId)
+        .single()
+
+      assertNoError(planErr, 'getSolverContext:plan')
+      if (!planData) throw new TRPCError({ code: 'NOT_FOUND', message: 'Plan not found' })
+
+      const plan = planData as Record<string, unknown>
+      const siteId = plan.site_id as string
+      const periodStart = plan.plan_period_start as string
+      const periodEnd = plan.plan_period_end as string
+
+      const [deptResult, procResult, empResult, shiftResult, siteResult, ppsResult, demandResult, skillResult] = await Promise.all([
+        admin.from('department').select('id, name, color').eq('site_id', siteId).eq('organization_id', orgId),
+        admin.from('process').select('id, name, department_id, max_capacity').eq('organization_id', orgId),
+        admin.from('employee').select('id, department_id').eq('home_site_id', siteId).eq('organization_id', orgId).eq('status', 'active'),
+        admin.from('shift_pattern').select('id, name, start_time, end_time, paid_hours, duration_hours').eq('organization_id', orgId).eq('is_active', true).or(`site_id.eq.${siteId},site_id.is.null`),
+        admin.from('site').select('settings_json').eq('id', siteId).single(),
+        admin.from('process_productivity_standard').select('process_id, units_per_hour, skill_level').eq('organization_id', orgId),
+        admin.from('demand_forecast').select('process_id, volume, period_start').eq('site_id', siteId).not('process_id', 'is', null).gte('period_start', periodStart).lte('period_start', periodEnd),
+        admin.from('employee_skill').select('process_id, employee_id').eq('organization_id', orgId),
+      ])
+
+      // Build UPH map (skill_level 3 = baseline)
+      const uphMap = new Map<string, number>()
+      for (const s of (ppsResult.data ?? []) as Array<Record<string, unknown>>) {
+        if ((s.skill_level as number) === 3) {
+          uphMap.set(s.process_id as string, Number(s.units_per_hour))
+        }
+      }
+
+      // Aggregate demand volumes per process
+      const demandByProcess = new Map<string, number[]>()
+      for (const d of (demandResult.data ?? []) as Array<Record<string, unknown>>) {
+        const pid = d.process_id as string
+        if (!demandByProcess.has(pid)) demandByProcess.set(pid, [])
+        demandByProcess.get(pid)!.push(Number(d.volume) || 0)
+      }
+
+      // Count FTE per process
+      const fteByProcess = new Map<string, number>()
+      for (const s of (skillResult.data ?? []) as Array<Record<string, unknown>>) {
+        const pid = s.process_id as string
+        fteByProcess.set(pid, (fteByProcess.get(pid) ?? 0) + 1)
+      }
+
+      const departments = (deptResult.data ?? []).map(d => {
+        const deptId = (d as Record<string, unknown>).id as string
+        const empCount = (empResult.data ?? []).filter(e => (e as Record<string, unknown>).department_id === deptId).length
+        const procCount = (procResult.data ?? []).filter(p => (p as Record<string, unknown>).department_id === deptId).length
+        return {
+          id: deptId,
+          name: (d as Record<string, unknown>).name as string,
+          color: (d as Record<string, unknown>).color as string,
+          employee_count: empCount,
+          process_count: procCount,
+        }
+      })
+
+      const processes = (procResult.data ?? []).map(p => {
+        const pr = p as Record<string, unknown>
+        const pid = pr.id as string
+        return {
+          id: pid,
+          name: pr.name as string,
+          department_id: (pr.department_id as string) ?? null,
+          max_capacity: (pr.max_capacity as number) ?? null,
+          uph: uphMap.get(pid) ?? 0,
+          day_volumes: demandByProcess.get(pid) ?? [],
+          available_fte: fteByProcess.get(pid) ?? 0,
+        }
+      })
+
+      const settings = ((siteResult.data as Record<string, unknown> | null)?.settings_json ?? {}) as Record<string, unknown>
+
+      const shifts = (shiftResult.data ?? []).map(s => {
+        const sr = s as Record<string, unknown>
+        return {
+          id: sr.id as string,
+          name: sr.name as string,
+          start_time: (sr.start_time as string).slice(0, 5),
+          end_time: (sr.end_time as string).slice(0, 5),
+          paid_hours: sr.paid_hours as number,
+        }
+      })
+
+      return {
+        departments,
+        processes,
+        site_settings: {
+          operating_hours: (settings.operating_hours ?? {}) as Record<string, { open: string; close: string }>,
+          absenteeism_rate: Number(settings.absenteeism_rate) || 0.05,
+        },
+        shifts,
+      }
+    }),
+
+  // -------------------------------------------------------------------------
   // runOptimizer  (planner+)
   // -------------------------------------------------------------------------
   runOptimizer: plannerProcedure
     .input(
       z.object({
         plan_version_id: z.string().uuid(),
-        solver_strategy: z.enum(['greedy', 'highs_mip']).optional(),
+        departments: z.array(z.string().uuid()).optional(),
+        processes: z.array(z.string().uuid()).optional(),
+        solver_mode: z.enum(['performance', 'balanced', 'training']).default('balanced'),
+        training_slots: z.record(z.string(), z.number().int().min(0)).optional(),
         time_budget_seconds: z.number().min(1).max(300).optional(),
         objective_overrides: z
           .object({
@@ -286,14 +399,7 @@ export const planningRouter = router({
     .mutation(async ({ ctx, input }) => {
       const admin = createAdminClient()
       const orgId = ctx.organizationId
-      const strategy = input.solver_strategy ?? 'greedy'
-
-      if (strategy === 'highs_mip') {
-        throw new TRPCError({
-          code: 'BAD_REQUEST',
-          message: 'MIP solver is not yet available. Use greedy strategy.',
-        })
-      }
+      const strategy = 'greedy'
 
       // a. Fetch plan_version, verify draft status
       const { data: plan, error: planErr } = await admin
@@ -566,10 +672,10 @@ export const planningRouter = router({
         objective,
         time_budget_seconds: input.time_budget_seconds ?? 30,
         solver_config: {
-          mode: 'balanced' as const,
-          departments: [],
-          processes: [],
-          training_slots: {},
+          mode: input.solver_mode ?? 'balanced',
+          departments: input.departments ?? [],
+          processes: input.processes ?? [],
+          training_slots: input.training_slots ?? {},
         },
       }
 
