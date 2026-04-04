@@ -299,7 +299,7 @@ export const planningRouter = router({
         admin.from('department').select('id, name, color').eq('site_id', siteId).eq('organization_id', orgId),
         // Fetch processes belonging to this site's departments
         siteDeptIds.length > 0
-          ? admin.from('process').select('id, name, department_id, max_capacity').eq('organization_id', orgId).in('department_id', siteDeptIds)
+          ? admin.from('process').select('id, name, department_id').eq('organization_id', orgId).in('department_id', siteDeptIds)
           : Promise.resolve({ data: [], error: null }),
         admin.from('employee').select('id, department_id').eq('home_site_id', siteId).eq('organization_id', orgId).eq('status', 'active'),
         admin.from('shift_pattern').select('id, name, start_time, end_time, paid_hours, duration_hours').eq('organization_id', orgId).eq('is_active', true).or(`site_id.eq.${siteId},site_id.is.null`),
@@ -355,7 +355,7 @@ export const planningRouter = router({
           id: pid,
           name: pr.name as string,
           department_id: (pr.department_id as string) ?? null,
-          max_capacity: (pr.max_capacity as number) ?? null,
+          max_capacity: null, // Column not yet in DB — will be added when process setup supports it
           uph: uphMap.get(pid) ?? 0,
           day_volumes: demandByProcess.get(pid) ?? [],
           available_fte: fteByProcess.get(pid) ?? 0,
