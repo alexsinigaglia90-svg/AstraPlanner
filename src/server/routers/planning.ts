@@ -289,9 +289,18 @@ export const planningRouter = router({
       const periodStart = plan.plan_period_start as string
       const periodEnd = plan.plan_period_end as string
 
+      // First fetch departments for this site to filter processes
+      const { data: siteDepts, error: siteDeptErr } = await admin
+        .from('department').select('id').eq('site_id', siteId).eq('organization_id', orgId)
+      assertNoError(siteDeptErr, 'getSolverContext:siteDepts')
+      const siteDeptIds = (siteDepts ?? []).map(d => (d as Record<string, unknown>).id as string)
+
       const [deptResult, procResult, empResult, shiftResult, siteResult, ppsResult, demandResult, skillResult] = await Promise.all([
         admin.from('department').select('id, name, color').eq('site_id', siteId).eq('organization_id', orgId),
-        admin.from('process').select('id, name, department_id, max_capacity').eq('organization_id', orgId),
+        // Fetch processes belonging to this site's departments
+        siteDeptIds.length > 0
+          ? admin.from('process').select('id, name, department_id, max_capacity').eq('organization_id', orgId).in('department_id', siteDeptIds)
+          : Promise.resolve({ data: [], error: null }),
         admin.from('employee').select('id, department_id').eq('home_site_id', siteId).eq('organization_id', orgId).eq('status', 'active'),
         admin.from('shift_pattern').select('id, name, start_time, end_time, paid_hours, duration_hours').eq('organization_id', orgId).eq('is_active', true).or(`site_id.eq.${siteId},site_id.is.null`),
         admin.from('site').select('settings_json').eq('id', siteId).single(),
@@ -323,17 +332,13 @@ export const planningRouter = router({
         fteByProcess.set(pid, (fteByProcess.get(pid) ?? 0) + 1)
       }
 
-      // Count processes per department (including unassigned as site-wide)
       const allProcs = (procResult.data ?? []) as Array<Record<string, unknown>>
       const allEmps = (empResult.data ?? []) as Array<Record<string, unknown>>
-      const unassignedProcs = allProcs.filter(p => !p.department_id)
 
       const departments = (deptResult.data ?? []).map(d => {
         const deptId = (d as Record<string, unknown>).id as string
         const empCount = allEmps.filter(e => e.department_id === deptId).length
-        // Count dept-specific + unassigned (site-wide) processes
-        const deptProcs = allProcs.filter(p => p.department_id === deptId).length
-        const procCount = deptProcs + (deptProcs === 0 ? unassignedProcs.length : 0)
+        const procCount = allProcs.filter(p => p.department_id === deptId).length
         return {
           id: deptId,
           name: (d as Record<string, unknown>).name as string,
