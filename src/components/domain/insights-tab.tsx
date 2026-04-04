@@ -1,7 +1,7 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import { containerStagger, fadeInUp } from '@/lib/motion'
+import { bouncy, containerStagger, fadeInUp } from '@/lib/motion'
 import { trpc } from '@/lib/trpc/client'
 import { useSiteStore } from '@/stores/site-store'
 import { useDemoStore } from '@/hooks/use-demo'
@@ -50,12 +50,18 @@ export function InsightsTab() {
   const insightData = isDemo ? DEMO_INSIGHTS : (staticInsights.data ?? [])
   const lastUpdated = signalData[0]?.fetched_at ?? null
 
+  const isLoading = !isDemo && (riskRadar.isLoading || staticInsights.isLoading)
+
   if (!activeSiteId) {
     return (
       <div style={{ padding: '40px 24px', textAlign: 'center' }}>
         <p style={{ fontSize: 14, color: 'var(--muted-foreground)' }}>Selecteer een locatie om insights te bekijken.</p>
       </div>
     )
+  }
+
+  if (isLoading) {
+    return <InsightsSkeleton />
   }
 
   return (
@@ -85,6 +91,109 @@ export function InsightsTab() {
         onRefresh={() => refreshMutation.mutate({ site_id: siteId })}
         isRefreshing={refreshMutation.isPending}
       />
+    </motion.div>
+  )
+}
+
+// ── Premium Loading Skeleton ────────────────────────────────────────────────
+
+function Pulse({ width = '100%', height = 10, radius = 6, delay = 0 }: {
+  width?: string | number; height?: number; radius?: number; delay?: number
+}) {
+  return (
+    <motion.div
+      animate={{ opacity: [0.3, 0.6, 0.3] }}
+      transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut', delay }}
+      style={{
+        width, height, borderRadius: radius,
+        background: 'linear-gradient(90deg, rgba(99,102,241,0.08) 0%, rgba(99,102,241,0.15) 50%, rgba(99,102,241,0.08) 100%)',
+      }}
+    />
+  )
+}
+
+function GlassCard({ children, h }: { children: React.ReactNode; h: number }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ ...bouncy }}
+      style={{
+        background: 'rgba(255,255,255,0.72)', backdropFilter: 'blur(16px)',
+        border: '1px solid rgba(255,255,255,0.6)', borderRadius: 20,
+        padding: 20, minHeight: h, overflow: 'hidden',
+      }}
+    >
+      {children}
+    </motion.div>
+  )
+}
+
+function InsightsSkeleton() {
+  return (
+    <motion.div
+      variants={containerStagger}
+      initial="hidden"
+      animate="show"
+      style={{ display: 'flex', flexDirection: 'column', gap: 16 }}
+    >
+      {/* Row 1: Risk Radar + AI Panel */}
+      <motion.div variants={fadeInUp} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+        <GlassCard h={240}>
+          <Pulse width="35%" height={14} />
+          <Pulse width="55%" height={10} delay={0.1} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 20, marginTop: 20 }}>
+            <motion.div
+              animate={{ opacity: [0.3, 0.6, 0.3] }}
+              transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
+              style={{
+                width: 140, height: 140, borderRadius: '50%', flexShrink: 0,
+                background: 'linear-gradient(135deg, rgba(99,102,241,0.06), rgba(99,102,241,0.12))',
+              }}
+            />
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <Pulse width="70%" delay={0.15} />
+              <Pulse width="85%" delay={0.2} />
+              <Pulse width="60%" delay={0.25} />
+              <Pulse width="75%" delay={0.3} />
+              <Pulse width="50%" delay={0.35} />
+            </div>
+          </div>
+        </GlassCard>
+        <GlassCard h={240}>
+          <Pulse width="30%" height={14} />
+          <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <Pulse width="100%" height={52} radius={10} delay={0.1} />
+            <Pulse width="100%" height={52} radius={10} delay={0.2} />
+            <Pulse width="100%" height={40} radius={10} delay={0.3} />
+          </div>
+        </GlassCard>
+      </motion.div>
+
+      {/* Row 2: 3 charts */}
+      <motion.div variants={fadeInUp} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
+        {[0, 1, 2].map((i) => (
+          <GlassCard key={i} h={190}>
+            <Pulse width="40%" height={12} delay={i * 0.1} />
+            <Pulse width="25%" height={9} delay={i * 0.1 + 0.05} />
+            <div style={{ marginTop: 14 }}>
+              <Pulse width="100%" height={120} radius={12} delay={i * 0.1 + 0.1} />
+            </div>
+          </GlassCard>
+        ))}
+      </motion.div>
+
+      {/* Row 3: Signal feed */}
+      <motion.div variants={fadeInUp}>
+        <GlassCard h={100}>
+          <Pulse width="22%" height={12} />
+          <div style={{ marginTop: 14, display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10 }}>
+            {[0, 1, 2, 3, 4].map((i) => (
+              <Pulse key={i} width="100%" height={56} radius={12} delay={i * 0.08} />
+            ))}
+          </div>
+        </GlassCard>
+      </motion.div>
     </motion.div>
   )
 }
