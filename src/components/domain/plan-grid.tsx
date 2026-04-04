@@ -43,6 +43,15 @@ function fmtTime(t?: string): string {
   return t.slice(0, 5) // "HH:MM:SS" → "HH:MM"
 }
 
+/** Subtle left-border color per shift type based on start_time */
+function shiftAccent(startTime?: string): string {
+  if (!startTime) return 'transparent'
+  const hour = parseInt(startTime.slice(0, 2), 10)
+  if (hour >= 5 && hour < 12) return 'rgba(245,158,11,0.5)'    // Ochtend — warm amber
+  if (hour >= 12 && hour < 20) return 'rgba(99,102,241,0.45)'  // Middag — soft indigo
+  return 'rgba(100,116,139,0.5)'                                 // Nacht — slate
+}
+
 // ── Types ──────────────────────────────────────────────────────────────────
 
 interface Assignment {
@@ -493,6 +502,7 @@ export function PlanGrid({
                     const cellBg = procDc
                       ? rgbaBg(procDc.main, 0.045)
                       : 'transparent'
+                    const shiftBorder = assignment ? shiftAccent(shift?.start_time) : 'transparent'
 
                     return (
                       <td
@@ -503,6 +513,7 @@ export function PlanGrid({
                           padding: '4px 6px',
                           borderBottom: '1px solid rgba(0,0,0,0.04)',
                           borderRight: '1px solid rgba(0,0,0,0.03)',
+                          borderLeft: assignment ? `3px solid ${shiftBorder}` : 'none',
                           cursor: isEditable ? 'pointer' : 'default',
                           verticalAlign: 'middle',
                           backgroundColor: cellBg,
