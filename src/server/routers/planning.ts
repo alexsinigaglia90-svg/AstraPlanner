@@ -121,7 +121,7 @@ export const planningRouter = router({
     .query(async ({ ctx, input }) => {
       const admin = createAdminClient()
 
-      const [planResult, assignmentsResult] = await Promise.all([
+      const [planResult, assignmentsResult, skillsResult] = await Promise.all([
         admin
           .from('plan_version')
           .select('id, version_number, name, plan_period_start, plan_period_end, status, site_id, created_at, updated_at, summary_metrics_json, optimizer_config_json, notes')
@@ -132,6 +132,10 @@ export const planningRouter = router({
           .from('shift_assignment_staging')
           .select('id, employee_id, process_id, shift_pattern_id, site_id, assignment_date, start_time, end_time, scheduled_hours, assignment_source, cost_estimate')
           .eq('plan_version_id', input.id),
+        admin
+          .from('employee_skill')
+          .select('employee_id, process_id, proficiency_level')
+          .eq('organization_id', ctx.organizationId),
       ])
 
       assertNoError(planResult.error, 'getPlanVersion')
@@ -140,7 +144,13 @@ export const planningRouter = router({
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Plan version not found' })
       }
 
-      const plan = planResult.data as Record<string, unknown>
+      const planRow = planResult.data as Record<string, unknown>
+
+      // Build skill lookup map: "employee_id::process_id" → proficiency_level
+      const skillMap = new Map<string, number>()
+      for (const s of (skillsResult.data ?? []) as Array<Record<string, unknown>>) {
+        skillMap.set(`${s.employee_id}::${s.process_id}`, s.proficiency_level as number)
+      }
 
       const assignments = ((assignmentsResult.data ?? []) as Array<Record<string, unknown>>).map((a) => ({
         id: a.id as string,
@@ -154,22 +164,39 @@ export const planningRouter = router({
         scheduled_hours: a.scheduled_hours as number,
         assignment_source: a.assignment_source as string,
         cost_estimate: (a.cost_estimate as number) ?? 0,
+        proficiency_level: skillMap.get(`${a.employee_id}::${a.process_id}`) ?? 3,
       }))
 
+      // Fetch demand data for the plan's period
+      const demandResult = await admin
+        .from('workload_plan')
+        .select('process_id, period_start, fte_needed')
+        .eq('site_id', planRow.site_id as string)
+        .eq('organization_id', ctx.organizationId)
+        .gte('period_start', planRow.plan_period_start as string)
+        .lte('period_start', planRow.plan_period_end as string)
+
+      const demandRows = (demandResult.data ?? []) as Array<Record<string, unknown>>
+
       return {
-        id: plan.id as string,
-        version_number: plan.version_number as number,
-        name: plan.name as string,
-        plan_period_start: plan.plan_period_start as string,
-        plan_period_end: plan.plan_period_end as string,
-        status: plan.status as string,
-        site_id: plan.site_id as string,
-        created_at: plan.created_at as string,
-        updated_at: plan.updated_at as string,
-        summary_metrics_json: (plan.summary_metrics_json as Record<string, unknown>) ?? null,
-        optimizer_config_json: (plan.optimizer_config_json as Record<string, unknown>) ?? null,
-        notes: (plan.notes as string) ?? null,
+        id: planRow.id as string,
+        version_number: planRow.version_number as number,
+        name: planRow.name as string,
+        plan_period_start: planRow.plan_period_start as string,
+        plan_period_end: planRow.plan_period_end as string,
+        status: planRow.status as string,
+        site_id: planRow.site_id as string,
+        created_at: planRow.created_at as string,
+        updated_at: planRow.updated_at as string,
+        summary_metrics_json: (planRow.summary_metrics_json as Record<string, unknown>) ?? null,
+        optimizer_config_json: (planRow.optimizer_config_json as Record<string, unknown>) ?? null,
+        notes: (planRow.notes as string) ?? null,
         assignments,
+        demand: demandRows.map(d => ({
+          process_id: d.process_id as string,
+          date: (d.period_start as string).slice(0, 10),
+          required_fte: Number(d.fte_needed) || 0,
+        })),
       }
     }),
 

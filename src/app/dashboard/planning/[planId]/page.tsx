@@ -11,6 +11,7 @@ import { KpiHeroCard } from '@/components/domain/kpi-hero-card'
 import { PlanGrid } from '@/components/domain/plan-grid'
 import { PlanCoverageBar } from '@/components/domain/plan-coverage-bar'
 import { AssignmentEditor } from '@/components/domain/assignment-editor'
+import { AssignmentPopover } from '@/components/domain/assignment-popover'
 import { useSiteStore } from '@/stores/site-store'
 import { useDemoStore } from '@/hooks/use-demo'
 import { useDemoPlanData } from '@/hooks/use-demo-plan-data'
@@ -159,6 +160,10 @@ export default function PlanDetailPage() {
   const [showSolverAnim, setShowSolverAnim] = useState(false)
   const [selectedCell, setSelectedCell] = useState<{
     empId: string; empName: string; date: string; shiftId: string; shiftName: string
+  } | null>(null)
+  const [popoverData, setPopoverData] = useState<{
+    assignment: Parameters<typeof AssignmentPopover>[0]['assignment']
+    anchorRect: DOMRect
   } | null>(null)
 
   // ── Data query ───────────────────────────────────────────────────────────
@@ -317,6 +322,7 @@ export default function PlanDetailPage() {
         scheduled_hours: a.scheduled_hours,
         assignment_source: a.assignment_source,
         cost_estimate: a.cost_estimate,
+        proficiency_level: a.proficiency_level,
       }
     })
   }, [demoSolver.result])
@@ -343,13 +349,48 @@ export default function PlanDetailPage() {
     return getWeekNumber(plan.plan_period_start)
   }, [plan?.plan_period_start])
 
+  // ── Demand aggregation for coverage bar ─────────────────────────────────
+
+  const demandByProcess = useMemo(() => {
+    const demand = plan?.demand
+    if (!demand || demand.length === 0) return null
+    const map = new Map<string, number>()
+    for (const d of demand) {
+      map.set(d.process_id, (map.get(d.process_id) ?? 0) + d.required_fte)
+    }
+    return map
+  }, [plan?.demand])
+
   // ── Cell click handler ──────────────────────────────────────────────────
 
   const handleCellClick = useCallback(
-    (empId: string, date: string, shiftId: string) => {
-      const emp = (employeesQ.data?.items ?? []).find((e) => e.id === empId)
-      const shift = (shiftsQ.data ?? []).find((s) => s.id === shiftId)
+    (empId: string, date: string, shiftId: string, assignment?: { id: string; employee_id: string; process_id: string; shift_pattern_id: string; assignment_date: string; scheduled_hours: number; assignment_source: string; cost_estimate: number; proficiency_level?: number } | null) => {
+      const emp = (isDemo ? demoEmps : (employeesQ.data?.items ?? [])).find((e) => e.id === empId)
+      const shift = (isDemo ? demoShiftsAms : (shiftsQ.data ?? [])).find((s) => s.id === shiftId)
       if (!emp || !shift) return
+
+      // If clicking an existing assignment, show the popover
+      if (assignment) {
+        const proc = (isDemo ? demoProcs : (processesQ.data ?? [])).find((p) => p.id === assignment.process_id)
+        // Build an anchor rect from the click event — use center of viewport as fallback
+        const rect = (globalThis as Record<string, unknown>).__lastClickRect as DOMRect | undefined
+        const anchorRect = rect ?? new DOMRect(window.innerWidth / 2 - 100, window.innerHeight / 3, 200, 40)
+        setPopoverData({
+          assignment: {
+            process_name: proc?.name ?? 'Onbekend',
+            proficiency_level: assignment.proficiency_level ?? 3,
+            shift_name: shift.name,
+            start_time: (shift as Record<string, unknown>).start_time as string ?? '',
+            end_time: (shift as Record<string, unknown>).end_time as string ?? '',
+            scheduled_hours: assignment.scheduled_hours,
+            cost_estimate: assignment.cost_estimate,
+            assignment_source: assignment.assignment_source,
+          },
+          anchorRect,
+        })
+        return
+      }
+
       setSelectedCell({
         empId,
         empName: `${emp.first_name} ${emp.last_name}`,
@@ -358,7 +399,7 @@ export default function PlanDetailPage() {
         shiftName: shift.name,
       })
     },
-    [employeesQ.data, shiftsQ.data],
+    [isDemo, demoEmps, demoShiftsAms, demoProcs, employeesQ.data, shiftsQ.data, processesQ.data],
   )
 
   const selectedAssignment = useMemo(() => {
@@ -611,6 +652,7 @@ export default function PlanDetailPage() {
           weekStart={plan.plan_period_start}
           workDays={[1, 2, 3, 4, 5]}
           isEditable={!isDemo && (status === 'draft' || status === 'optimized')}
+          demand={plan?.demand ?? []}
           onCellClick={handleCellClick}
         />
       </motion.div>
@@ -625,9 +667,21 @@ export default function PlanDetailPage() {
           departments={isDemo
             ? (demoDepts as Array<{ id: string; name: string; color: string }>)
             : (departmentsQ.data ?? []) as Array<{ id: string; name: string; color: string }>}
-          demandByProcess={null}
+          demandByProcess={demandByProcess}
         />
       </motion.div>
+
+      {/* ── Assignment popover ──────────────────────────────────────────── */}
+      {popoverData && (
+        <AssignmentPopover
+          assignment={popoverData.assignment}
+          anchorRect={popoverData.anchorRect}
+          isEditable={!isDemo && (status === 'draft' || status === 'optimized')}
+          onEdit={() => { setPopoverData(null) }}
+          onDelete={() => { setPopoverData(null) }}
+          onClose={() => setPopoverData(null)}
+        />
+      )}
     </motion.div>
   )
 }

@@ -264,6 +264,7 @@ export interface DemoPlanVersion {
   created_at: string
   summary_metrics_json: Record<string, unknown>
   assignments: DemoAssignment[]
+  demand?: Array<{ process_id: string; date: string; required_fte: number }>
 }
 
 // ── Exported scenarios ───────────────────────────────────────────────────────
