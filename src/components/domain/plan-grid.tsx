@@ -52,6 +52,15 @@ function shiftAccent(startTime?: string): string {
   return 'rgba(100,116,139,0.5)'                                 // Nacht — slate
 }
 
+/** Background opacity multiplier per shift — lighter for morning, darker for afternoon/night */
+function shiftBgAlpha(startTime?: string): number {
+  if (!startTime) return 0.045
+  const hour = parseInt(startTime.slice(0, 2), 10)
+  if (hour >= 5 && hour < 12) return 0.035   // Ochtend — licht
+  if (hour >= 12 && hour < 20) return 0.08   // Middag — donkerder
+  return 0.11                                  // Nacht — donkerst
+}
+
 // ── Types ──────────────────────────────────────────────────────────────────
 
 interface Assignment {
@@ -500,7 +509,7 @@ export function PlanGrid({
                     const isLowSkill = profLevel === 1
 
                     const cellBg = procDc
-                      ? rgbaBg(procDc.main, 0.045)
+                      ? rgbaBg(procDc.main, shiftBgAlpha(shift?.start_time))
                       : 'transparent'
                     const shiftBorder = assignment ? shiftAccent(shift?.start_time) : 'transparent'
 
