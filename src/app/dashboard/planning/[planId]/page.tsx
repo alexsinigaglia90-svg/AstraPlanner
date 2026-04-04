@@ -749,18 +749,85 @@ export default function PlanDetailPage() {
             />
           </div>
 
-          {/* ── Coverage summary bar ──────────────────────────────────── */}
+          {/* ── Process coverage cards ────────────────────────────────── */}
           <motion.div variants={fadeInUp}>
-            <PlanCoverageBar
-              assignments={plan.assignments}
-              processes={isDemo
-                ? (demoProcs as Array<{ id: string; name: string; department_id: string }>)
-                : (processesQ.data ?? []) as Array<{ id: string; name: string; department_id: string }>}
-              departments={isDemo
-                ? (demoDepts as Array<{ id: string; name: string; color: string }>)
-                : (departmentsQ.data ?? []) as Array<{ id: string; name: string; color: string }>}
-              demandByProcess={demandByProcess}
-            />
+            {processCards.length > 0 ? (
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
+                gap: 12,
+              }}>
+                {processCards.map((card) => (
+                  <div
+                    key={card.process.id}
+                    style={{
+                      backgroundColor: 'var(--card)',
+                      border: '1px solid var(--border)',
+                      borderLeft: `3px solid ${getDeptColor(card.dept?.color ?? 'slate').main}`,
+                      borderRadius: 12,
+                      padding: 14,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 8,
+                    }}
+                  >
+                    {/* Process name */}
+                    <div style={{
+                      fontFamily: 'var(--font-display)',
+                      fontSize: 13,
+                      fontWeight: 700,
+                      color: getDeptColor(card.dept?.color ?? 'slate').main,
+                    }}>
+                      {card.process.name}
+                    </div>
+
+                    {/* FTE row */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                      <span style={{ fontFamily: 'var(--font-body)', fontSize: 10, color: '#64748b' }}>Gevuld</span>
+                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 700, color: '#1e293b' }}>
+                        {card.assigned} / {Number.isInteger(card.required) ? card.required : card.required.toFixed(1)} FTE
+                      </span>
+                    </div>
+
+                    {/* Mini progress bar */}
+                    <div style={{ height: 4, borderRadius: 2, backgroundColor: 'var(--muted)', overflow: 'hidden' }}>
+                      <div style={{
+                        width: `${Math.round(card.coverage)}%`,
+                        height: '100%',
+                        borderRadius: 2,
+                        backgroundColor: getCoverageColor(card.coverage),
+                        transition: 'width 0.4s ease',
+                      }} />
+                    </div>
+
+                    {/* Coverage + Cost row */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                      <span style={{
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: 12,
+                        fontWeight: 700,
+                        color: getCoverageColor(card.coverage),
+                      }}>
+                        {Math.round(card.coverage)}%
+                      </span>
+                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#64748b' }}>
+                        &euro;{card.cost.toLocaleString('nl-NL', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{
+                padding: 24,
+                textAlign: 'center',
+                color: 'var(--muted-foreground)',
+                fontFamily: 'var(--font-body)',
+                fontSize: 13,
+              }}>
+                Geen procesdata beschikbaar
+              </div>
+            )}
           </motion.div>
         </>
       )}
