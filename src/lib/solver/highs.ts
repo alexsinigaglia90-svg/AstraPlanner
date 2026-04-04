@@ -186,6 +186,7 @@ export async function solveHiGHS(
   const assignments: Assignment[] = [...input.locked_assignments]
 
   for (const pair of selectedPairs) {
+    const skill = pair.employee.skills.find((s) => s.process_id === pair.demand.process_id)
     assignments.push({
       employee_id: pair.employee.id,
       process_id: pair.demand.process_id,
@@ -194,6 +195,7 @@ export async function solveHiGHS(
       scheduled_hours: pair.shiftHours,
       cost_estimate: pair.costEstimate,
       assignment_source: 'optimizer',
+      proficiency_level: skill?.proficiency_level ?? 3,
     })
   }
 
