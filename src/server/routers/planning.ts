@@ -517,6 +517,7 @@ export const planningRouter = router({
           scheduled_hours: a.scheduled_hours as number,
           cost_estimate: (a.cost_estimate as number) ?? 0,
           assignment_source: 'manual' as const,
+          proficiency_level: (a.proficiency_level as number) ?? 3,
         }
       })
 
