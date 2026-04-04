@@ -173,6 +173,38 @@ export function PlanGrid({
   const deptMap = useMemo(() => new Map(departments.map((d) => [d.id, d])), [departments])
   const shiftMap = useMemo(() => new Map(shifts.map((s) => [s.id, s])), [shifts])
 
+  // ── Dominant shift per employee (for sorting) ──────────────────────────
+
+  const empShiftOrder = useMemo(() => {
+    const order = new Map<string, number>()
+    for (const emp of employees) {
+      // Find all assignments for this employee and their shift start times
+      const empAssignments = assignments.filter((a) => a.employee_id === emp.id)
+      if (empAssignments.length === 0) {
+        order.set(emp.id, 99) // no assignments → sort last
+        continue
+      }
+      // Count shift occurrences by start hour
+      const hourCounts = new Map<number, number>()
+      for (const a of empAssignments) {
+        const shift = shiftMap.get(a.shift_pattern_id)
+        const hour = shift?.start_time ? parseInt(shift.start_time.slice(0, 2), 10) : 12
+        hourCounts.set(hour, (hourCounts.get(hour) ?? 0) + 1)
+      }
+      // Pick the most frequent start hour as the sort key
+      let maxCount = 0
+      let dominantHour = 12
+      for (const [hour, count] of hourCounts) {
+        if (count > maxCount) {
+          maxCount = count
+          dominantHour = hour
+        }
+      }
+      order.set(emp.id, dominantHour)
+    }
+    return order
+  }, [employees, assignments, shiftMap])
+
   // ── Employee grouping by department ────────────────────────────────────
 
   const groupedEmployees = useMemo(() => {
@@ -190,6 +222,10 @@ export function PlanGrid({
       byDept.get(key)!.push(emp)
     }
 
+    // Sort employees within each group by dominant shift time
+    const sortEmps = (emps: typeof employees) =>
+      [...emps].sort((a, b) => (empShiftOrder.get(a.id) ?? 99) - (empShiftOrder.get(b.id) ?? 99))
+
     // Department groups first (sorted by name)
     const sortedDepts = [...departments].sort((a, b) => a.name.localeCompare(b.name))
     for (const dept of sortedDepts) {
@@ -199,7 +235,7 @@ export function PlanGrid({
           deptId: dept.id,
           deptName: dept.name,
           deptColor: dept.color,
-          employees: emps,
+          employees: sortEmps(emps),
         })
       }
     }
@@ -211,7 +247,7 @@ export function PlanGrid({
         deptId: null,
         deptName: 'Overig',
         deptColor: 'slate',
-        employees: noDepEmps,
+        employees: sortEmps(noDepEmps),
       })
     }
 
