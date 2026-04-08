@@ -1,8 +1,6 @@
 # Security Addendum bij de Verwerkersovereenkomst
 
-**CONCEPT ter juridische review — niet ondertekend**
-
-Dit Security Addendum is een bijlage bij de Verwerkersovereenkomst tussen **Protest Sportwear B.V.** (Verwerkingsverantwoordelijke) en **Ascentra B.V.** (Verwerker, leverancier van het Astra-platform), hierna: de "Verwerkersovereenkomst", en maakt daarvan integraal onderdeel uit. Waar termen in dit Addendum met een hoofdletter beginnen en niet in dit document worden gedefinieerd, hebben zij de betekenis die daaraan in de Verwerkersovereenkomst is gegeven.
+Concept ten behoeve van juridische review. Dit Security Addendum is een bijlage bij de Verwerkersovereenkomst tussen **Protest Sportwear B.V.** (Verwerkingsverantwoordelijke) en **Ascentra B.V.** (Verwerker, leverancier van het Astra-platform), hierna: de "Verwerkersovereenkomst", en maakt daarvan integraal onderdeel uit. Waar termen in dit Addendum met een hoofdletter beginnen en niet in dit document worden gedefinieerd, hebben zij de betekenis die daaraan in de Verwerkersovereenkomst is gegeven.
 
 Het doel van dit Addendum is om de door de Verwerker toegezegde technische en organisatorische beveiligingsmaatregelen en hardening-verplichtingen contractueel bindend vast te leggen, zodanig dat de Verwerkingsverantwoordelijke bij niet-naleving een direct opzeggingsrecht heeft.
 
@@ -151,4 +149,4 @@ De Verwerker realiseert de encryptie van integratie-credentials met AES-256-GCM 
 
 **Einde concept Security Addendum.**
 
-> **LET OP:** Dit is een concept-document opgesteld als eerste versie voor juridische review. Het is **niet** gecontroleerd door een bevoegd juridisch adviseur en vormt geen juridisch advies.
+> Dit document is een concept ten behoeve van juridische review. Het is niet gecontroleerd door een bevoegd juridisch adviseur en vormt geen juridisch advies. Beide partijen wordt geadviseerd dit concept door hun juridisch adviseur te laten beoordelen voorafgaand aan ondertekening.

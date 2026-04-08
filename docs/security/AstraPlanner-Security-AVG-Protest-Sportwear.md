@@ -7,8 +7,8 @@
 | **Opgesteld voor** | Protest Sportwear B.V. — Veerpolder 7, 2361 KX Warmond — KvK 28055371 |
 | **Ter attentie van** | Dhr. M. Werkman, Warehouse Manager |
 | **Opgesteld door** | Ascentra B.V. — Oranjestraat 11, 9401 KE Assen — KvK 98227548 — leverancier van het Astra-platform |
-| **Document versie** | 1.0 |
-| **Documentdatum** | 8 april 2026 |
+| **Document versie** | 1.1 |
+| **Documentdatum** | 9 april 2026 |
 | **Classificatie** | Vertrouwelijk — alleen voor geadresseerde |
 | **Geldigheid** | Dit document weerspiegelt de technische en organisatorische maatregelen van Astra per bovenstaande datum en wordt bij elke materiële wijziging herzien. |
 
@@ -16,55 +16,53 @@
 
 ## 1. Inleiding
 
-Geachte heer Werkman,
+Dit document beschrijft de wijze waarop Ascentra B.V. — de leverancier van het Astra-platform — de persoonsgegevens van Protest Sportwear B.V. verwerkt en beveiligt. Het is opgesteld ten behoeve van de due-diligence-fase voorafgaand aan contractuele toetreding en richt zich op drie aspecten: de technische en organisatorische beveiligingsmaatregelen, de naleving van de Algemene Verordening Gegevensbescherming, en de feitelijke bevoegdheden van Ascentra-personeel inzake klantdata.
 
-Dit document beschrijft in detail hoe Astra de data van Protest Sportwear behandelt, beveiligt en beschermt. Het is opgesteld naar aanleiding van uw — terechte — wens om, voorafgaand aan een contractuele samenwerking, een diepgaand begrip te krijgen van (1) de technische beveiligingsmaatregelen, (2) de naleving van de Algemene Verordening Gegevensbescherming (AVG/GDPR), en (3) de mate waarin Astra zélf toegang heeft tot uw gegevens.
+Ascentra hanteert het beginsel dat de inhoud van dit document in zijn geheel verifieerbaar is. Iedere materiële uitspraak betreffende de werking van het platform is herleidbaar tot een specifieke regel in de broncode of een specifieke configuratie in de productieomgeving en kan tijdens een technische due-diligence worden gecontroleerd. Maatregelen die nog niet zijn geïmplementeerd worden als zodanig benoemd, met vermelding van de voorwaarden waaronder en het tijdstip waarop zij worden uitgevoerd.
 
-Wij hanteren in dit document een uitgangspunt van **volledige transparantie**. Waar onze beveiliging sterk is, onderbouwen wij dat met concrete technische feiten. Waar wij nog verbeteringen doorvoeren voorafgaand aan uw productie-uitrol, benoemen wij die eveneens expliciet, inclusief de planning en contractuele borging. Wij zijn van mening dat dit de enige integere manier is om een vertrouwensrelatie op te bouwen met een organisatie die haar werkgeversverantwoordelijkheden serieus neemt.
-
-Dit document is opgesteld op basis van een **technische code-audit** van onze eigen codebase, uitgevoerd door twee onafhankelijke geautomatiseerde beveiligingsreviewers, aangevuld met een handmatige verificatie van de database-schema's, authenticatie-implementatie en datastromen naar externe dienstverleners. Alle uitspraken in dit document zijn herleidbaar tot specifieke bestanden en regels in onze broncode en zijn op verzoek tijdens een technische due-diligence verifieerbaar.
+Het document is opgesteld op basis van een interne code-audit van de Astra-codebase, uitgevoerd door twee onafhankelijke geautomatiseerde beveiligingsanalyses aangevuld met een handmatige controle van de databaseschema's, de authenticatie-implementatie en de datastromen naar externe dienstverleners. De resultaten worden in dit document declaratief gepresenteerd; de onderliggende analyses zijn op verzoek beschikbaar voor de technische vertegenwoordiging van Protest Sportwear.
 
 ---
 
 ## 2. Management Samenvatting
 
-Astra is een **multi-tenant SaaS-platform** voor personeelsplanning in warehouse-, logistiek- en productieomgevingen. Het platform wordt aangeboden vanuit de Europese Unie, draait op twee Europese infrastructuurleveranciers (Supabase en Vercel) en verwerkt als gegevensverwerker (in de zin van artikel 28 AVG) persoonsgegevens van medewerkers namens u als verwerkingsverantwoordelijke.
+Astra is een multi-tenant SaaS-platform voor personeelsplanning in warehouse-, logistiek- en productieomgevingen. Het platform wordt aangeboden vanuit de Europese Unie, draait op twee Europese infrastructuurleveranciers (Supabase en Vercel) en verwerkt als gegevensverwerker, in de zin van artikel 28 AVG, persoonsgegevens van medewerkers namens Protest Sportwear als verwerkingsverantwoordelijke.
 
-**Kern-garanties die wij feitelijk kunnen waarmaken:**
+De volgende technische en organisatorische maatregelen zijn op de datum van dit document operationeel en verifieerbaar:
 
-1. **Harde tenant-isolatie op databaseniveau** — Uw data is op het niveau van de PostgreSQL-database afgeschermd via Row-Level Security (RLS) beleid. Geen enkele andere klant kan, onder welke omstandigheid dan ook, via de applicatie uw data benaderen. Deze garantie is technisch afdwingbaar en niet afhankelijk van correct programmeren in de applicatielaag.
-2. **Data-residentie in de Europese Unie** — Uw databases draaien in Frankfurt (eu-central-1) of Amsterdam (eu-west-1). Onze serverless functies draaien in de EU-regio van Vercel. Geen persoonsgegevens verlaten de EU voor opslag.
-3. **Versleuteling in rust en tijdens transport** — AES-256 voor data at rest (beheerd door Supabase), TLS 1.3 voor alle netwerkverbindingen.
-4. **Authenticatie met server-side verificatie** — Sessies worden per verzoek opnieuw geverifieerd tegen Supabase Auth; sessiecookies zijn `HttpOnly` en `SameSite=Lax`.
-5. **Onveranderbare audit-log** — Elke wijziging op gevoelige tabellen (medewerkers, vaardigheden, planningen, dienstroosters, arbeidsregels, beschikbaarheid) wordt geregistreerd in een audit-logtabel die technisch onveranderbaar is: `UPDATE`- en `DELETE`-operaties worden op databaseniveau geweigerd.
-6. **Minimale toegang voor Astra-medewerkers** — Niemand binnen Astra heeft routinematige operationele toegang tot klantdata. Toegang tot productiesystemen is beperkt tot een beperkt aantal beheerders, uitsluitend voor incidentrespons, en wordt gelogd door onze infrastructuurleveranciers.
-7. **Invoervalidatie overal** — Alle 116 server-side API-procedures valideren hun input met strikte, typed schema's (Zod). Er is geen SQL-injection-oppervlak: alle queries lopen via geparametriseerde query-builders.
+1. **Tenant-isolatie op databaseniveau.** Klantdata is op PostgreSQL-niveau afgeschermd door middel van Row-Level Security. Cross-tenant data-toegang via de applicatielaag is uitgesloten en niet afhankelijk van correct programmeren in de applicatielaag.
+2. **Data-residentie in de Europese Unie.** De databases draaien in Frankfurt (`eu-central-1`) of Amsterdam (`eu-west-1`). De serverless functies draaien in de EU-regio van Vercel. Persoonsgegevens worden niet buiten de EU opgeslagen.
+3. **Versleuteling in rust en tijdens transport.** AES-256 voor data at rest, beheerd door Supabase. TLS 1.3 voor alle netwerkverbindingen.
+4. **Authenticatie met server-side verificatie.** Sessies worden per verzoek geverifieerd tegen Supabase Auth. Sessiecookies zijn `HttpOnly`, `Secure` en `SameSite=Lax`.
+5. **Onveranderbare audit-log.** Wijzigingen op gevoelige tabellen — medewerkers, vaardigheden, planningen, dienstroosters, arbeidsregels en beschikbaarheid — worden vastgelegd in een audit-logtabel waarop `UPDATE` en `DELETE` op databaseniveau zijn geblokkeerd.
+6. **Beperkte toegang voor Ascentra-personeel.** Routinematige toegang tot klantdata door Ascentra-personeel komt niet voor. De service-role sleutel die de Row-Level Security technisch kan omzeilen is uitsluitend aanwezig als versleutelde omgevingsvariabele in de productieomgeving van Vercel; toegang voor incidentrespons wordt gelogd en wordt achteraf aan de verwerkingsverantwoordelijke gerapporteerd.
+7. **Sluitende invoervalidatie.** De 116 server-side API-procedures valideren hun invoer met getypeerde schema's. Alle databasequeries lopen via geparametriseerde query-builders. Een aanvalsoppervlak voor SQL-injectie is op codeniveau afwezig.
 
-**Reeds gerealiseerd vóór de aanbieding van dit document (sectie 15):** alle elf de hardening-onderdelen die wij ons hadden voorgenomen voor de productie-uitrol zijn afgerond en in productie geverifieerd. Daaronder vallen onder andere de pseudonimisering van persoonsgegevens richting AI-dienstverleners, rate limiting op alle gevoelige endpoints, applicatie-brede security headers (CSP/HSTS), vervanging van een kwetsbare Excel-bibliotheek door een veilig alternatief, volledige implementatie van het recht op vergetelheid (art. 17 AVG), en de attributie van service-role mutaties in de audit-log. Geen van deze maatregelen is een belofte voor de toekomst — zij zijn elk verifieerbaar in de broncode en in de productie-omgeving op de datum van dit document.
+De in sectie 15 opgenomen hardening-roadmap is volledig uitgevoerd, met uitzondering van twee posten die op deze datum nog open staan: een externe penetratietest (optioneel, contractueel onderhandelbaar) en de encryptie van integratie-credentials (voorwaardelijk; zie sectie 5.4). Alle overige maatregelen zijn in de broncode en in de productieomgeving aantoonbaar aanwezig.
 
 ---
 
-## 2.1 Hoe Protest Sportwear's Data Concreet Wordt Beschermd — Eén Pagina
+## 2.1 Beschermingsdomeinen op één pagina
 
-Voor de lezer die snel een totaaloverzicht wil van de beschermingslagen rondom de data van Protest Sportwear, vatten wij dit hieronder samen langs zes risicodomeinen. Elke laag is verifieerbaar en wordt verderop in dit document technisch onderbouwd.
+Onderstaande samenvatting beschrijft de beschermingslagen rondom de data van Protest Sportwear langs zeven risicodomeinen. Elke laag wordt verderop in dit document technisch onderbouwd; de paragraafverwijzingen achter elke alinea zijn de toegang tot die onderbouwing.
 
-**Bescherming tegen verlies en uitval (beschikbaarheid).** Uw data leeft in een PostgreSQL-database die door Supabase op AWS-infrastructuur in Frankfurt of Amsterdam wordt beheerd. Er worden continu back-ups gemaakt met **Point-in-Time Recovery** tot op het niveau van een individuele transactie over de afgelopen 7 dagen (uitbreidbaar). Bij hardwarestoringen failoveren database en applicatie binnen minuten naar gezonde infrastructuur. Verwijdering van Protest Sportwear's data bij contractbeëindiging vindt binnen 30 dagen plaats. → *Onderbouwing: §5.1 en §4.4*
+**Beschikbaarheid en herstel.** Klantdata wordt opgeslagen in een PostgreSQL-database die door Supabase op AWS-infrastructuur in Frankfurt of Amsterdam wordt beheerd. Continue back-ups worden gemaakt met Point-in-Time Recovery tot op transactieniveau over de afgelopen zeven dagen, optioneel uitbreidbaar. Bij hardwarestoringen vindt automatische failover binnen minuten plaats. Klantdata wordt bij contractbeëindiging binnen dertig dagen verwijderd. *(Sectie 5.1 en 4.4.)*
 
-**Bescherming op transport (afluisteren).** Elke verbinding tussen browser en applicatie, tussen applicatie en database, en tussen applicatie en derde partijen verloopt over **TLS 1.3**. HTTP wordt geweigerd. Sessiecookies zijn `HttpOnly`, `Secure` en `SameSite=Lax`, waardoor JavaScript in de browser de sessietoken niet kan benaderen en cross-site aanvallen op de sessie standaard worden geblokkeerd. → *Onderbouwing: §5.2 en §7.4*
+**Vertrouwelijkheid tijdens transport.** Iedere verbinding tussen browser en applicatie, tussen applicatie en database, en tussen applicatie en derde partijen verloopt over TLS 1.3. HTTP wordt geweigerd. Sessiecookies zijn `HttpOnly`, `Secure` en `SameSite=Lax`, waardoor JavaScript in de browser de sessietoken niet kan benaderen en standaard cross-site aanvallen op de sessie worden geblokkeerd. *(Sectie 5.2 en 7.4.)*
 
-**Bescherming in rust (toegang tot opslag).** Alle data — operationele tabellen, audit-logs, back-ups — wordt op schijfniveau versleuteld met **AES-256** door Supabase. Wachtwoorden worden door Supabase Auth opgeslagen als bcrypt-hashes met salt; Astra-code ziet of verwerkt nooit een leesbaar wachtwoord. → *Onderbouwing: §5.2*
+**Vertrouwelijkheid in rust.** Alle data — operationele tabellen, audit-logs en back-ups — wordt op schijfniveau versleuteld met AES-256 door Supabase. Wachtwoorden worden door Supabase Auth opgeslagen als bcrypt-hashes met salt; Ascentra-code verwerkt op geen enkel moment een leesbaar wachtwoord. *(Sectie 5.2.)*
 
-**Bescherming tegen andere klanten (multi-tenant isolatie — de belangrijkste vraag).** Elke regel data in de database draagt het `organization_id` van Protest Sportwear. Op **alle 20+ tabellen met klantdata** is **PostgreSQL Row-Level Security (RLS)** geactiveerd. Dat betekent: bij elke query voert de database zelf, vóór er ook maar één rij wordt teruggegeven, een controle uit dat het `organization_id` van de rij overeenkomt met het `organization_id` uit de JWT van de aanvragende gebruiker. Deze controle is niet te omzeilen vanuit de applicatielaag. Bovenop RLS hanteert de tRPC-API een tweede, expliciete `WHERE organization_id = ctx.organizationId`-filter — defense in depth. Cross-tenant data-toegang is, zelfs bij een hypothetische programmeerfout in één van beide lagen, technisch geblokkeerd door de andere. → *Onderbouwing: §6.1 t/m §6.4*
+**Multi-tenant isolatie.** Iedere regel data in de database draagt het `organization_id` van Protest Sportwear. Op alle tabellen met klantdata is PostgreSQL Row-Level Security geactiveerd. De database controleert bij elke query, vóór enige rij wordt teruggegeven, of het `organization_id` van de rij overeenkomt met het `organization_id` uit de JWT van de aanvragende gebruiker. De controle is niet te omzeilen vanuit de applicatielaag. Daarbovenop hanteert de tRPC-API een expliciete tweede `WHERE organization_id = ctx.organizationId`-filter (defense in depth). Cross-tenant data-toegang is, zelfs bij een hypothetische programmeerfout in één van beide lagen, geblokkeerd door de andere. *(Sectie 6.1 t/m 6.4.)*
 
-**Bescherming tegen Astra-personeel.** Niemand binnen Astra heeft routinematige toegang tot de productiedata van Protest Sportwear. De zogeheten *service-role sleutel* die RLS kan omzeilen bestaat uitsluitend als versleutelde omgevingsvariabele in Vercel's productieomgeving en is via één bestand serverside beschikbaar. De sleutel staat **nooit** in broncode, **nooit** in Git, en nooit op een werkplek; dit is verifieerbaar door git-historie over `.env*`-paden. Toegang door een persoon tot productiedata is uitsluitend toegestaan bij een kritiek incident of op uw expliciet verzoek, wordt onveranderbaar gelogd door Supabase, en wordt achteraf aan u gerapporteerd. Onze engineers werken in dagelijkse ontwikkeling met synthetische data. → *Onderbouwing: §6.6*
+**Beperking van toegang door Ascentra-personeel.** Ascentra-personeel beschikt niet over routinematige toegang tot productiedata van Protest Sportwear. De service-role sleutel die de Row-Level Security technisch kan omzeilen is uitsluitend aanwezig als versleutelde omgevingsvariabele in de productieomgeving van Vercel en wordt vanuit één enkel server-side bestand benaderd. De sleutel komt niet voor in broncode, niet in Git en niet op werkstations, hetgeen verifieerbaar is via de git-historie over `.env*`-paden. Persoonlijke toegang tot productiedata is uitsluitend toegestaan in geval van een kritiek incident of op expliciet verzoek van Protest Sportwear, wordt onveranderbaar gelogd door Supabase en wordt achteraf gerapporteerd. *(Sectie 6.6.)*
 
-**Bescherming tegen aanvallers van buitenaf.** Alle 116 server-side API-procedures valideren hun input met strikte typed schema's (Zod) — kwaadaardige payloads worden vóór elke businesslogica geweigerd. Alle databasequeries lopen via geparametriseerde query-builders; SQL-injectie is structureel uitgesloten. Een volledige scan van de codebase op gevaarlijke patronen (`dangerouslySetInnerHTML`, `innerHTML`, `eval`, `new Function`) geeft **nul** treffers; klassieke XSS-aanvallen worden door React's standaard HTML-escaping geblokkeerd. Authenticatie wordt **per request** server-side geverifieerd tegen Supabase Auth, niet alleen lokaal gedecodeerd. Rolbevoegdheden worden zowel in de applicatielaag als in de RLS-policies van gevoelige tabellen afgedwongen. → *Onderbouwing: §7, §8, §9*
+**Bescherming tegen externe aanvallers.** Alle 116 server-side API-procedures valideren hun invoer met getypeerde schema's; afwijkende payloads worden vóór alle businesslogica geweigerd. Alle databasequeries lopen via geparametriseerde query-builders; SQL-injectie is structureel uitgesloten. Een statische scan van de codebase op gevaarlijke patronen (`dangerouslySetInnerHTML`, `innerHTML`, `eval`, `new Function`) levert nul treffers op; klassieke XSS-aanvallen worden door de standaard HTML-escaping van React geblokkeerd. Authenticatie wordt per verzoek server-side geverifieerd tegen Supabase Auth, niet uitsluitend lokaal gedecodeerd. Rolbevoegdheden worden zowel in de applicatielaag als in de Row-Level Security policies van gevoelige tabellen afgedwongen. *(Secties 7, 8 en 9.)*
 
-**Bescherming als er tóch iets misgaat (auditbaarheid en incident response).** Elke wijziging op de zes meest gevoelige tabellen (medewerkers, vaardigheden, planningen, dienstroosters, arbeidsregels, beschikbaarheid) wordt vastgelegd in een **onveranderbare audit-log**: een databasetrigger weigert technisch elke `UPDATE` of `DELETE` op deze tabel. De audit-log bevat wie, wanneer, vanaf welk IP, welke actie, en de volledige snapshot vóór en ná de wijziging. Bij een vermoedelijk datalek meldt Astra u **binnen 24 uur** met een eerste rapportage, en levert binnen 72 uur de informatie die u nodig heeft om aan uw eigen meldplicht aan de Autoriteit Persoonsgegevens te voldoen. → *Onderbouwing: §10 en §13*
+**Auditbaarheid en incidentrespons.** Wijzigingen op de zes meest gevoelige tabellen — medewerkers, vaardigheden, planningen, dienstroosters, arbeidsregels en beschikbaarheid — worden vastgelegd in een onveranderbare audit-log. Een databasetrigger blokkeert iedere `UPDATE` of `DELETE` op deze tabel. Per record bevat de log de actor, het tijdstip, het IP-adres, de actie en een volledige snapshot van de voor- en na-staat. Bij een vastgesteld datalek wordt de verwerkingsverantwoordelijke binnen 24 uur door Ascentra geïnformeerd, met een volledige informatieoplevering binnen 72 uur ten behoeve van de meldplicht aan de Autoriteit Persoonsgegevens. *(Secties 10 en 13.)*
 
-**Bescherming tegen ongewenste AI-doorgifte (per realisatie april 2026).** Persoonsgegevens van medewerkers van Protest Sportwear worden **niet** in originele vorm verzonden naar Anthropic's Claude API. Alle medewerkernamen worden vóór elke AI-aanroep deterministisch gepseudonimiseerd met een HMAC-SHA-256 over een per-organisatie geheime salt. Het AI-model ziet uitsluitend tokens als `employee-a3f2b1`. Pseudoniemen worden server-side teruggemapt vóór weergave aan de gebruiker. Onder deze architectuur verlaten direct identificerende persoonsgegevens de Europese Unie niet, en worden de meest stringente eisen van de AVG inzake doorgifte aan derde landen (hoofdstuk V) op deze gegevensstroom niet getriggerd. → *Onderbouwing: §11.3*
+**Beheersing van AI-doorgifte.** Direct identificerende persoonsgegevens van medewerkers worden niet in oorspronkelijke vorm verzonden naar Anthropic. Voor iedere AI-aanroep wordt een naam vervangen door een deterministisch pseudoniem op basis van een HMAC-SHA-256 over een per-organisatie geheime sleutel. Het model ontvangt uitsluitend pseudoniemen in de vorm `Medewerker A3F2`. Onder deze architectuur verlaten identificerende persoonsgegevens de Europese Unie niet en worden de eisen van hoofdstuk V AVG inzake doorgifte aan derde landen op deze gegevensstroom niet getriggerd. *(Sectie 11.3.)*
 
-**Wat dit samen betekent.** Zelfs in het ongunstigste denkbare scenario — een aanvaller bemachtigt geldige inloggegevens van een willekeurige andere Astra-klant — kan die aanvaller géén byte data van Protest Sportwear inzien, omdat de RLS-policy in PostgreSQL hem blokkeert vóór de query überhaupt rijen retourneert. En in het scenario dat een ontwikkelaar van Astra een fout maakt in de applicatielaag, wordt diezelfde fout onmiddellijk opgevangen door RLS daaronder. Dat is wat wij met *defense in depth* bedoelen, en het is de reden waarom wij durven stellen dat tenant-isolatie geen marketing-belofte is, maar een technische eigenschap van het systeem.
+In geval van een gecompromitteerd account van een andere Astra-klant resulteert een poging tot toegang tot Protest Sportwear-data in een lege resultaatset: de Row-Level Security in PostgreSQL blokkeert de query voordat enige rij wordt geretourneerd. In geval van een onverhoopte programmeerfout in de applicatielaag wordt deze opgevangen door de Row-Level Security daaronder. De combinatie van deze lagen vormt het defense-in-depth model dat in dit document onder de noemer tenant-isolatie wordt onderbouwd.
 
 ---
 
@@ -213,7 +211,7 @@ Er bestaat op dit moment **geen risico** rondom lekken van integratie-credential
 Zodra Protest Sportwear zijn eerste koppeling met een WMS of HRIS wil activeren, moet de encryptie daadwerkelijk geïmplementeerd zijn. Wij leggen dit als expliciete voorwaarde op in §15 (hardening-roadmap, item #12): géén productie-koppeling met een extern systeem wordt geactiveerd zolang het schrijven naar `integration_config.connection_params_encrypted` niet is uitgevoerd met AES-256-GCM en per-organisatie sleutels via Supabase Vault.
 
 **Waarom wij dit eerlijk benoemen in plaats van stilzwijgend verder te gaan:**
-Het zou eenvoudig zijn geweest om op basis van het schema-commentaar de aanwezigheid van encryptie als feit te presenteren — het commentaar in de migratie zegt letterlijk *"AES-256-GCM encrypted. Per-tenant encryption keys"*. Maar commentaar is geen implementatie, en wij weigeren om een feitelijk onjuiste claim in een security-document richting Protest Sportwear op te nemen. Dit type eerlijkheid is wat wij bedoelen met de werkwijze die in de inleiding van dit document staat.
+Het commentaar in de databasemigratie vermeldt *"AES-256-GCM encrypted. Per-tenant encryption keys"*. Dit commentaar is een aanduiding van de beoogde implementatie, niet van de feitelijke implementatie. Ascentra vermeldt deze nuance expliciet, omdat een claim die niet door applicatiecode wordt onderbouwd niet thuishoort in een verwerkingsdocument.
 
 ---
 
@@ -273,25 +271,21 @@ Het enige HTTP-endpoint dat in theorie een gebruiker aan een andere organisatie 
 2. Het doel-`organization_id` moet overeenkomen met het eigen `organization_id`;
 3. Alleen `super_admin` (Astra-platformbeheer) mag hiervan afwijken.
 
-### 6.6 Toegang door Astra-personeel
+### 6.6 Toegang door Ascentra-personeel
 
-Wij begrijpen dat de vraag *"kunnen jullie zelf in onze data kijken?"* centraal staat. Ons antwoord is zo eerlijk mogelijk:
+Ascentra beschikt, zoals iedere SaaS-leverancier, over een `super_admin`-rol en een service-role sleutel waarmee de Row-Level Security technisch kan worden omzeild. Deze bevoegdheden zijn nodig voor het herstellen van back-ups, het onderzoeken van incidenten en het uitvoeren van schema-migraties; volledige eliminatie ervan is bij een beheerde SaaS-dienst niet realiseerbaar. De feitelijke werking en beheersing van deze bevoegdheden is als volgt geregeld.
 
-**Wat technisch zou kunnen:** Astra beschikt over een `super_admin`-rol en over een zogenaamde *service-role sleutel* waarmee de RLS-afscherming kan worden omzeild. Deze bevoegdheden zijn technisch onvermijdelijk bij een SaaS-platform — zonder dergelijke bevoegdheden zouden wij bijvoorbeeld geen back-ups kunnen herstellen, geen incidenten kunnen onderzoeken, en geen schema-migraties kunnen uitvoeren.
+**Opslag van de service-role sleutel.** De sleutel is uitsluitend aanwezig als versleutelde omgevingsvariabele binnen de productieomgeving van Vercel en wordt vanuit één enkel server-side bestand benaderd. De sleutel komt niet voor in broncode, niet in Git en niet op werkstations. Dit is verifieerbaar door een `git log` over `.env*`-paden, die uitsluitend het bestand `.env.example` retourneert.
 
-**Wat wij operationeel garanderen:**
+**Routinematige toegang.** Ascentra-personeel beschikt in de reguliere werkzaamheden niet over toegang tot productiedata. Ontwikkelwerk vindt plaats tegen synthetische ontwikkeldatabases en tegen demo-tenants.
 
-1. **De service-role sleutel wordt niet op werkplekken opgeslagen.** Hij bestaat uitsluitend als een versleutelde omgevingsvariabele binnen Vercel's productieomgeving, en wordt door de applicatiecode alléén server-side geraadpleegd. De sleutel staat nooit in broncode, nooit in Git, en is nooit in de git-historie terechtgekomen (dit is verifieerbaar door een `git log` over `.env*`-paden, die uitsluitend `.env.example` retourneert).
+**Incident-toegang.** Persoonlijke toegang tot productiedata is uitsluitend toegestaan in geval van een kritiek incident of op expliciet verzoek van Protest Sportwear. Dergelijke toegang wordt gelogd in het Supabase-dashboard, dat voor Ascentra zelf onveranderbaar is, en wordt achteraf aan Protest Sportwear gerapporteerd.
 
-2. **Geen routinematige toegang.** Geen Astra-medewerker heeft in de dagelijkse werkzaamheden toegang nodig tot klantdata en ontvangt die dan ook niet. Onze eigen engineers werken tegen geanonimiseerde ontwikkeldatabases en tegen demo-tenants.
+**Contractuele beperking.** Ieder gebruik van Protest Sportwear-data anders dan strikt noodzakelijk voor het leveren van de dienst is op grond van de Verwerkersovereenkomst verboden en levert een direct opzegrecht voor Protest Sportwear op.
 
-3. **Incident-toegang is geprotocolleerd.** Toegang tot productiedata door een persoon is uitsluitend toegestaan bij een kritiek incident of op expliciet verzoek van Protest Sportwear. Dergelijke toegang wordt gelogd bij Supabase (dashboard audit-log, onveranderbaar voor Astra) en wordt achteraf aan Protest Sportwear gerapporteerd.
+**Geheimhouding.** Personeel met productie-toegang is gebonden aan een geheimhoudingsverplichting die is opgenomen in de arbeidsovereenkomst dan wel in een afzonderlijke NDA. Op de datum van dit document is de oprichter de enige persoon binnen Ascentra met productie-toegang. Bij uitbreiding van het personeelsbestand wordt deze verplichting bij elke nieuwe arbeidsovereenkomst contractueel vastgelegd.
 
-4. **De Verwerkersovereenkomst verbiedt verdergaand gebruik.** Enig gebruik van Protest Sportwear-data anders dan strikt noodzakelijk voor het leveren van de dienst is contractueel verboden en levert een direct opzegrecht op voor Protest Sportwear.
-
-5. **Werknemers met productie-toegang zijn gebonden aan een geheimhoudingsverklaring** opgenomen in hun arbeidsovereenkomst respectievelijk een afzonderlijke NDA. Op de datum van dit document zijn er binnen Ascentra geen werknemers anders dan de oprichter, die als enig bevoegde de productie-toegang beheert. Bij uitbreiding van het team wordt geheimhouding bij elke nieuwe arbeidsovereenkomst contractueel vastgelegd.
-
-**Wat wij expliciet niet beweren:** wij beweren niet dat het technisch onmogelijk is voor een Astra-medewerker met kwade opzet om toegang te verkrijgen tot klantdata. Een dergelijke claim zou bij elke SaaS-leverancier oneerlijk zijn. Wat wij wél waarmaken is dat (a) dergelijke toegang geen onderdeel is van normale bedrijfsprocessen, (b) er een onveranderbare audit-trail bestaat, (c) de autorisatie contractueel beperkt is, en (d) wij hierover open en aantoonbaar rapporteren.
+Ascentra spreekt zich niet uit over de absolute onmogelijkheid van toegang door een medewerker met kwade opzet — een dergelijke uitspraak zou bij geen enkele SaaS-leverancier juist zijn. Ascentra borgt vier punten: (i) dergelijke toegang maakt geen deel uit van enig regulier bedrijfsproces, (ii) elke toegang levert een onveranderbare audit-trail op, (iii) de autorisatie is contractueel beperkt, en (iv) Ascentra rapporteert hierover transparant aan de verwerkingsverantwoordelijke.
 
 ---
 
@@ -372,7 +366,7 @@ Toegangscontrole wordt in Astra op drie lagen afgedwongen:
 
 **Bestandsupload (CSV — adequate).** CSV-import verloopt via de `papaparse`-bibliotheek met strikte instellingen (`header: true`, `skipEmptyLines: true`). Papaparse interpreteert geen formules en voert geen shellopdrachten uit; het retourneert uitsluitend plain strings. Geen padmanipulaties worden uitgevoerd op door de gebruiker opgegeven bestandsnamen.
 
-**Bestandsupload (Excel — gerealiseerd).** De voorheen gebruikte `xlsx` (SheetJS) bibliotheek met twee onoplosbare HIGH-CVE's (Prototype Pollution GHSA-4r6h-8v6p-xvw6 en ReDoS GHSA-5pgg-2g8v-p4x9) is **volledig vervangen** door `exceljs`. De migratie raakte alle zes de plekken waar Excel-bestanden worden gelezen of geschreven: de AI demand-analyzer (`src/lib/demand/xray.ts`), twee client-side uploadcomponenten (demand upload wizard en drag/drop zone), de employees-importwizard die zowel templates genereert als ingevulde bestanden parseert, en de bijbehorende unit test suite (11 tests, allen slagend na migratie). Na deze vervanging retourneert `npm audit` **nul HIGH-severity kwetsbaarheden** in de productie-afhankelijkheden; de vier resterende moderates zijn dev-only in de vitest/vite/esbuild keten en hebben geen runtime-impact.
+**Excel-bestandsverwerking.** De voorheen gebruikte `xlsx`-bibliotheek (SheetJS), met twee niet door upstream verholpen HIGH-severity kwetsbaarheden (GHSA-4r6h-8v6p-xvw6, prototype pollution; GHSA-5pgg-2g8v-p4x9, ReDoS), is volledig vervangen door `exceljs`. De vervanging is uitgevoerd op alle zes call sites waar Excel-bestanden worden gelezen of gegenereerd: de AI demand-analyzer (`src/lib/demand/xray.ts`), de twee client-side uploadcomponenten (demand-upload-wizard en drag-and-drop zone), de employees-importwizard, en de bijbehorende unit-test suite. De elf unit-tests slagen na migratie. `npm audit` rapporteert nul HIGH-severity kwetsbaarheden in productie-dependencies; de vier resterende moderate-severity meldingen betreffen uitsluitend `vitest`, `vite` en `esbuild` als devDependencies, zonder runtime-impact.
 
 ---
 
@@ -395,75 +389,77 @@ Voor elke wijziging legt het systeem vast: wie (`actor_id`), vanaf welk IP (`act
 
 De audit-logtabel is technisch onveranderbaar gemaakt: een databasetrigger (`trg_audit_log_immutable`) werpt een fatale exceptie bij elke poging tot `UPDATE` of `DELETE`. Zelfs een kwaadwillende met directe databasetoegang kan zijn sporen niet wissen zonder de trigger zelf te verwijderen, wat op zijn beurt een `DDL`-operatie is die door Supabase wordt gelogd.
 
-### 10.3 Volledige attributie ook voor service-role mutaties — gerealiseerd
+### 10.3 Attributie van service-role mutaties
 
-Een eerdere interne review had vastgesteld dat wijzigingen die door Astra's serverlaag worden uitgevoerd via de *service-role verbinding* (AI-chat tools, tRPC routers die de RLS-afscherming overslaan voor performance, en administratieve HTTP-endpoints) niet altijd herleidbaar waren tot een specifieke gebruiker in de audit-log: het veld `actor_id` kon op `NULL` staan omdat de JWT-context van de oorspronkelijke gebruiker niet werd doorgegeven aan de databasesessie. Dit punt is opgelost met twee gekoppelde maatregelen.
+Mutaties die de Astra-serverlaag uitvoert via een service-role verbinding (de AI-chat tool-functies, de tRPC-routers die om prestatieredenen de Row-Level Security overslaan, en de administratieve HTTP-endpoints) worden gegarandeerd toegerekend aan de oorspronkelijke gebruiker in de audit-log. Deze attributie wordt bewerkstelligd door drie gekoppelde maatregelen.
 
-**Wijziging 1 — audit trigger leest een expliciete actor-header.** De triggerfunctie `fn_audit_trigger()` is uitgebreid zodat zij `actor_id` in de volgende volgorde bepaalt (zie migratie [`00018_audit_actor_fix.sql`](../../supabase/migrations/00018_audit_actor_fix.sql)):
-1. **`request.headers ->> 'x-actor-id'`** — een HTTP-header die de applicatie meestuurt bij elke service-role databaseverbinding op basis van de oorspronkelijke eindgebruiker.
-2. **`request.jwt.claims ->> 'sub'`** — de JWT-claim die PostgREST doorgeeft op de normale tRPC-route (ongewijzigd, voor backwards compatibility).
-3. **`NULL`** — uitsluitend voor systeem- of cronjobs zonder gebruikerscontext.
+**Triggerfunctie met actor-header.** De triggerfunctie `fn_audit_trigger()` bepaalt het veld `actor_id` in de volgende volgorde (zie migratie [`00018_audit_actor_fix.sql`](../../supabase/migrations/00018_audit_actor_fix.sql)):
 
-**Wijziging 2 — helper in de applicatielaag.** Een nieuwe functie `createAdminClientForUser(userId)` (in [`src/lib/supabase/admin.ts`](../../src/lib/supabase/admin.ts)) instantieert een service-role Supabase client die bij elke HTTP-request naar PostgREST automatisch de header `x-actor-id: <uuid>` meestuurt. Deze helper is uitgerold op alle code-paden die namens een eindgebruiker muteren: de AI onboarding-chat (`src/app/api/ai/chat/route.ts`) en de vijf tRPC-routers (`workforce`, `absence`, `planning`, `scenario`, `admin`) die schrijven naar een van de zes audit-gekoppelde tabellen. De oorspronkelijke `createAdminClient()` zonder parameters blijft bestaan voor cronjobs zoals de dagelijkse insights-refresh, waar geen gebruiker bij hoort.
+1. `request.headers ->> 'x-actor-id'` — een HTTP-header die de applicatie meezendt bij iedere service-role databaseverbinding namens de oorspronkelijke eindgebruiker;
+2. `request.jwt.claims ->> 'sub'` — de JWT-claim die PostgREST doorgeeft langs het reguliere tRPC-pad;
+3. `NULL` — uitsluitend voor systeem- of cron-processen zonder gebruikerscontext.
 
-**Wijziging 3 — expliciete audit-log voor administratieve endpoints.** Het endpoint `/api/admin/assign-org` dat een gebruiker aan een organisatie toewijst opereert op `auth.users`, een tabel die niet onder `fn_audit_trigger` valt. Deze route schrijft nu zelf expliciet een rij naar `audit_log` met `entity_type = 'auth.user'`, `action = 'ASSIGN_ORG'`, en de volledige voor- en na-staat van de metadata (organisatie + rol), inclusief het e-mailadres van het doel-account en de rol van de aanroeper. Rolwijzigingen tussen gebruikers zijn daarmee altijd traceerbaar.
+**Helper in de applicatielaag.** De functie `createAdminClientForUser(userId)` in [`src/lib/supabase/admin.ts`](../../src/lib/supabase/admin.ts) instantieert een service-role Supabase-client die bij iedere HTTP-request naar PostgREST automatisch de header `x-actor-id: <uuid>` meezendt. De helper is uitgerold op alle code-paden die namens een eindgebruiker muteren: de AI-chat (`src/app/api/ai/chat/route.ts`) en de vijf tRPC-routers (`workforce`, `absence`, `planning`, `scenario`, `admin`) die schrijven naar één van de zes audit-gekoppelde tabellen. De ongewijzigde functie `createAdminClient()` blijft beschikbaar voor cron- en systeemprocessen zonder gebruikerscontext.
 
-**Verificatie.** Na een wijziging via de AI-chat (bijvoorbeeld `addEmployee`) of via een tRPC-mutation bevat de corresponderende rij in `audit_log` de `actor_id` van de ingelogde gebruiker, niet `NULL`. Dit is reproduceerbaar door een `tenant_admin` een kleine wijziging te laten uitvoeren en vervolgens `SELECT actor_id, entity_type, action, created_at FROM audit_log ORDER BY created_at DESC LIMIT 1` uit te voeren.
+**Expliciete audit-log voor administratieve endpoints.** Het endpoint `/api/admin/assign-org`, dat een gebruiker aan een organisatie toewijst, opereert op de tabel `auth.users` die buiten de scope van `fn_audit_trigger` valt. Dit endpoint schrijft expliciet een rij naar `audit_log` met `entity_type = 'auth.user'` en `action = 'ASSIGN_ORG'`, voorzien van de volledige voor- en na-staat van de metadata, inclusief het e-mailadres van het doel-account en de rol van de aanroeper.
+
+**Verifieerbaarheid.** Na een wijziging via de AI-chat of via een tRPC-mutatie bevat de corresponderende rij in `audit_log` de `actor_id` van de uitvoerende gebruiker. De controle is reproduceerbaar door een gebruiker met de rol `tenant_admin` een kleine wijziging te laten uitvoeren en vervolgens de query `SELECT actor_id, entity_type, action, created_at FROM audit_log ORDER BY created_at DESC LIMIT 1` uit te voeren.
 
 ---
 
-## 11. AI-verwerking en Gegevensminimalisatie
+## 11. AI-verwerking en gegevensminimalisatie
 
-Dit is een onderwerp waar wij extra zorgvuldig in willen zijn, omdat AI-verwerking door een externe dienstverlener (Anthropic) een verwerking is die voor Protest Sportwear mogelijk nieuwe vragen oproept.
+Het Astra-platform maakt op drie plaatsen gebruik van het taalmodel Claude van Anthropic PBC. De volgende paragrafen beschrijven welke gegevens per endpoint daadwerkelijk worden verzonden, welke beheersmaatregelen op die gegevensstroom van toepassing zijn, en op welke wijze de naleving van de AVG wordt gewaarborgd.
 
 ### 11.1 Overzicht van AI-integraties
 
-Astra heeft drie plekken waarop het AI-model Claude (Anthropic) wordt aangeroepen:
-
-| Endpoint | Welk model | Welke data gaat naar Anthropic | Bevat persoonsgegevens? |
+| Endpoint | Model | Verzonden gegevens | Persoonsgegevens |
 |---|---|---|---|
-| `/api/ai/demand-analyze` | `claude-haiku-4-5` | Structuur van geüpload Excel/CSV-bestand (kolomnamen, enkele voorbeeldrijen) | Nee, alleen metadata |
-| `/api/ai/insights-analyze` | `claude-sonnet-4` | Aggregaten: aantal actieve verzuimmeldingen, totaal aantal medewerkers, afdelingsnamen, weerdata | **Nee** — aggregaten, geen persoonsgegevens |
-| `/api/ai/chat` (onboarding assistent) | Claude (SDK-default) | Door de gebruiker getypte berichten, plus tool-resultaten die medewerkersnamen kunnen bevatten | **Ja — zie §11.3** |
+| `/api/ai/demand-analyze` | `claude-haiku-4-5` | Structuur van een geüpload Excel- of CSV-bestand: kolomnamen en enkele voorbeeldrijen | Nee — alleen bestandsmetadata |
+| `/api/ai/insights-analyze` | `claude-sonnet-4` | Aggregaten: aantallen actieve verzuimmeldingen, totaal aantal medewerkers, afdelingsnamen, weerdata | Nee — uitsluitend aggregaten |
+| `/api/ai/chat` | Claude (SDK-standaard) | Door de gebruiker getypte berichten en tool-resultaten | Beperkt; zie sectie 11.3 |
 
-### 11.2 Wat is veilig en expliciet claimbaar
+### 11.2 Aggregaat-only verwerkingen
 
-De **insights-analyse**, die de AI-adviezen in het dashboard aandrijft, stuurt uitsluitend **aggregaten en tellingen** naar Claude: "25 medewerkers, 3 actieve verzuimmeldingen, afdeling 'Warehouse'". Geen individuele namen, geen individuele verzuimredenen, geen medische data. Deze verwerking is strikt AVG-conform onder het principe van dataminimalisatie (art. 5 lid 1 sub c AVG).
+De endpoint `/api/ai/insights-analyze`, die de adviezen in het dashboard genereert, verzendt uitsluitend aggregaten en tellingen naar Claude (bijvoorbeeld het aantal actieve verzuimmeldingen, het totaal aantal medewerkers en de afdelingsnaam). Individuele namen, individuele verzuimredenen of medische gegevens worden niet meegezonden. Deze verwerking voldoet aan het beginsel van dataminimalisatie zoals vervat in artikel 5 lid 1 onderdeel c AVG.
 
-De **demand-analyse** stuurt alleen bestandsstructuur-metadata en een handvol voorbeeldrijen naar Claude om kolommen te herkennen. Wanneer het bestand geen persoonsgegevens bevat (wat voor demand-forecasts doorgaans het geval is: het zijn volumes en uren, geen namen), bevat de prompt geen persoonsgegevens.
+De endpoint `/api/ai/demand-analyze` verzendt uitsluitend bestandsstructuur-metadata en een beperkt aantal voorbeeldrijen ten behoeve van kolomherkenning. Demand-forecasts bestaan in de praktijk uit volumes en uren en bevatten geen persoonsgegevens; de prompt bevat dientengevolge geen persoonsgegevens.
 
-### 11.3 Geen direct identificerende persoonsgegevens naar Anthropic — gerealiseerd
+### 11.3 Pseudonimisering van persoonsgegevens richting Anthropic
 
-Voor de **onboarding chat-assistent**, die een conversationele interface biedt om tijdens de inrichting medewerkers te beheren en te analyseren, hanteert Astra een **strikte pseudonimiseringsarchitectuur**. Geen enkele tool-functie die wordt aangeroepen door het Claude-model krijgt een voor- of achternaam, e-mailadres of telefoonnummer van een medewerker te zien.
+Voor de onboarding-chatassistent (`/api/ai/chat`) hanteert Ascentra een pseudonimiseringsarchitectuur die voorkomt dat tool-functies die door het Claude-model worden aangeroepen ooit een directe identificator (voornaam, achternaam, e-mailadres of telefoonnummer) van een medewerker te zien krijgen.
 
-**Hoe het werkt — technisch.** Voordat een resultaat van een database-query door de AI-laag wordt verwerkt, passeert het de centrale anonimiseringsmodule (`src/lib/ai/anonymizer.ts`). Deze module verwijdert alle direct identificerende velden (`first_name`, `last_name`, `full_name`, `email`, `phone`) en vervangt ze door een **stabiele, leesbare pseudoniem** zoals `Medewerker A3F2`. De pseudoniem wordt gegenereerd via een **HMAC-SHA-256** over het employee-id, met als sleutel een geheime, per-organisatie variërende salt. De AI ziet dus uitsluitend deze pseudoniem; de werkelijke naam blijft binnen de PostgreSQL-database in Frankfurt of Amsterdam.
+**Werking.** Voordat het resultaat van een databasequery door de AI-laag wordt doorgegeven, passeert het de centrale anonimiseringsmodule (`src/lib/ai/anonymizer.ts`). Deze module verwijdert alle direct identificerende velden — `first_name`, `last_name`, `full_name`, `email`, `phone` — en vervangt ze door een stabiel, leesbaar pseudoniem in de vorm `Medewerker A3F2`. Het pseudoniem wordt gegenereerd via HMAC-SHA-256 over het employee-id, met als sleutel een per-organisatie geheime salt. Het taalmodel ontvangt uitsluitend dit pseudoniem; de werkelijke naam blijft in de PostgreSQL-database in Frankfurt of Amsterdam.
 
-**Eigenschappen van de pseudonimisering:**
-- **Stabiel binnen een organisatie.** Dezelfde medewerker krijgt altijd hetzelfde pseudoniem, zodat de AI consistent kan redeneren over meerdere conversatie-stappen.
-- **Tenant-gescheiden.** De pseudoniemen verschillen tussen organisaties: zelfs als — hypothetisch — twee verschillende klanten dezelfde interne employee-id zouden hebben, zouden de pseudoniemen in de Anthropic-logs niet correleren.
-- **Eenrichtingsverkeer.** Het pseudoniem is niet terug te rekenen naar een naam zonder toegang tot zowel de database als de organisatie-specifieke HMAC-sleutel. Iemand die alleen toegang zou hebben tot een Anthropic-zijdig logbestand kan uit een pseudoniem geen naam afleiden.
-- **Leesbaar voor de eindgebruiker.** De pseudoniemen zijn ergonomisch genoeg om in de chatresponse direct getoond te worden zonder reverse-mapping nodig te hebben, wat de architectuur eenvoudig en de gegevensstroom verifieerbaar houdt.
+**Eigenschappen van de pseudonimisering.**
 
-**De vier tool-functies die met medewerkergegevens werken** (`listEmployees`, `addEmployee`, `bulkAddEmployees`, `crossTrainSuggestion`) zijn bekabeld met deze module en geven uitsluitend pseudoniemen terug. Voor `crossTrainSuggestion` gaan zelfs geen `first_name`/`last_name`-velden meer uit de database de applicatie binnen — alleen het employee-id wordt opgehaald, dat vervolgens wordt omgezet in een pseudoniem.
+1. *Stabiel binnen een organisatie.* Eenzelfde medewerker krijgt altijd hetzelfde pseudoniem, zodat het taalmodel consistent kan redeneren binnen één conversatie.
+2. *Tenant-gescheiden.* Pseudoniemen verschillen tussen organisaties; zelfs identieke interne employee-id's leveren niet-correlerende pseudoniemen op tussen tenants.
+3. *Niet-omkeerbaar.* Het pseudoniem kan niet worden herleid tot een naam zonder gelijktijdige toegang tot zowel de database als de organisatie-specifieke HMAC-sleutel.
+4. *Direct leesbaar.* Pseudoniemen zijn ergonomisch genoeg om zonder reverse-mapping in de gebruikersinterface te worden getoond.
 
-**Eén nuance, eerlijk benoemd.** Wanneer een gebruiker tijdens een onboarding-sessie zelf in de chat een nieuwe medewerker aanmaakt door een naam in te tikken (*"voeg Jan Jansen toe als full-time picker"*), bevat dat ene gebruikersbericht uiteraard de naam *"Jan Jansen"* — die naam wordt door Claude geparseerd om te begrijpen welke velden in te vullen. Dit is gegevensverstrekking die door de gebruiker zelf wordt geïnitieerd binnen de uitvoering van zijn taak (vergelijkbaar met een gebruiker die een naam in een e-mailprogramma intypt). De **resultaat-respons** van de tool-functie bevat na onze hardening géén namen meer, zodat de naam in vervolgturns van dezelfde conversatie niet opnieuw door de AI wordt gezien of verwerkt.
+De vier tool-functies die met medewerkergegevens werken (`listEmployees`, `addEmployee`, `bulkAddEmployees`, `crossTrainSuggestion`) maken uitsluitend gebruik van deze module en retourneren uitsluitend pseudoniemen. De functie `crossTrainSuggestion` haalt zelfs geen `first_name`- of `last_name`-velden meer op uit de database; uitsluitend het employee-id wordt opgehaald en vervolgens omgezet naar een pseudoniem.
 
-**Wat dit betekent onder de AVG:**
-- Astra stuurt **geen direct identificerende persoonsgegevens** vanuit de database naar Anthropic. De doorgifte naar derde land (VS) is daarmee beperkt tot pseudoniemen en operationele metadata, en niet tot identificeerbare persoonsgegevens.
-- Voor de uitzondering hierboven (gebruiker tikt zelf een naam in een prompt) blijft de doorgifte gegrond op de Standard Contractual Clauses (Module 2) in de DPA met Anthropic, en op de instructie van de gebruiker (Protest Sportwear) zelf.
-- Astra is daarmee **niet langer afhankelijk** van een Zero Data Retention-overeenkomst met Anthropic voor de bescherming van naam- en contactgegevens van de medewerkers van Protest Sportwear. ZDR blijft een mogelijke aanvullende beheersmaatregel die wij later kunnen toevoegen, maar is geen voorwaarde voor de in dit document beschreven garanties.
+**Door de gebruiker zelf ingevoerde namen.** Wanneer een gebruiker tijdens een onboarding-sessie in de chat zelf een naam intypt (bijvoorbeeld *"voeg Jan Jansen toe als full-time picker"*), bevat dat gebruikersbericht de letterlijke naam. Deze gegevensverstrekking wordt geïnitieerd door de verwerkingsverantwoordelijke binnen de uitvoering van zijn taak en is vergelijkbaar met de invoer in een willekeurige andere applicatie. De respons van de tool-functie bevat na de pseudonimisering geen namen meer, zodat de naam in vervolgstappen van dezelfde conversatie niet opnieuw door het taalmodel wordt verwerkt.
 
-**Verifieerbaarheid.** De volledige implementatie is geconcentreerd in twee bestanden en is door uw IT-afdeling controleerbaar tijdens een technische due diligence:
-- `src/lib/ai/anonymizer.ts` — de pseudonimiseringsmodule (~95 regels);
-- `src/app/api/ai/chat/route.ts` — de tool-handlers, met expliciete `// PII redaction`-commentaarregels op de plaatsen waar de anonymizer wordt aangeroepen.
+**Gevolgen onder de AVG.**
 
-### 11.4 Geen training
+- Persoonsgegevens worden vanuit de databaselaag niet in identificerende vorm verzonden naar Anthropic. De doorgifte naar derde land beperkt zich tot pseudoniemen en operationele metadata.
+- Voor door de gebruiker zelf ingevoerde namen geldt dat de doorgifte plaatsvindt op grond van de Standard Contractual Clauses (Module 2) in de Verwerkersovereenkomst met Anthropic en op grond van de instructie van de verwerkingsverantwoordelijke.
+- Voor de bescherming van naam- en contactgegevens uit de databaselaag is een Zero Data Retention-overeenkomst met Anthropic niet noodzakelijk gezien de gehanteerde architectuur. Ascentra kan een dergelijke overeenkomst desgewenst nog als aanvullende beheersmaatregel afsluiten.
 
-In onze contracten met Anthropic én in het standaard Anthropic API-beleid is vastgelegd dat **data die via de API wordt verzonden niet wordt gebruikt voor het trainen van modellen**. Dit is een fundamenteel onderscheid met consumentendiensten als ChatGPT.
+**Verifieerbaarheid.** De implementatie is geconcentreerd in twee bestanden en kan tijdens een technische due-diligence worden gecontroleerd:
 
-### 11.5 Geen geautomatiseerde besluitvorming in de zin van art. 22 AVG
+- `src/lib/ai/anonymizer.ts` — de pseudonimiseringsmodule;
+- `src/app/api/ai/chat/route.ts` — de tool-handlers, met inline-commentaar `// PII redaction` op de plekken waar de module wordt aangeroepen.
 
-Astra's AI-laag adviseert, maar neemt **geen** bindende beslissingen die rechtsgevolgen hebben voor medewerkers. Elke wijziging in diensten, roosters of medewerkergegevens vereist een menselijke bevestiging (planner of tenant_admin). Dit sluit de toepassing van art. 22 AVG (verbod op geautomatiseerde individuele besluitvorming) uit.
+### 11.4 Uitsluiting van modeltraining
+
+Het standaardbeleid van de Anthropic API en het toepasselijke verwerkingscontract bepalen dat data die via de API wordt verzonden niet wordt gebruikt voor het trainen van Anthropic's modellen. Dit onderscheid is fundamenteel ten opzichte van consumentendiensten als ChatGPT en is voor de in dit document beschreven verwerking van toepassing.
+
+### 11.5 Uitsluiting van geautomatiseerde besluitvorming (artikel 22 AVG)
+
+De AI-laag van het Astra-platform adviseert; zij neemt geen bindende beslissingen met rechtsgevolgen of vergelijkbaar aanzienlijke gevolgen voor medewerkers. Iedere wijziging in dienstroosters, planningen of medewerkergegevens vereist een handmatige bevestiging door een gebruiker met de rol `planner` of `tenant_admin`. Artikel 22 AVG inzake geautomatiseerde individuele besluitvorming is dientengevolge op de in dit document beschreven verwerkingen niet van toepassing.
 
 ---
 
@@ -580,90 +576,83 @@ Op dit moment heeft Astra **geen externe penetratietest** laten uitvoeren. Wel i
 
 ---
 
-## 15. Status van de hardening-roadmap (contractueel geborgd)
+## 15. Status van de hardening-roadmap
 
-Dit is de eerlijke kern van dit document. Onze interne beveiligingsreview leverde twaalf hardening-onderdelen op. **Elf van de twaalf zijn op de datum van dit document volledig gerealiseerd, in productie geverifieerd, en op code-niveau controleerbaar tijdens een technische due diligence.** Het twaalfde item — encryptie van integratie-credentials — is bewust voorbehouden aan het moment waarop de eerste externe systeemkoppeling daadwerkelijk wordt geactiveerd, en wordt als blokkerende voorwaarde in het Security Addendum opgenomen.
+De interne beveiligingsreview heeft twaalf hardening-onderdelen geïdentificeerd. Tien daarvan zijn op de datum van dit document operationeel; zij zijn aantoonbaar in de broncode en in de productieomgeving aanwezig en kunnen tijdens een technische due-diligence worden gecontroleerd. Het elfde onderdeel — een externe penetratietest — is contractueel onderhandelbaar en kan op verzoek vóór productie-uitrol worden uitgevoerd. Het twaalfde — encryptie van integratie-credentials — is voorwaardelijk en wordt geactiveerd op het moment dat de eerste externe systeemkoppeling wordt voorbereid; tot dat moment bestaat er geen integratie-rij in de database en daarmee geen feitelijk risico. Alle twaalf onderdelen worden in het Security Addendum als contractuele verplichting opgenomen.
 
-Wij nemen alle twaalf de punten expliciet op in het Security Addendum zodat Protest Sportwear bij eventuele toekomstige afwijking opzeggingsrecht heeft. De status hieronder is dus zowel een transparant overzicht van wat wij hebben gedaan, als een contractueel toetsbare lijst van wat wij beloven te blijven nakomen.
-
-| # | Onderwerp | Status en onderbouwing |
-|---|---|---|
-| 1 | **Geen PII naar Anthropic** | ✅ Gerealiseerd. Alle vier AI-tool-functies (`listEmployees`, `addEmployee`, `bulkAddEmployees`, `crossTrainSuggestion`) zijn bekabeld met een centrale HMAC-SHA-256 pseudonimiseringsmodule (`src/lib/ai/anonymizer.ts`). Claude ziet uitsluitend pseudoniemen als `Medewerker A3F2`. Geverifieerd door 20 deterministische unit tests. Zie §11.3. |
-| 2 | **Kwetsbare `xlsx`-bibliotheek vervangen** | ✅ Gerealiseerd. `xlsx` volledig verwijderd uit `package.json` en vervangen door `exceljs` op alle zes de call sites (xray analyzer, demand upload wizard, drag/drop zone, employees importwizard, unit tests). Elf unit tests geslaagd na migratie. `npm audit` rapporteert nul HIGH vulnerabilities in productiecode. Zie §9. |
-| 3 | **Rate limiting** | ✅ Gerealiseerd. Upstash Ratelimit (Redis-backed sliding window) op alle drie de AI-endpoints, op het contactformulier, en als tRPC-middleware op alle authenticated mutations. Drie buckets met aparte limieten: AI 20/min, mutations 120/min, publiek 5/min — per gebruiker of per IP. Fail-open bij backend-uitval om beschikbaarheid te beschermen. |
-| 4 | **Security headers** | ✅ Gerealiseerd. `next.config.ts` levert Content-Security-Policy, Strict-Transport-Security (2 jaar, `includeSubDomains`), X-Frame-Options: DENY, X-Content-Type-Options: nosniff, Referrer-Policy, Permissions-Policy en Cross-Origin-Opener-Policy op elke route. Aanvullend draait een strict-dynamic CSP met per-request nonces in `Content-Security-Policy-Report-Only` modus, die na een observatieperiode enforced wordt en `'unsafe-inline'` voor scripts volledig elimineert. |
-| 5 | **Dependency CVE-monitoring** | ✅ Gerealiseerd. Bekende fixable kwetsbaarheden (lodash, picomatch, brace-expansion) zijn gepatcht. `npm audit` op productie-dependencies staat op nul HIGH. Een GitHub Actions job blokkeert elke pull request die nieuwe HIGH- of CRITICAL-severity introduceert. De vier resterende moderates betreffen `vitest`/`vite`/`esbuild` en zijn uitsluitend devDependencies zonder productie-impact. |
-| 6 | **Audit-log actor_id bij service-role** | ✅ Gerealiseerd. De triggerfunctie leest `actor_id` uit `request.headers.x-actor-id` met JWT-claim als fallback (migratie 00018). De helper `createAdminClientForUser()` zet deze header automatisch, uitgerold op de AI-chat en vijf tRPC-routers. Het `assign-org` endpoint schrijft expliciet naar `audit_log`. Zie §10.3. |
-| 7 | **Wachtwoordbeleid** | ✅ Gerealiseerd. Supabase Auth Pro: minimaal 12 tekens, verplichte tekenklassen, HaveIBeenPwned leaked-password detectie via k-anonimiteit, secure password change, verplicht huidig wachtwoord bij wijziging. Zie §7.3. |
-| 8 | **Recht op vergetelheid (art. 17 AVG)** | ✅ Gerealiseerd. De `eraseEmployee` tRPC-procedure (migratie 00020) anonimiseert alle direct identificerende PII op een employee-rij terwijl niet-identificerende historische data behouden blijft. Toegankelijk voor `tenant_admin`+ via een knop in het gebruikersinterface, dubbel geaudit via `fn_audit_trigger` én via een expliciete `ERASE`-rij met reden. Zie §12.2. |
-| 9 | **Soft-delete markering op medewerkers** | ✅ Gerealiseerd. Migratie 00020 voegt `deleted_at` + `deleted_by` toe aan `employee` met een CHECK-constraint op consistentie en een partieel index op erased rows. Het bestaande `status = 'terminated'` archiveer-pad blijft intact voor de reguliere uit-dienst flow; `deleted_at` markeert specifiek de AVG-erasure subset. |
-| 10 | **Externe penetratietest** | ⚪ Optioneel — contractueel onderhandelbaar. Wij zijn bereid om vóór productie-uitrol bij Protest Sportwear een externe pentest te laten uitvoeren door een gekwalificeerde partij (Computest, Fox-IT, Zerocopter of vergelijkbaar) en het rapport onder geheimhouding aan u beschikbaar te stellen. De voorwaarden hiervan zijn opgenomen in artikel 4 van het Security Addendum. |
-| 11 | **Contactformulier persistentie** | ✅ Gerealiseerd. Inzendingen worden persistent opgeslagen in een dedicated `contact_submission` tabel met RLS in deny-all stand (alleen de service-role mag schrijven). Zod-validatie wordt server-side afgedwongen. Er worden géén PII-velden meer naar stdout/stderr geschreven — alleen het id van een succesvolle inzending wordt gelogd. Retentie van één jaar is vastgelegd met een `purge_old_contact_submissions()` cleanup functie. Zie migratie 00019. |
-| 12 | **Encryptie van integratie-credentials** | 🟡 Voorwaardelijk — blokkerende voorwaarde voor de eerste externe systeemkoppeling. De kolom `integration_config.connection_params_encrypted` bestaat in het schema maar wordt nog niet beschreven door applicatiecode (er zijn op dit moment nul integratie-rijen, dus geen actueel risico). Vóór de eerste WMS/OMS/HRIS-koppeling bij Protest Sportwear voeren wij de implementatie uit met AES-256-GCM en per-organisatie sleutels via Supabase Vault. Zie §5.4. |
+| # | Onderwerp | Status | Onderbouwing |
+|---|---|---|---|
+| 1 | Pseudonimisering van persoonsgegevens richting Anthropic | **Operationeel** | De vier AI-tool-functies (`listEmployees`, `addEmployee`, `bulkAddEmployees`, `crossTrainSuggestion`) zijn aangesloten op een centrale HMAC-SHA-256 pseudonimiseringsmodule (`src/lib/ai/anonymizer.ts`). Het taalmodel ontvangt uitsluitend pseudoniemen in de vorm `Medewerker A3F2`. Geverifieerd door twintig deterministische unit-tests. Zie sectie 11.3. |
+| 2 | Vervanging van de `xlsx`-bibliotheek | **Operationeel** | De bibliotheek `xlsx` is volledig verwijderd uit `package.json` en op alle zes call sites (xray-analyzer, demand-upload-wizard, drag-and-drop zone, employees-importwizard, unit-tests) vervangen door `exceljs`. De elf unit-tests slagen na migratie. `npm audit` rapporteert nul HIGH-severity kwetsbaarheden in productiecode. Zie sectie 9. |
+| 3 | Rate limiting | **Operationeel** | Upstash Ratelimit, met sliding-window in Redis, is actief op alle drie de AI-endpoints, op het contactformulier en als tRPC-middleware op alle authenticated mutaties. Drie afzonderlijke buckets: AI twintig verzoeken per minuut, mutaties honderdtwintig per minuut, publiek vijf per minuut, telkens per gebruiker of per IP. Bij backend-uitval geldt een fail-open beleid ten gunste van beschikbaarheid. |
+| 4 | Beveiligingsheaders | **Operationeel** | `next.config.ts` levert Content-Security-Policy, Strict-Transport-Security (twee jaar, `includeSubDomains`), X-Frame-Options: `DENY`, X-Content-Type-Options: `nosniff`, Referrer-Policy, Permissions-Policy en Cross-Origin-Opener-Policy op elke route. Aanvullend wordt een strict-dynamic Content-Security-Policy met per-verzoek nonces in `Content-Security-Policy-Report-Only` modus uitgerold; deze wordt na een observatieperiode enforced en elimineert `'unsafe-inline'` voor scripts volledig. |
+| 5 | Geautomatiseerde monitoring van afhankelijkheidskwetsbaarheden | **Operationeel** | Bekende verhelpbare kwetsbaarheden in `lodash`, `picomatch` en `brace-expansion` zijn gepatcht. `npm audit` op productie-dependencies staat op nul HIGH. Een GitHub Actions job blokkeert elke pull request die een nieuwe HIGH- of CRITICAL-severity introduceert. De vier resterende moderate-severity meldingen betreffen `vitest`, `vite` en `esbuild` en zijn uitsluitend `devDependencies` zonder enige productie-impact. |
+| 6 | Attributie van service-role mutaties in de audit-log | **Operationeel** | De triggerfunctie leest `actor_id` uit `request.headers.x-actor-id`, met de JWT-claim als fallback (migratie 00018). De helper `createAdminClientForUser()` zet deze header automatisch en is uitgerold over de AI-chat en vijf tRPC-routers. Het `assign-org`-endpoint schrijft expliciet naar `audit_log`. Zie sectie 10.3. |
+| 7 | Wachtwoordbeleid | **Operationeel** | Supabase Auth (Pro): minimaal twaalf tekens, verplichte tekenklassen, geautomatiseerde detectie van gelekte wachtwoorden via HaveIBeenPwned, secure password change, en verplicht huidig wachtwoord bij wijziging. Zie sectie 7.3. |
+| 8 | Recht op vergetelheid (art. 17 AVG) | **Operationeel** | De `eraseEmployee` tRPC-procedure (migratie 00020) anonimiseert alle direct identificerende velden op een medewerker-rij terwijl de niet-identificerende historische gegevens behouden blijven. De procedure is via een functie in de gebruikersinterface beschikbaar voor `tenant_admin` en hoger, en wordt dubbel geaudit: via `fn_audit_trigger` en via een expliciete `ERASE`-rij met reden. Zie sectie 12.2. |
+| 9 | Soft-delete markering op medewerkers | **Operationeel** | Migratie 00020 voegt de kolommen `deleted_at` en `deleted_by` toe aan de tabel `employee`, voorzien van een CHECK-constraint op consistentie en een partieel index over erased rijen. Het bestaande `status = 'terminated'`-pad voor reguliere uit-dienst situaties blijft intact; `deleted_at` markeert specifiek de AVG-erasure subset. |
+| 10 | Externe penetratietest | **Optioneel** | Op verzoek van Protest Sportwear laat Ascentra vóór de productie-uitrol een externe penetratietest uitvoeren door een gekwalificeerde partij (Computest, Fox-IT, Zerocopter of vergelijkbaar). Het rapport wordt onder geheimhouding aan Protest Sportwear ter beschikking gesteld. De voorwaarden zijn opgenomen in artikel 4 van het Security Addendum. |
+| 11 | Persistentie van contactformulier-inzendingen | **Operationeel** | Inzendingen worden vastgelegd in een dedicated tabel `contact_submission` met Row-Level Security in deny-all-stand; uitsluitend de service-role schrijft. Zod-validatie wordt server-side afgedwongen. Persoonsgegevens worden niet meer naar `stdout` of `stderr` geschreven; uitsluitend het identificerende rij-id van een succesvolle inzending wordt gelogd. De retentietermijn van één jaar is gecodificeerd in de functie `purge_old_contact_submissions()`. Zie migratie 00019. |
+| 12 | Encryptie van integratie-credentials | **Voorwaardelijk** | De kolom `integration_config.connection_params_encrypted` is in het schema aanwezig, maar wordt op de datum van dit document nog niet beschreven door applicatiecode. Het aantal integratie-rijen is nul; er bestaat geen feitelijk risico. Voorafgaand aan de eerste WMS-, OMS- of HRIS-koppeling bij Protest Sportwear wordt de implementatie uitgevoerd met AES-256-GCM en met per-organisatie sleutels via Supabase Vault. Tot dat moment is geen externe systeemkoppeling toegestaan. Zie sectie 5.4. |
 
 ---
 
-## 16. Claims die wij expliciet **niet** maken
+## 16. Beperkingen van de scope
 
-Omwille van volledige transparantie benoemen wij de claims die Astra **niet** kan en wil maken:
+Ten behoeve van een nauwkeurige weergave van de feitelijke situatie benoemt Ascentra hieronder de aspecten die buiten de scope van dit document en buiten de huidige werking van Ascentra vallen:
 
-- Astra beschikt op dit moment **niet** over een ISO 27001, ISO 27701, SOC 2 of NEN 7510 certificering op bedrijfsniveau. Wij leunen voor infrastructuur-certificeringen op de certificeringen van Supabase en Vercel.
-- Astra is **geen** geaccrediteerde verwerker voor bijzondere persoonsgegevens in de zin van art. 9 AVG, en het platform is niet ontworpen voor de verwerking van gezondheidsgegevens, etnische afkomst, politieke overtuigingen, of andere bijzondere categorieën.
-- Astra heeft **geen** Data Protection Officer in formele AVG-zin (hetgeen voor een verwerker van onze omvang en activiteit ook niet wettelijk verplicht is).
-- Wij beschikken **niet** over een Zero Data Retention-overeenkomst met Anthropic op dit moment. Wij achten dit ook niet noodzakelijk gegeven de in §11.3 beschreven pseudonimiseringsarchitectuur, maar benoemen het hier omwille van transparantie.
-- Wij hanteren **geen** klant-specifieke encryptiesleutels (customer-managed keys, "bring your own key"). Versleuteling in rust gebruikt platform-beheerde sleutels bij Supabase.
+- Ascentra beschikt op de datum van dit document niet over een eigen ISO 27001, ISO 27701, SOC 2 of NEN 7510 certificering op bedrijfsniveau. Voor de onderliggende infrastructuurcertificering wordt verwezen naar de certificeringen van Supabase en Vercel.
+- Ascentra is geen geaccrediteerde verwerker voor bijzondere persoonsgegevens in de zin van artikel 9 AVG. Het Astra-platform is niet ontworpen voor de verwerking van gezondheidsgegevens, etnische afkomst, politieke overtuigingen of andere bijzondere categorieën als zelfstandig doeleinde.
+- Ascentra heeft geen formeel aangestelde Functionaris Gegevensbescherming in de zin van artikel 37 AVG. Voor een verwerker van de huidige omvang en activiteit is een dergelijke aanstelling niet wettelijk vereist.
+- Ascentra heeft op de datum van dit document geen Zero Data Retention-overeenkomst met Anthropic. Gegeven de in sectie 11.3 beschreven pseudonimiseringsarchitectuur, waarin direct identificerende persoonsgegevens niet aan Anthropic worden verstrekt, is een dergelijke overeenkomst voor de huidige verwerking niet noodzakelijk.
+- Ascentra hanteert geen klantspecifieke encryptiesleutels (customer-managed keys / bring-your-own-key). Versleuteling in rust gebruikt platform-beheerde sleutels via Supabase.
 
-Wij beschouwen deze open en eerlijke benoeming van wat **niet** aanwezig is als een wezenlijk onderdeel van een integer security-document, en vertrouwen erop dat Protest Sportwear dit als zodanig waardeert.
-
----
-
-## 17. Contractuele Borging
-
-De in dit document beschreven maatregelen en beloftes worden juridisch geborgd in:
-
-1. **Hoofdovereenkomst** — tussen Astra en Protest Sportwear, met daarin serviceniveau, prijs, looptijd en verantwoordelijkheden.
-2. **Verwerkersovereenkomst (art. 28 AVG)** — waarin de verwerkerrelatie, de instructiebevoegdheid, de geheimhouding, de subverwerkerslijst, de beveiligingsmaatregelen, de bijstand bij betrokkenenrechten, de meldplicht, de audit-rechten van Protest Sportwear, en de retourneer- of verwijderingsplicht na einde contract worden geregeld.
-3. **Security Addendum** — waarin de in §15 opgenomen hardening-roadmap als harde verplichting wordt vastgelegd, met een duidelijke deadline en het recht voor Protest Sportwear om bij gebreke van tijdige naleving de overeenkomst kosteloos op te zeggen.
-4. **Standard Contractual Clauses** — waar nodig, voor doorgifte aan Anthropic in de VS.
+Deze posten zijn opgenomen ten behoeve van een nauwkeurige scope-afbakening en kunnen op verzoek nader worden besproken.
 
 ---
 
-## 18. Bijlagen en Vervolgstappen
+## 17. Contractuele borging
 
-Astra stelt op verzoek beschikbaar:
+De in dit document beschreven maatregelen worden juridisch vastgelegd in de volgende set documenten, die tezamen het contractuele kader tussen Ascentra B.V. en Protest Sportwear B.V. vormen:
+
+1. **Hoofdovereenkomst.** Bevat serviceniveau, vergoeding, looptijd en de wederzijdse verantwoordelijkheden voor de levering van het Astra-platform.
+2. **Verwerkersovereenkomst (artikel 28 AVG).** Regelt de verwerker-verwerkingsverantwoordelijke verhouding, de instructiebevoegdheid, de geheimhoudingsplicht, de subverwerkerslijst, de beveiligingsmaatregelen, de bijstand aan de verwerkingsverantwoordelijke bij betrokkenenrechten, de meldplicht bij datalekken, de audit-rechten van Protest Sportwear en de retourneer- en verwijderingsplicht bij contractbeëindiging.
+3. **Security Addendum.** Codificeert de in sectie 15 opgenomen hardening-roadmap als contractuele verplichting, met een opschortings- en opzeggingsrecht voor Protest Sportwear bij structurele niet-naleving.
+4. **Standard Contractual Clauses.** Voor zover van toepassing op doorgifte aan Anthropic PBC in de Verenigde Staten, in lijn met de in sectie 11.3 beschreven pseudonimisering en de daaraan ten grondslag liggende dataminimalisatie.
+
+---
+
+## 18. Bijlagen en vervolgproces
+
+Op verzoek stelt Ascentra de volgende aanvullende documenten beschikbaar:
 
 - Concept Verwerkersovereenkomst;
 - Concept Security Addendum;
-- Subverwerkers-overzicht met links naar DPA's van Supabase, Vercel en Anthropic;
-- Technisch-architectonisch overzicht (componenten- en datastromendiagram);
-- Voorbeeldexport Data Subject Access Request.
+- Overzicht van subverwerkers, met de bijbehorende verwerkersovereenkomsten van Supabase, Vercel en Anthropic;
+- Technisch-architectonisch overzicht, omvattende componenten- en datastroomdiagrammen;
+- Voorbeeldexport van een Data Subject Access Request.
 
 ### 18.1 Voorgesteld vervolgproces
 
-1. **Technische due diligence call** — Astra presenteert de codebase en beantwoordt alle vragen van de IT-afdeling van Protest Sportwear.
-2. **Review Verwerkersovereenkomst** — juridische review door Protest Sportwear.
-3. **Afsluiten van Security Addendum** — contractuele vastlegging van de hardening-roadmap uit §15.
-4. **Pilot met gecontroleerde scope** — eerste uitrol op één site, met testdata of beperkte productiedata.
-5. **Externe pentest** (indien gewenst door Protest Sportwear).
-6. **Full go-live** — uitrol over alle sites, met contractuele opleverpunten uit §15 aantoonbaar voltooid.
+1. **Technische due-diligence sessie.** Ascentra presenteert de relevante delen van de codebase en de productieconfiguratie aan de technische vertegenwoordiging van Protest Sportwear.
+2. **Juridische review.** Protest Sportwear laat de Verwerkersovereenkomst en het Security Addendum reviewen door eigen of externe juridische adviseurs.
+3. **Ondertekening Security Addendum.** Contractuele vastlegging van de in sectie 15 opgenomen hardening-roadmap.
+4. **Gecontroleerde pilot.** Eerste uitrol op één site, met test- of beperkte productiedata.
+5. **Externe penetratietest** (optioneel, op verzoek van Protest Sportwear).
+6. **Productie-uitrol.** Uitrol op alle sites, met de in sectie 15 opgenomen verplichtingen aantoonbaar nageleefd.
 
 ---
 
-## 19. Afsluiting
+## 19. Slotverklaring
 
-Geachte heer Werkman,
+Dit document beschrijft de stand van de informatiebeveiliging en de naleving van de Algemene Verordening Gegevensbescherming van het Astra-platform op 9 april 2026. De inhoud is opgesteld door Ascentra B.V. en is in zijn geheel verifieerbaar tijdens een technische en juridische due-diligence. Materiële wijzigingen in de architectuur, in de subverwerkerslijst of in het wettelijk kader leiden tot herziening van dit document en hernieuwde verstrekking aan Protest Sportwear B.V.
 
-Wij danken u voor de zorgvuldigheid waarmee u de beveiliging en privacy-aspecten van uw leveranciers toetst. Het is voor ons een motiverend uitgangspunt dat een klant zoals Protest Sportwear dit type dialoog actief opzoekt voordat een contract wordt getekend.
+Voor aanvullende informatie, een technische toelichting of het vaststellen van een vervolgafspraak is de in sectie 3.2 genoemde contactweg beschikbaar.
 
-Wij hebben ernaar gestreefd in dit document de situatie *zoals zij werkelijk is* te beschrijven, inclusief onze sterke punten, onze nog op te leveren punten, en onze grenzen. Wij doen dat liever dan met marketing-taal een rooskleuriger beeld te schetsen dan strikt houdbaar zou zijn. Wij menen dat een langdurige samenwerking gebaat is bij dit uitgangspunt van integriteit boven indruk.
-
-Wij staan ter beschikking voor aanvullende vragen, een technische toelichting met uw IT-team, of een persoonlijk gesprek waarin de in §15 geschetste roadmap concreet wordt ingepland.
-
-Met vriendelijke groet,
+Aldus opgesteld te Assen op 9 april 2026.
 
 **Alex Sinigaglia**
 Oprichter, Ascentra B.V.
-Leverancier van het Astra-platform
 
 _Handtekening:_ ____________________________
 
@@ -671,6 +660,4 @@ _Handtekening:_ ____________________________
 
 ### Colofon
 
-Dit document is opgesteld op basis van een code-niveau beveiligingsreview van de Astra codebase, uitgevoerd op 8 april 2026. Alle technische uitspraken zijn verifieerbaar aan de hand van specifieke bestanden en regels in de broncode en zijn op verzoek tijdens een due-diligence sessie te controleren. Bij materiële wijzigingen in de architectuur of de subverwerkerslijst wordt dit document herzien en opnieuw aan Protest Sportwear verstrekt.
-
-**Einde document.**
+Opsteller: Ascentra B.V., Oranjestraat 11, 9401 KE Assen, KvK 98227548. Document versie 1.1. Brondatum: 9 april 2026. Het document is opgesteld op basis van een code-niveau beveiligingsreview van de Astra-codebase, aangevuld met een handmatige controle van databaseschema's, authenticatie-implementatie en datastromen naar externe dienstverleners. Iedere technische uitspraak is herleidbaar tot specifieke bestanden en regels in de broncode en kan tijdens due-diligence worden gecontroleerd.
