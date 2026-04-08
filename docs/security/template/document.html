@@ -64,12 +64,9 @@
   </main>
 
   <!-- Floating action bar — alleen op scherm; verborgen tijdens print. -->
-  <div class="doc-action-bar" data-doc-key="{{DOC_KEY}}">
-    <button type="button" class="doc-action-button primary" data-action="print" title="Open de printdialoog en sla op als PDF">
+  <div class="doc-action-bar" data-doc-key="{{DOC_KEY}}" data-doc-filename="{{DOC_KEY}}">
+    <button type="button" class="doc-action-button primary" data-action="download" title="Download dit document als PDF-bestand">
       Download PDF
-    </button>
-    <button type="button" class="doc-action-button" data-action="export" title="Download de ingevulde waardes als JSON-back-up">
-      Export
     </button>
     <button type="button" class="doc-action-button danger" data-action="reset" title="Wis alle ingevulde waardes en handtekeningen">
       Wissen
@@ -78,6 +75,8 @@
 
   <!-- signature_pad library — inline ingebed zodat het document ook offline werkt. -->
   <script>{{SIGNATURE_PAD_LIB}}</script>
+  <!-- html2pdf bundel (html2canvas + jsPDF + html2pdf) — eveneens inline. -->
+  <script>{{HTML2PDF_LIB}}</script>
 
   <!-- Document runtime: localStorage persistence + signature pad init + print-prep. -->
   <script>
@@ -553,6 +552,79 @@
     window.addEventListener('beforeprint', preparePrint)
     window.addEventListener('afterprint', cleanupPrint)
 
+    /* ── PDF generator ────────────────────────────────────────────────── */
+    /* The Download PDF button uses html2pdf.js (html2canvas + jsPDF) to
+       capture the rendered .page element and serialise it directly to a
+       downloaded .pdf file. This bypasses the browser print dialog
+       entirely — the recipient gets the file immediately with no
+       interaction. The action bar is hidden during capture so the
+       generated PDF is identical to what they see on screen, minus the
+       floating chrome. */
+
+    function downloadAsPdf(button) {
+      if (typeof html2pdf !== 'function' && typeof window.html2pdf !== 'function') {
+        window.alert('PDF-bibliotheek is niet geladen. Probeer de pagina opnieuw te laden.')
+        return
+      }
+
+      var originalLabel = button.textContent
+      button.disabled = true
+      button.textContent = 'Bezig met genereren…'
+
+      // Convert text inputs to spans so the typed values render as plain
+      // ink in the captured PDF. (Inputs are visible to html2canvas but
+      // their chrome and the cursor blink can leak into the output.)
+      preparePrint()
+
+      // Hide the floating action bar so it does not appear in the PDF.
+      var bar = document.querySelector('.doc-action-bar')
+      if (bar) bar.style.visibility = 'hidden'
+
+      var pageEl = document.querySelector('.page')
+      var filename = (actionBar.getAttribute('data-doc-filename') || 'document') + '.pdf'
+
+      var opts = {
+        margin: [12, 10, 14, 10],
+        filename: filename,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: {
+          scale: 2,
+          useCORS: true,
+          letterRendering: true,
+          backgroundColor: '#FFFFFF',
+          windowWidth: pageEl.scrollWidth,
+        },
+        jsPDF: {
+          unit: 'mm',
+          format: 'a4',
+          orientation: 'portrait',
+          compress: true,
+        },
+        pagebreak: { mode: ['css', 'legacy'] },
+      }
+
+      var generator = (typeof html2pdf === 'function' ? html2pdf : window.html2pdf)
+
+      generator()
+        .set(opts)
+        .from(pageEl)
+        .save()
+        .then(function () {
+          cleanupPrint()
+          if (bar) bar.style.visibility = ''
+          button.disabled = false
+          button.textContent = originalLabel
+        })
+        .catch(function (err) {
+          cleanupPrint()
+          if (bar) bar.style.visibility = ''
+          button.disabled = false
+          button.textContent = originalLabel
+          console.error('[ascentra] PDF generation failed:', err)
+          window.alert('Het genereren van de PDF is niet gelukt. Probeer het opnieuw of meld dit bij privacy@ascentra.nl.')
+        })
+    }
+
     /* ── Action bar buttons ───────────────────────────────────────────── */
 
     if (actionBar) {
@@ -561,27 +633,8 @@
         if (!btn) return
         var action = btn.getAttribute('data-action')
 
-        if (action === 'print') {
-          // Some browsers don't fire beforeprint, so we call preparePrint
-          // explicitly and schedule cleanup after a short delay.
-          preparePrint()
-          setTimeout(function () {
-            window.print()
-            setTimeout(cleanupPrint, 500)
-          }, 50)
-        }
-
-        if (action === 'export') {
-          var data = loadStore()
-          var blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
-          var url = URL.createObjectURL(blob)
-          var a = document.createElement('a')
-          a.href = url
-          a.download = (actionBar.getAttribute('data-doc-key') || 'document') + '-ingevuld.json'
-          document.body.appendChild(a)
-          a.click()
-          document.body.removeChild(a)
-          URL.revokeObjectURL(url)
+        if (action === 'download') {
+          downloadAsPdf(btn)
         }
 
         if (action === 'reset') {

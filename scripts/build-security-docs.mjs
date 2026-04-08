@@ -204,6 +204,22 @@ function buildAll() {
     ? readFileSync(signaturePadPath, 'utf8')
     : '/* signature_pad not installed */'
 
+  // Inline html2pdf.js (bundles html2canvas + jsPDF). At ~924 KB
+  // minified this is the heavy part of the document, but it lets the
+  // Download PDF button generate a real PDF file directly without
+  // ever opening the browser print dialog. The cost is acceptable for
+  // a one-off contract document delivered by email.
+  const html2pdfPath = path.join(
+    ROOT,
+    'node_modules',
+    'html2pdf.js',
+    'dist',
+    'html2pdf.bundle.min.js',
+  )
+  const html2pdfSource = existsSync(html2pdfPath)
+    ? readFileSync(html2pdfPath, 'utf8')
+    : '/* html2pdf.js not installed */'
+
   const sourceFiles = readdirSync(SRC_DIR)
     .filter((f) => f.endsWith('.md'))
     .filter((f) => !f.startsWith('.'))
@@ -242,6 +258,7 @@ function buildAll() {
       CLASSIFICATION: escapeHtml(meta.classification),
       DOC_KEY: escapeAttr(baseName),
       SIGNATURE_PAD_LIB: signaturePadSource,
+      HTML2PDF_LIB: html2pdfSource,
       CONTENT: html,
     })
 
