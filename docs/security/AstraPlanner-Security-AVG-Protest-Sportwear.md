@@ -310,6 +310,16 @@ Het wachtwoordbeleid is ingesteld in de productie-omgeving van Supabase Auth (ti
 
 **Secure email change.** Wijzigingen van het e-mailadres van een gebruiker worden geverifieerd op zowel het oude als het nieuwe adres, waarmee een aanvaller die tijdelijk toegang heeft tot één van beide mailboxen geen onomkeerbare account-takeover kan uitvoeren.
 
+### 7.3.1 Overgangsregeling voor bestaande wachtwoorden
+
+De hierboven beschreven regels voor minimum-lengte, verplichte tekenklassen en controle tegen HaveIBeenPwned worden door Supabase Auth afgedwongen op het moment dat een wachtwoord wordt **gezet of gewijzigd**. Bestaande wachtwoorden die vóór de aanscherping van het beleid zijn aangemaakt (en die mogelijk korter of eenvoudiger waren) blijven tot hun eerstvolgende wijziging geldig. Dit is standaardgedrag van Supabase Auth en van vrijwel alle authenticatieplatforms: het tegenovergestelde zou neerkomen op een collectieve account-lockout, wat vanuit een AVG-perspectief (beschikbaarheid, art. 32) ongewenst is.
+
+**Hoe AstraPlanner hiermee omgaat richting Protest Sportwear:**
+
+1. **Bij go-live** sturen wij aan alle Protest Sportwear-gebruikers een verplichte "first login password reset" per e-mail. Tijdens deze reset wordt het nieuwe, strengere wachtwoordbeleid volledig afgedwongen. Na voltooiing hiervan voldoet het volledige gebruikersbestand aan de regels in §7.3.
+2. **Voor de interne AstraPlanner-accounts** die reeds vóór deze aanscherping bestonden wordt dezelfde reset-cyclus uitgevoerd als onderdeel van de pre-go-live checklist.
+3. **Periodieke heraanscherping.** Als in de toekomst het beleid verder wordt aangescherpt (bijvoorbeeld naar 14 tekens, of met een verplichte passphrase-structuur) voeren wij dezelfde verplichte-reset procedure uit.
+
 ### 7.4 Sessiebeveiliging — concreet
 
 - **HttpOnly-cookies:** JavaScript in de browser kan de sessie-token niet benaderen, waarmee XSS-aanvallen de sessie niet kunnen stelen.
