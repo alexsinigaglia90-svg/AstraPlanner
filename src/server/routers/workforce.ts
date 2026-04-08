@@ -249,19 +249,31 @@ export const workforceRouter = router({
         }
       }
 
-      const row = {
-        ...input,
-        organization_id: ctx.organizationId,
-        hire_date: input.id ? undefined : new Date().toISOString().split('T')[0],
-      }
-      // Remove undefined keys
-      const cleanRow = Object.fromEntries(Object.entries(row).filter(([, v]) => v !== undefined))
+      // Split into explicit insert/update paths. We intentionally do NOT use
+      // .upsert() here: Supabase-js v2 defaults to `defaultToNull: true`,
+      // which causes unspecified columns to be set to NULL on the conflict-
+      // update path. That violated the NOT NULL constraint on hire_date
+      // whenever a manager edited an existing employee without touching
+      // hire_date, because hire_date is never part of the upsert payload.
+      const { id: maybeId, ...fields } = input
+      const baseRow = { ...fields, organization_id: ctx.organizationId }
+      const cleanRow = Object.fromEntries(
+        Object.entries(baseRow).filter(([, v]) => v !== undefined),
+      )
 
-      const { data, error } = await admin
-        .from('employee')
-        .upsert(cleanRow)
-        .select('id, employee_number, first_name, last_name, status, created_at, updated_at')
-        .single()
+      const { data, error } = maybeId
+        ? await admin
+            .from('employee')
+            .update(cleanRow)
+            .eq('id', maybeId)
+            .eq('organization_id', ctx.organizationId)
+            .select('id, employee_number, first_name, last_name, status, created_at, updated_at')
+            .single()
+        : await admin
+            .from('employee')
+            .insert({ ...cleanRow, hire_date: new Date().toISOString().split('T')[0] })
+            .select('id, employee_number, first_name, last_name, status, created_at, updated_at')
+            .single()
 
       assertNoError(error, 'upsertEmployee')
 
