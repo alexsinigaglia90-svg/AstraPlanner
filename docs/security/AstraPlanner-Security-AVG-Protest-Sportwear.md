@@ -163,11 +163,12 @@ De betrokkenen wiens gegevens in AstraPlanner worden verwerkt zijn:
 
 AstraPlanner draait **volledig in de Europese Unie**. Onze infrastructuur bestaat uit twee gescheiden lagen:
 
-**Database-laag — Supabase (PostgreSQL 15+)**
+**Database-laag — Supabase (PostgreSQL 15+, tier: Pro)**
 - Fysieke locatie: Frankfurt, Duitsland (`eu-central-1`) of Amsterdam, Nederland (`eu-west-1`) — afhankelijk van het voor Protest Sportwear in te richten project.
 - Onderliggende infrastructuur: AWS EU-regio (Supabase is een managed PostgreSQL-laag bovenop AWS).
+- Abonnementsniveau: **Supabase Pro**, zodat HaveIBeenPwned-integratie voor leaked-password detectie, 7 dagen Point-in-Time Recovery, en prioritaire ondersteuning bij incidenten beschikbaar zijn.
 - Versleuteling at rest: AES-256 met door Supabase beheerde sleutels.
-- Back-ups: dagelijkse back-ups met Point-in-Time Recovery tot op transactieniveau over de laatste 7 dagen (uitbreidbaar).
+- Back-ups: dagelijkse back-ups met Point-in-Time Recovery tot op transactieniveau over de laatste 7 dagen (uit te breiden via Supabase PITR add-on op verzoek).
 - Netwerkisolatie: de database is niet direct benaderbaar vanaf het publieke internet voor applicaties; verbindingen lopen via Supabase's gecontroleerde API-laag, behalve vanaf expliciet toegelaten beheer-IP-adressen.
 
 **Applicatie-laag — Vercel (Next.js 16 op Node.js 20+)**
@@ -295,10 +296,19 @@ Bij elke API-aanroep voert AstraPlanner een server-side validatie uit door Supab
 
 ### 7.3 Wachtwoordbeleid
 
-- **Minimaal 12 tekens**, met verplichte mix van hoofdletters, kleine letters, cijfers en een speciaal teken (door te voeren vóór go-live via Supabase Dashboard → Authentication → Policies).
-- **HaveIBeenPwned-integratie actief**: wachtwoorden die voorkomen in bekende datalekken worden door Supabase Auth automatisch geweigerd, gebruikmakend van de k-anonimiteit API van HaveIBeenPwned (zie [haveibeenpwned.com/API/v3#PwnedPasswords](https://haveibeenpwned.com/API/v3#PwnedPasswords) — er wordt alleen een prefix van de SHA-1 hash verstuurd, nooit het wachtwoord zelf).
-- Hash-algoritme: bcrypt met salt (Supabase-standaard, vanaf Supabase-zijde niet te wijzigen door AstraPlanner).
-- Multi-factor authenticatie: beschikbaar via Supabase Auth op verzoek te activeren per gebruiker — wij adviseren Protest Sportwear om MFA verplicht te stellen voor alle rollen van `planner` en hoger.
+Het wachtwoordbeleid is ingesteld in de productie-omgeving van Supabase Auth (tier: **Pro**) en omvat vijf onafhankelijke beschermingsmaatregelen:
+
+- **Minimaal 12 tekens.** Kortere wachtwoorden worden bij registratie of wachtwoordwijziging geweigerd.
+- **Verplichte tekenklassen.** Elk wachtwoord moet minstens één kleine letter, één hoofdletter, één cijfer en één speciaal teken bevatten. Wachtwoorden die niet aan deze eis voldoen worden geweigerd.
+- **Automatische detectie van gelekte wachtwoorden via HaveIBeenPwned.** Bij elke registratie en wachtwoordwijziging controleert Supabase Auth het opgegeven wachtwoord tegen de Pwned Passwords database van HaveIBeenPwned. Deze controle gebruikt het **k-anonimiteit-protocol**: alleen de eerste vijf tekens van de SHA-1 hash van het wachtwoord worden aan HaveIBeenPwned verstuurd, nooit het wachtwoord zelf en nooit de volledige hash (zie [haveibeenpwned.com/API/v3#PwnedPasswords](https://haveibeenpwned.com/API/v3#PwnedPasswords)). Wachtwoorden die bekend zijn uit publieke datalekken worden geweigerd.
+- **Secure password change.** Een gebruiker moet recent (binnen 24 uur) zijn ingelogd om zijn eigen wachtwoord te mogen wijzigen. Dit voorkomt dat een aanvaller die een slapende sessie bemachtigt het wachtwoord kan wijzigen en de rechtmatige gebruiker buitensluit.
+- **Verplichte opgave van het huidige wachtwoord bij wijziging.** Ook binnen een geldige sessie moet de gebruiker zijn huidige wachtwoord invoeren om een nieuw wachtwoord in te stellen.
+
+**Hash-algoritme.** Wachtwoorden worden door Supabase Auth opgeslagen als bcrypt-hash met salt. AstraPlanner heeft geen toegang tot het leesbare wachtwoord op enig moment, zelfs niet tijdens het inlogproces.
+
+**Multi-factor authenticatie.** Beschikbaar via Supabase Auth en op verzoek per gebruiker te activeren. Wij adviseren Protest Sportwear om MFA verplicht te stellen voor alle rollen vanaf `planner` (rang 50) en hoger.
+
+**Secure email change.** Wijzigingen van het e-mailadres van een gebruiker worden geverifieerd op zowel het oude als het nieuwe adres, waarmee een aanvaller die tijdelijk toegang heeft tot één van beide mailboxen geen onomkeerbare account-takeover kan uitvoeren.
 
 ### 7.4 Sessiebeveiliging — concreet
 
@@ -526,7 +536,7 @@ Dit is de eerlijke kern van dit document. De interne beveiligingsreview heeft ee
 | 4 | **Security headers** | ✅ **Gerealiseerd** — `next.config.ts` levert nu Content-Security-Policy, Strict-Transport-Security (2 jaar, includeSubDomains), X-Frame-Options: DENY, X-Content-Type-Options: nosniff, Referrer-Policy: strict-origin-when-cross-origin, Permissions-Policy, en Cross-Origin-Opener-Policy op elke route | — | ✅ Gereed |
 | 5 | **Fixable dependency-CVE's** | ✅ **Gerealiseerd** — `npm audit fix` uitgevoerd; lodash, picomatch en brace-expansion gepatcht. Van 8 → 5 vulnerabilities, van 3 → 1 high (de resterende high is `xlsx`, zie item #2). De 4 resterende moderates betreffen `vitest`/`vite`/`esbuild` en zijn uitsluitend devDependencies zonder productie-impact | — | ✅ Gereed |
 | 6 | **Audit-log actor_id bij admin-client** | Kan `NULL` zijn voor service-role mutaties | Expliciet doorgeven van actor bij elke admin-client call; logging van `assign-org` endpoint naar `audit_log` | Ja |
-| 7 | **Wachtwoordbeleid** | Minimum 6 tekens; door te voeren via Supabase Dashboard (Authentication → Policies): minimum 12 tekens, verplichte tekencategorieën, HaveIBeenPwned-check | Configuratiewijziging in Supabase door AstraPlanner-beheerder | In uitvoering |
+| 7 | **Wachtwoordbeleid** | ✅ **Gerealiseerd** — Supabase Auth upgrade naar Pro uitgevoerd; alle vijf de beschermingsmaatregelen actief (min 12 tekens, verplichte tekenklassen, HaveIBeenPwned leaked-password detectie via k-anonimiteit, secure password change, verplicht huidig wachtwoord bij wijziging). Zie §7.3 | — | ✅ Gereed |
 | 8 | **Recht op vergetelheid** | Alleen cascade delete | Expliciete anonimiseringsroutine die PII nullt | Ja |
 | 9 | **Soft-delete op medewerkers** | Niet geïmplementeerd | Toevoegen `deleted_at` kolom + filter in alle queries | Ja |
 | 10 | **Externe pentest** | Niet uitgevoerd | Externe pentest door gekwalificeerde partij vóór productie-uitrol | Optioneel, contractueel onderhandelbaar |
