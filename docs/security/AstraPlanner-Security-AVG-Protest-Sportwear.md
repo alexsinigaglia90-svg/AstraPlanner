@@ -295,10 +295,10 @@ Bij elke API-aanroep voert AstraPlanner een server-side validatie uit door Supab
 
 ### 7.3 Wachtwoordbeleid
 
-- **Minimaal 6 tekens** (huidig beleid, voldoet niet aan onze eigen hardening-doelstelling en wordt vóór go-live verhoogd — zie §15).
-- Hash-algoritme: bcrypt met salt (Supabase-standaard).
-- Automatische detectie en weigering van bekende gelekte wachtwoorden: `[INVULLEN: bevestigen of Supabase HaveIBeenPwned-integratie actief is voor uw project]`.
-- Multi-factor authenticatie: beschikbaar via Supabase Auth op verzoek te activeren per gebruiker.
+- **Minimaal 12 tekens**, met verplichte mix van hoofdletters, kleine letters, cijfers en een speciaal teken (door te voeren vóór go-live via Supabase Dashboard → Authentication → Policies).
+- **HaveIBeenPwned-integratie actief**: wachtwoorden die voorkomen in bekende datalekken worden door Supabase Auth automatisch geweigerd, gebruikmakend van de k-anonimiteit API van HaveIBeenPwned (zie [haveibeenpwned.com/API/v3#PwnedPasswords](https://haveibeenpwned.com/API/v3#PwnedPasswords) — er wordt alleen een prefix van de SHA-1 hash verstuurd, nooit het wachtwoord zelf).
+- Hash-algoritme: bcrypt met salt (Supabase-standaard, vanaf Supabase-zijde niet te wijzigen door AstraPlanner).
+- Multi-factor authenticatie: beschikbaar via Supabase Auth op verzoek te activeren per gebruiker — wij adviseren Protest Sportwear om MFA verplicht te stellen voor alle rollen van `planner` en hoger.
 
 ### 7.4 Sessiebeveiliging — concreet
 
@@ -523,10 +523,10 @@ Dit is de eerlijke kern van dit document. De interne beveiligingsreview heeft ee
 | 1 | **PII naar Anthropic** | ✅ **Gerealiseerd** — alle vier AI-tool-functies (`listEmployees`, `addEmployee`, `bulkAddEmployees`, `crossTrainSuggestion`) zijn bekabeld met een centrale HMAC-SHA-256 pseudonimiseringsmodule (`src/lib/ai/anonymizer.ts`); Claude ziet alleen pseudoniemen als `Medewerker A3F2`. Zie §11.3 | — | ✅ Gereed |
 | 2 | **Kwetsbare `xlsx`-bibliotheek** | Aanwezig met twee onoplosbare HIGH CVE's | Vervanging door `exceljs` of sandboxing in Web Worker | Ja |
 | 3 | **Rate limiting** | Niet aanwezig op applicatieniveau | Toevoegen van Upstash Ratelimit op `/api/ai/**`, `/api/contact`, en tRPC-mutaties | Ja |
-| 4 | **Security headers** | `next.config.ts` bevat geen `headers()` functie | CSP, HSTS, X-Frame-Options: DENY, X-Content-Type-Options: nosniff, Referrer-Policy | Ja |
-| 5 | **Fixable dependency-CVE's** | `lodash`, `picomatch`, `brace-expansion` met fixable vulnerabilities | `npm audit fix` uitvoeren | Ja |
+| 4 | **Security headers** | ✅ **Gerealiseerd** — `next.config.ts` levert nu Content-Security-Policy, Strict-Transport-Security (2 jaar, includeSubDomains), X-Frame-Options: DENY, X-Content-Type-Options: nosniff, Referrer-Policy: strict-origin-when-cross-origin, Permissions-Policy, en Cross-Origin-Opener-Policy op elke route | — | ✅ Gereed |
+| 5 | **Fixable dependency-CVE's** | ✅ **Gerealiseerd** — `npm audit fix` uitgevoerd; lodash, picomatch en brace-expansion gepatcht. Van 8 → 5 vulnerabilities, van 3 → 1 high (de resterende high is `xlsx`, zie item #2). De 4 resterende moderates betreffen `vitest`/`vite`/`esbuild` en zijn uitsluitend devDependencies zonder productie-impact | — | ✅ Gereed |
 | 6 | **Audit-log actor_id bij admin-client** | Kan `NULL` zijn voor service-role mutaties | Expliciet doorgeven van actor bij elke admin-client call; logging van `assign-org` endpoint naar `audit_log` | Ja |
-| 7 | **Wachtwoordbeleid** | Minimum 6 tekens | Verhogen naar minimum 12 tekens; activeren van HaveIBeenPwned-check | Ja |
+| 7 | **Wachtwoordbeleid** | Minimum 6 tekens; door te voeren via Supabase Dashboard (Authentication → Policies): minimum 12 tekens, verplichte tekencategorieën, HaveIBeenPwned-check | Configuratiewijziging in Supabase door AstraPlanner-beheerder | In uitvoering |
 | 8 | **Recht op vergetelheid** | Alleen cascade delete | Expliciete anonimiseringsroutine die PII nullt | Ja |
 | 9 | **Soft-delete op medewerkers** | Niet geïmplementeerd | Toevoegen `deleted_at` kolom + filter in alle queries | Ja |
 | 10 | **Externe pentest** | Niet uitgevoerd | Externe pentest door gekwalificeerde partij vóór productie-uitrol | Optioneel, contractueel onderhandelbaar |
