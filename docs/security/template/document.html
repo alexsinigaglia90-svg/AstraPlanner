@@ -140,101 +140,383 @@
       requestAnimationFrame(autosize)
     })
 
-    /* ── Signature blocks ─────────────────────────────────────────────── */
+    /* ── Signature blocks (DocuSign-style modal) ──────────────────────── */
+    /*
+     * Each .signature-block on the page is a clickable target that, on
+     * click, opens a modal with two tabs:
+     *
+     *   Tekenen — free-hand drawing on a larger canvas via SignaturePad
+     *   Typen   — type your name and pick one of four handwriting fonts
+     *
+     * On confirmation the chosen signature is rendered to an offscreen
+     * canvas as a 720x180 px PNG (so typed and drawn signatures share
+     * the same storage shape) and stored in localStorage as a data URL.
+     * The inline .signature-block then displays the result as an <img>.
+     *
+     * The runtime signature_pad library is used inside the modal only;
+     * the inline blocks themselves never host a live canvas.
+     */
 
-    var signaturePads = []
+    var SIG_RENDER_W = 720
+    var SIG_RENDER_H = 180
+    var SIG_FONTS = [
+      { id: 'caveat',         label: 'Caveat',         family: "'Caveat', cursive",         weight: '700', size: 76, baseline: 0.66 },
+      { id: 'dancing-script', label: 'Dancing Script', family: "'Dancing Script', cursive", weight: '700', size: 70, baseline: 0.68 },
+      { id: 'great-vibes',   label: 'Great Vibes',    family: "'Great Vibes', cursive",    weight: '400', size: 84, baseline: 0.72 },
+      { id: 'homemade-apple', label: 'Homemade Apple', family: "'Homemade Apple', cursive", weight: '400', size: 56, baseline: 0.62 },
+    ]
 
-    function initSignatureBlock(block) {
+    /* Pre-load all signature handwriting fonts so canvas-based renders use
+       the actual glyphs from the very first call. document.fonts.load
+       returns a promise per font; we await them all once at startup. */
+    function preloadSignatureFonts() {
+      if (!('fonts' in document)) return Promise.resolve()
+      var promises = SIG_FONTS.map(function (f) {
+        return document.fonts.load(f.weight + ' ' + f.size + 'px ' + f.family, 'AaBbCcDdEe').catch(function () {})
+      })
+      return Promise.all(promises)
+    }
+    preloadSignatureFonts()
+
+    /**
+     * Render a typed signature to a 720x180 PNG data URL. We pre-load the
+     * Google Font via a hidden DOM node before measuring so the canvas
+     * draw call uses the actual handwriting glyphs.
+     */
+    function renderTypedSignature(text, fontConfig) {
+      var canvas = document.createElement('canvas')
+      canvas.width = SIG_RENDER_W
+      canvas.height = SIG_RENDER_H
+      var ctx = canvas.getContext('2d')
+      ctx.fillStyle = 'rgba(0,0,0,0)'
+      ctx.clearRect(0, 0, SIG_RENDER_W, SIG_RENDER_H)
+      ctx.fillStyle = '#0E2240'
+      ctx.textBaseline = 'alphabetic'
+      ctx.textAlign = 'center'
+
+      // Auto-shrink the font if the text is wider than 92% of the canvas
+      var size = fontConfig.size
+      var family = fontConfig.weight + ' ' + size + 'px ' + fontConfig.family
+      ctx.font = family
+      var metrics = ctx.measureText(text)
+      var maxWidth = SIG_RENDER_W * 0.92
+      while (metrics.width > maxWidth && size > 18) {
+        size -= 2
+        ctx.font = fontConfig.weight + ' ' + size + 'px ' + fontConfig.family
+        metrics = ctx.measureText(text)
+      }
+
+      ctx.fillText(text, SIG_RENDER_W / 2, SIG_RENDER_H * fontConfig.baseline)
+      return canvas.toDataURL('image/png')
+    }
+
+    /**
+     * Render a SignaturePad data URL onto a normalised 720x180 canvas so
+     * drawn signatures persist with the same shape as typed ones. Returns
+     * a Promise that resolves with the normalised data URL.
+     */
+    function renderDrawnSignature(sourceDataURL) {
+      return new Promise(function (resolve) {
+        var img = new Image()
+        img.onload = function () {
+          var canvas = document.createElement('canvas')
+          canvas.width = SIG_RENDER_W
+          canvas.height = SIG_RENDER_H
+          var ctx = canvas.getContext('2d')
+          // Fit-contain inside 720x180 with 16px padding
+          var pad = 16
+          var availW = SIG_RENDER_W - pad * 2
+          var availH = SIG_RENDER_H - pad * 2
+          var scale = Math.min(availW / img.width, availH / img.height)
+          var drawW = img.width * scale
+          var drawH = img.height * scale
+          var dx = (SIG_RENDER_W - drawW) / 2
+          var dy = (SIG_RENDER_H - drawH) / 2
+          ctx.drawImage(img, dx, dy, drawW, drawH)
+          resolve(canvas.toDataURL('image/png'))
+        }
+        img.src = sourceDataURL
+      })
+    }
+
+    /**
+     * Mount or remount a stored signature on an inline .signature-block.
+     */
+    function paintSignatureBlock(block, dataURL) {
+      // Remove any previous image
+      var existing = block.querySelector('img.signature-print')
+      if (existing) existing.remove()
+      if (!dataURL) {
+        block.classList.remove('has-signature')
+        return
+      }
+      var img = document.createElement('img')
+      img.className = 'signature-print'
+      img.src = dataURL
+      img.alt = 'Handtekening'
+      // Forced visible on screen as well (the print-only display:none is
+      // overridden inline so the same node serves both screen and print).
+      img.style.display = 'block'
+      img.style.position = 'absolute'
+      img.style.inset = '0'
+      img.style.width = '100%'
+      img.style.height = '100%'
+      img.style.objectFit = 'contain'
+      img.style.padding = '6px 8px 10px'
+      img.style.boxSizing = 'border-box'
+      block.appendChild(img)
+      block.classList.add('has-signature')
+    }
+
+    /* ── Modal construction ───────────────────────────────────────────── */
+
+    var activeModal = null
+    var activeBlock = null
+    var modalSignaturePad = null
+    var modalSelectedFont = SIG_FONTS[0]
+
+    function buildModal() {
+      var backdrop = document.createElement('div')
+      backdrop.className = 'sig-modal-backdrop'
+      backdrop.innerHTML =
+        '<div class="sig-modal" role="dialog" aria-modal="true" aria-labelledby="sig-modal-title">' +
+          '<div class="sig-modal-header">' +
+            '<div class="sig-modal-eyebrow">Handtekening plaatsen</div>' +
+            '<h2 class="sig-modal-title" id="sig-modal-title">Onderteken het document</h2>' +
+          '</div>' +
+          '<div class="sig-modal-body">' +
+            '<div class="sig-name-field">' +
+              '<label for="sig-name-input">Volledige naam</label>' +
+              '<input type="text" id="sig-name-input" autocomplete="name" placeholder="Bijvoorbeeld: Alex Sinigaglia" />' +
+            '</div>' +
+            '<div class="sig-tabs" role="tablist">' +
+              '<button type="button" class="sig-tab active" data-tab="type" role="tab">Typen</button>' +
+              '<button type="button" class="sig-tab" data-tab="draw" role="tab">Tekenen</button>' +
+            '</div>' +
+            '<div class="sig-panel active" data-panel="type">' +
+              '<div class="sig-style-grid">' +
+                SIG_FONTS.map(function (f, i) {
+                  return '<div class="sig-style-option' + (i === 0 ? ' selected' : '') + '" data-font="' + f.id + '" tabindex="0" role="button" aria-label="Stijl ' + f.label + '">' +
+                    '<span class="sig-style-preview"></span>' +
+                  '</div>'
+                }).join('') +
+              '</div>' +
+            '</div>' +
+            '<div class="sig-panel" data-panel="draw">' +
+              '<div class="sig-draw-canvas-wrapper">' +
+                '<canvas class="sig-draw-canvas"></canvas>' +
+                '<div class="sig-draw-baseline"></div>' +
+                '<span class="sig-draw-hint">Teken hier uw handtekening</span>' +
+                '<button type="button" class="sig-draw-clear">Wissen</button>' +
+              '</div>' +
+            '</div>' +
+            '<p class="sig-disclosure">Door op <strong>Bevestigen</strong> te klikken bevestigt u dat de hierboven gekozen weergave de geldige elektronische handtekening van de hierboven ingevulde persoon is bij dit document.</p>' +
+          '</div>' +
+          '<div class="sig-modal-footer">' +
+            '<button type="button" class="sig-btn sig-btn-cancel">Annuleren</button>' +
+            '<button type="button" class="sig-btn sig-btn-confirm" disabled>Bevestigen</button>' +
+          '</div>' +
+        '</div>'
+      return backdrop
+    }
+
+    function openSignatureModal(block) {
+      activeBlock = block
+      var modal = buildModal()
+      document.body.appendChild(modal)
+      activeModal = modal
+
+      var nameInput = modal.querySelector('#sig-name-input')
+      var styleOptions = modal.querySelectorAll('.sig-style-option')
+      var tabs = modal.querySelectorAll('.sig-tab')
+      var panels = modal.querySelectorAll('.sig-panel')
+      var confirmBtn = modal.querySelector('.sig-btn-confirm')
+      var cancelBtn = modal.querySelector('.sig-btn-cancel')
+      var drawCanvas = modal.querySelector('.sig-draw-canvas')
+      var drawClearBtn = modal.querySelector('.sig-draw-clear')
+      var hint = modal.querySelector('.sig-draw-hint')
+
+      modalSelectedFont = SIG_FONTS[0]
+
+      // Pre-populate name from previous Ascentra-side fields if available.
+      // We look for any text input with "naam" or "alex" pattern that already
+      // has a value, just as a quality-of-life nudge.
+      var existing = document.querySelector('input.fillable[value*=" "]')
+      if (existing && existing.value && /^[A-Z]/.test(existing.value)) {
+        nameInput.value = existing.value
+      }
+
+      function refreshPreviews() {
+        var name = nameInput.value.trim() || 'Voorbeeld'
+        styleOptions.forEach(function (opt) {
+          var preview = opt.querySelector('.sig-style-preview')
+          if (preview) preview.textContent = name
+        })
+      }
+
+      function refreshConfirm() {
+        var activeTab = modal.querySelector('.sig-tab.active').getAttribute('data-tab')
+        var hasName = nameInput.value.trim().length > 0
+        if (activeTab === 'type') {
+          confirmBtn.disabled = !hasName
+        } else {
+          confirmBtn.disabled = modalSignaturePad ? modalSignaturePad.isEmpty() : true
+        }
+      }
+
+      nameInput.addEventListener('input', function () {
+        refreshPreviews()
+        refreshConfirm()
+      })
+
+      styleOptions.forEach(function (opt) {
+        opt.addEventListener('click', function () {
+          styleOptions.forEach(function (o) { o.classList.remove('selected') })
+          opt.classList.add('selected')
+          var fontId = opt.getAttribute('data-font')
+          modalSelectedFont = SIG_FONTS.find(function (f) { return f.id === fontId }) || SIG_FONTS[0]
+          refreshConfirm()
+        })
+      })
+
+      tabs.forEach(function (tab) {
+        tab.addEventListener('click', function () {
+          tabs.forEach(function (t) { t.classList.remove('active') })
+          panels.forEach(function (p) { p.classList.remove('active') })
+          tab.classList.add('active')
+          var name = tab.getAttribute('data-tab')
+          modal.querySelector('.sig-panel[data-panel="' + name + '"]').classList.add('active')
+          if (name === 'draw' && !modalSignaturePad && typeof SignaturePad !== 'undefined') {
+            // Lazy-init draw canvas the first time the tab is opened
+            var ratio = Math.max(window.devicePixelRatio || 1, 1)
+            var rect = drawCanvas.getBoundingClientRect()
+            drawCanvas.width = rect.width * ratio
+            drawCanvas.height = rect.height * ratio
+            var ctx = drawCanvas.getContext('2d')
+            if (ctx) ctx.scale(ratio, ratio)
+            modalSignaturePad = new SignaturePad(drawCanvas, {
+              backgroundColor: 'rgba(0,0,0,0)',
+              penColor: '#0E2240',
+              minWidth: 0.8,
+              maxWidth: 2.6,
+              throttle: 16,
+              velocityFilterWeight: 0.7,
+            })
+            modalSignaturePad.addEventListener('beginStroke', function () {
+              if (hint) hint.style.opacity = '0'
+            })
+            modalSignaturePad.addEventListener('endStroke', refreshConfirm)
+          }
+          refreshConfirm()
+        })
+      })
+
+      if (drawClearBtn) {
+        drawClearBtn.addEventListener('click', function () {
+          if (modalSignaturePad) modalSignaturePad.clear()
+          if (hint) hint.style.opacity = '0.5'
+          refreshConfirm()
+        })
+      }
+
+      cancelBtn.addEventListener('click', closeSignatureModal)
+      modal.addEventListener('click', function (event) {
+        if (event.target === modal) closeSignatureModal()
+      })
+
+      confirmBtn.addEventListener('click', function () {
+        var activeTab = modal.querySelector('.sig-tab.active').getAttribute('data-tab')
+        var name = nameInput.value.trim()
+        if (activeTab === 'type') {
+          if (!name) return
+          var dataURL = renderTypedSignature(name, modalSelectedFont)
+          commitSignature(dataURL, name)
+        } else {
+          if (!modalSignaturePad || modalSignaturePad.isEmpty()) return
+          var sourceURL = modalSignaturePad.toDataURL('image/png')
+          renderDrawnSignature(sourceURL).then(function (normalised) {
+            commitSignature(normalised, name)
+          })
+        }
+      })
+
+      // Escape closes
+      document.addEventListener('keydown', escapeHandler)
+
+      // Initial render
+      refreshPreviews()
+      refreshConfirm()
+
+      // Focus the name input
+      setTimeout(function () { nameInput.focus() }, 50)
+    }
+
+    function escapeHandler(event) {
+      if (event.key === 'Escape' && activeModal) closeSignatureModal()
+    }
+
+    function closeSignatureModal() {
+      if (!activeModal) return
+      activeModal.parentNode.removeChild(activeModal)
+      activeModal = null
+      activeBlock = null
+      modalSignaturePad = null
+      document.removeEventListener('keydown', escapeHandler)
+    }
+
+    function commitSignature(dataURL, signedName) {
+      if (!activeBlock) return
+      var id = activeBlock.getAttribute('data-field')
+      var record = { dataURL: dataURL, name: signedName || '' }
+      setField(id, record)
+      paintSignatureBlock(activeBlock, dataURL)
+      closeSignatureModal()
+    }
+
+    /* Initialise inline signature blocks: replace their inline canvas with
+       a clickable surface, restore from storage, and wire the open / clear
+       handlers. */
+
+    document.querySelectorAll('.signature-block').forEach(function (block) {
       var id = block.getAttribute('data-field')
       if (!id) return
 
-      var canvas = block.querySelector('canvas.signature-canvas')
-      if (!canvas) return
-
-      // High-DPI support: scale the canvas backing store so strokes are crisp
-      // on retina displays. We must redo this on resize.
-      function resizeCanvas() {
-        var ratio = Math.max(window.devicePixelRatio || 1, 1)
-        var rect = canvas.getBoundingClientRect()
-        canvas.width = rect.width * ratio
-        canvas.height = rect.height * ratio
-        var ctx = canvas.getContext('2d')
-        if (ctx) ctx.scale(ratio, ratio)
-      }
-      resizeCanvas()
-
-      var pad = new SignaturePad(canvas, {
-        backgroundColor: 'rgba(0,0,0,0)',
-        penColor: '#0E2240',
-        minWidth: 0.6,
-        maxWidth: 2.2,
-        throttle: 16,
-        velocityFilterWeight: 0.7,
-      })
-
-      signaturePads.push({ id: id, block: block, canvas: canvas, pad: pad })
+      // Remove the inline canvas — we render via <img> after the modal flow
+      var inlineCanvas = block.querySelector('canvas.signature-canvas')
+      if (inlineCanvas) inlineCanvas.remove()
 
       // Restore from storage
       var saved = getField(id)
       if (saved) {
-        pad.fromDataURL(saved, { ratio: window.devicePixelRatio || 1 })
-        block.classList.add('has-signature')
+        // Backwards-compat: old plain dataURL strings
+        var dataURL = typeof saved === 'string' ? saved : saved.dataURL
+        if (dataURL) paintSignatureBlock(block, dataURL)
       }
 
-      pad.addEventListener('endStroke', function () {
-        if (pad.isEmpty()) {
-          setField(id, null)
-          block.classList.remove('has-signature')
-        } else {
-          setField(id, pad.toDataURL('image/png'))
-          block.classList.add('has-signature')
-        }
+      // Click anywhere on the block opens the modal (except the clear btn)
+      block.addEventListener('click', function (event) {
+        if (event.target.closest('.signature-clear')) return
+        openSignatureModal(block)
       })
+      block.style.cursor = 'pointer'
 
-      // Resize handler — re-renders the saved signature on resize
-      window.addEventListener('resize', function () {
-        var data = pad.toData()
-        resizeCanvas()
-        if (data && data.length) pad.fromData(data)
-      })
-
-      // Clear button
+      // Clear button stays at top-right
       var clearBtn = block.querySelector('.signature-clear')
       if (clearBtn) {
         clearBtn.addEventListener('click', function (event) {
           event.preventDefault()
-          pad.clear()
+          event.stopPropagation()
           setField(id, null)
-          block.classList.remove('has-signature')
-          // Remove any print image left over from a previous print
-          var printImg = block.querySelector('img.signature-print')
-          if (printImg) printImg.remove()
+          paintSignatureBlock(block, null)
         })
       }
-    }
-
-    if (typeof SignaturePad !== 'undefined') {
-      document.querySelectorAll('.signature-block').forEach(initSignatureBlock)
-    }
+    })
 
     /* ── Print preparation ────────────────────────────────────────────── */
-    /* Browsers cannot include a live <canvas> in the printed PDF reliably.
-       We add an <img> sibling with the rasterised signature just before the
-       print, and remove it again afterwards. The print stylesheet hides the
-       canvas and shows the image. */
+    /* Signature blocks already host the rasterised <img>, so we only need
+       to make sure typed text inputs render as plain text in the print. */
 
     function preparePrint() {
-      signaturePads.forEach(function (entry) {
-        var existing = entry.block.querySelector('img.signature-print')
-        if (existing) existing.remove()
-        if (entry.pad.isEmpty()) return
-        var img = document.createElement('img')
-        img.className = 'signature-print'
-        img.src = entry.pad.toDataURL('image/png')
-        img.alt = 'Handtekening'
-        entry.block.appendChild(img)
-      })
-
       // Convert text inputs to spans so the printed PDF shows the value
       // without any input chrome. We replace each input with a span with
       // the same class so the print stylesheet leaves them styled

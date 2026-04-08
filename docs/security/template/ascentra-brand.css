@@ -18,7 +18,7 @@
  *   Cormorant Garamond  serif voor display headings, taglines
  * ============================================================================= */
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=Caveat:wght@500;700&family=Dancing+Script:wght@500;700&family=Great+Vibes&family=Homemade+Apple&display=swap');
 
 :root {
   --ascentra-navy: #0E2240;
@@ -578,6 +578,338 @@ html, body {
 .doc-action-button.danger:hover {
   background: rgba(239, 68, 68, 0.18);
   color: var(--ascentra-cream);
+}
+
+/* ── Signature modal ────────────────────────────────────────────────────── */
+
+.sig-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(14, 34, 64, 0.55);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  padding: 24px;
+  animation: sig-fade-in 180ms ease-out;
+}
+
+@keyframes sig-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.sig-modal {
+  background: var(--ascentra-white);
+  border-radius: 12px;
+  box-shadow: 0 32px 64px -16px rgba(14, 34, 64, 0.5),
+              0 8px 16px -8px rgba(14, 34, 64, 0.3);
+  width: 100%;
+  max-width: 560px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  font-family: var(--font-sans);
+  animation: sig-slide-up 240ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes sig-slide-up {
+  from { opacity: 0; transform: translateY(16px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.sig-modal-header {
+  padding: 24px 28px 18px;
+  border-bottom: 1px solid var(--ascentra-hairline);
+}
+
+.sig-modal-eyebrow {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ascentra-muted);
+  margin-bottom: 4px;
+}
+
+.sig-modal-title {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--ascentra-navy);
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+.sig-modal-body {
+  padding: 22px 28px 24px;
+}
+
+.sig-name-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 18px;
+}
+
+.sig-name-field label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ascentra-muted);
+}
+
+.sig-name-field input {
+  width: 100%;
+  padding: 11px 14px;
+  border: 1px solid var(--ascentra-hairline);
+  border-radius: 6px;
+  background: var(--ascentra-white);
+  color: var(--ascentra-ink);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  outline: none;
+  transition: border-color 140ms ease, box-shadow 140ms ease;
+}
+
+.sig-name-field input:focus {
+  border-color: var(--ascentra-navy);
+  box-shadow: 0 0 0 3px rgba(14, 34, 64, 0.1);
+}
+
+.sig-tabs {
+  display: flex;
+  gap: 4px;
+  background: var(--ascentra-cream);
+  border-radius: 8px;
+  padding: 4px;
+  margin-bottom: 16px;
+}
+
+.sig-tab {
+  flex: 1;
+  padding: 9px 12px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--ascentra-muted);
+  cursor: pointer;
+  transition: background 140ms ease, color 140ms ease;
+}
+
+.sig-tab:hover {
+  color: var(--ascentra-navy);
+}
+
+.sig-tab.active {
+  background: var(--ascentra-white);
+  color: var(--ascentra-navy);
+  box-shadow: 0 1px 3px rgba(14, 34, 64, 0.1);
+}
+
+.sig-panel {
+  display: none;
+}
+
+.sig-panel.active {
+  display: block;
+}
+
+/* Type-tab: stijlkeuze grid */
+.sig-style-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.sig-style-option {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 76px;
+  padding: 8px 14px;
+  border: 1.5px solid var(--ascentra-hairline);
+  border-radius: 8px;
+  background: var(--ascentra-white);
+  cursor: pointer;
+  transition: border-color 140ms ease, background 140ms ease, transform 140ms ease;
+  text-align: center;
+  overflow: hidden;
+}
+
+.sig-style-option:hover {
+  border-color: var(--ascentra-navy-soft);
+  background: rgba(14, 34, 64, 0.02);
+}
+
+.sig-style-option.selected {
+  border-color: var(--ascentra-navy);
+  background: rgba(14, 34, 64, 0.04);
+}
+
+.sig-style-option .sig-style-preview {
+  font-size: 28px;
+  line-height: 1.1;
+  color: var(--ascentra-navy);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.sig-style-option[data-font="caveat"] .sig-style-preview {
+  font-family: 'Caveat', cursive;
+  font-weight: 700;
+}
+
+.sig-style-option[data-font="dancing-script"] .sig-style-preview {
+  font-family: 'Dancing Script', cursive;
+  font-weight: 700;
+  font-size: 26px;
+}
+
+.sig-style-option[data-font="great-vibes"] .sig-style-preview {
+  font-family: 'Great Vibes', cursive;
+  font-size: 32px;
+}
+
+.sig-style-option[data-font="homemade-apple"] .sig-style-preview {
+  font-family: 'Homemade Apple', cursive;
+  font-size: 22px;
+  letter-spacing: -0.02em;
+}
+
+/* Draw-tab: canvas op modal-niveau (groter dan inline canvas) */
+.sig-draw-canvas-wrapper {
+  position: relative;
+  height: 180px;
+  background: rgba(239, 237, 227, 0.5);
+  border: 1.5px solid var(--ascentra-hairline);
+  border-radius: 8px;
+  margin-top: 4px;
+  overflow: hidden;
+}
+
+.sig-draw-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.sig-draw-baseline {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: 36px;
+  height: 1px;
+  background: var(--ascentra-hairline);
+  pointer-events: none;
+}
+
+.sig-draw-hint {
+  position: absolute;
+  bottom: 12px;
+  left: 16px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ascentra-muted);
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.sig-draw-clear {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  padding: 4px 10px;
+  border: 1px solid var(--ascentra-hairline);
+  background: var(--ascentra-white);
+  color: var(--ascentra-muted);
+  font-family: var(--font-sans);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: color 140ms ease, border-color 140ms ease;
+}
+
+.sig-draw-clear:hover {
+  color: var(--ascentra-navy);
+  border-color: var(--ascentra-navy);
+}
+
+/* Disclosure */
+.sig-disclosure {
+  margin-top: 16px;
+  padding: 12px 14px;
+  background: var(--ascentra-cream);
+  border-radius: 6px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--ascentra-muted);
+}
+
+.sig-modal-footer {
+  padding: 16px 28px 22px;
+  border-top: 1px solid var(--ascentra-hairline);
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  background: rgba(239, 237, 227, 0.3);
+}
+
+.sig-btn {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 6px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: background 140ms ease, color 140ms ease, transform 100ms ease;
+}
+
+.sig-btn:active {
+  transform: translateY(1px);
+}
+
+.sig-btn-cancel {
+  background: transparent;
+  color: var(--ascentra-muted);
+}
+
+.sig-btn-cancel:hover {
+  color: var(--ascentra-navy);
+}
+
+.sig-btn-confirm {
+  background: var(--ascentra-navy);
+  color: var(--ascentra-cream);
+}
+
+.sig-btn-confirm:hover {
+  background: var(--ascentra-navy-soft);
+}
+
+.sig-btn-confirm:disabled {
+  background: var(--ascentra-hairline);
+  color: var(--ascentra-muted);
+  cursor: not-allowed;
 }
 
 /* ── Print stylesheet ───────────────────────────────────────────────────── */
