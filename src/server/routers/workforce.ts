@@ -9,6 +9,7 @@ import {
   viewerProcedure,
   managerProcedure,
   plannerProcedure,
+  adminProcedure,
 } from '../trpc'
 import { createAdminClientForUser } from '../../lib/supabase/admin'
 import {
@@ -742,5 +743,128 @@ export const workforceRouter = router({
       assertNoError(error, 'bulkArchiveEmployees')
 
       return { archived: input.ids.length }
+    }),
+
+  // -------------------------------------------------------------------------
+  // eraseEmployee — AVG art. 17 right to erasure (tenant_admin only)
+  //
+  // Implements the Dutch "recht op vergetelheid" for a single employee:
+  // anonymises all directly identifying PII on the employee row while
+  // preserving the row itself so that related shift_assignment /
+  // employee_skill / audit_log rows remain consistent for historical
+  // payroll and KPI reporting.
+  //
+  // After a successful call:
+  //   first_name     → 'VERWIJDERD'
+  //   last_name      → 'VERWIJDERD'
+  //   email          → NULL
+  //   phone          → NULL
+  //   preferences_json → NULL  (may contain personal preferences)
+  //   metadata_json  → NULL   (free-form, may contain PII)
+  //   status         → 'terminated'
+  //   deleted_at     → now()
+  //   deleted_by     → caller's user id
+  //
+  // Retained (because not directly identifying and needed for history):
+  //   employee_number, hire_date, termination_date, contract_type,
+  //   weekly_hours_contracted, hourly_rate, pay_grade, home_site_id,
+  //   department_id, crew_id, job_role_id, seniority_date
+  //
+  // The operation is audited twice:
+  //   1. The fn_audit_trigger on employee automatically records the
+  //      UPDATE with before/after state, so the full snapshot of the
+  //      erased data lives in audit_log exactly once (immutable).
+  //   2. An explicit audit_log row with action='ERASE' is written so the
+  //      operation is easy to find when a data-subject request needs
+  //      to be shown to a DPO or the Autoriteit Persoonsgegevens.
+  //
+  // Only a tenant_admin may invoke this procedure, because it permanently
+  // destroys data that cannot be recovered after the call returns.
+  // -------------------------------------------------------------------------
+  eraseEmployee: adminProcedure
+    .input(
+      z.object({
+        id: z.string().uuid(),
+        reason: z.string().min(1).max(1000).describe('Reason for erasure, e.g. DSAR reference'),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const admin = createAdminClientForUser(ctx.user.id)
+
+      // Fetch first to confirm the employee exists in this org and to
+      // capture the name for the explicit audit row (because after the
+      // UPDATE we can no longer read the original value).
+      const { data: existing, error: fetchErr } = await admin
+        .from('employee')
+        .select('id, first_name, last_name, status, deleted_at')
+        .eq('id', input.id)
+        .eq('organization_id', ctx.organizationId)
+        .maybeSingle()
+
+      assertNoError(fetchErr, 'eraseEmployee:fetch')
+
+      if (!existing) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Employee not found in your organization',
+        })
+      }
+
+      if (existing.deleted_at) {
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: 'Employee is already erased under AVG art. 17',
+        })
+      }
+
+      const now = new Date().toISOString()
+      const { error: updateErr } = await admin
+        .from('employee')
+        .update({
+          first_name: 'VERWIJDERD',
+          last_name: 'VERWIJDERD',
+          email: null,
+          phone: null,
+          preferences_json: null,
+          metadata_json: null,
+          status: 'terminated',
+          deleted_at: now,
+          deleted_by: ctx.user.id,
+        })
+        .eq('id', input.id)
+        .eq('organization_id', ctx.organizationId)
+
+      assertNoError(updateErr, 'eraseEmployee:update')
+
+      // Explicit audit trail with the reason. The standard trigger already
+      // captured the UPDATE with before/after state; this second row makes
+      // the erasure event trivially queryable via action='ERASE'.
+      const { error: auditErr } = await admin.from('audit_log').insert({
+        organization_id: ctx.organizationId,
+        actor_id: ctx.user.id,
+        actor_type: 'user',
+        action: 'ERASE',
+        entity_type: 'employee',
+        entity_id: input.id,
+        metadata_json: {
+          reason: input.reason,
+          previous_name: `${existing.first_name} ${existing.last_name}`.trim(),
+          previous_status: existing.status,
+          erased_at: now,
+        },
+      })
+
+      if (auditErr) {
+        // Erasure already happened, but audit write failed. Log for ops
+        // visibility. This should be extremely rare because the same
+        // service-role client performed the update that just succeeded.
+        console.error('[eraseEmployee] explicit audit insert failed:', auditErr.message)
+      }
+
+      return {
+        erased: true,
+        employee_id: input.id,
+        erased_at: now,
+      }
     }),
 })
