@@ -818,6 +818,12 @@ export const workforceRouter = router({
       }
 
       const now = new Date().toISOString()
+      // Note on JSONB columns: preferences_json and metadata_json are
+      // NOT NULL with default '{}' in the schema, so we cannot null them.
+      // Resetting to an empty object is functionally equivalent from a
+      // data-subject perspective (no personal preferences remain) and
+      // preserves the NOT NULL invariant the rest of the codebase relies
+      // on.
       const { error: updateErr } = await admin
         .from('employee')
         .update({
@@ -825,8 +831,8 @@ export const workforceRouter = router({
           last_name: 'VERWIJDERD',
           email: null,
           phone: null,
-          preferences_json: null,
-          metadata_json: null,
+          preferences_json: {},
+          metadata_json: {},
           status: 'terminated',
           deleted_at: now,
           deleted_by: ctx.user.id,
