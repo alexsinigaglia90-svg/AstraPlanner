@@ -2,7 +2,7 @@
 
 ## (Data Processing Agreement, artikel 28 AVG)
 
-Concept ten behoeve van juridische review. Opgesteld op basis van artikel 28 van de Algemene Verordening Gegevensbescherming (Verordening (EU) 2016/679) en de Uitvoeringswet AVG. Het document strekt tot vastlegging van de verwerker-verwerkingsverantwoordelijke verhouding tussen partijen en vormt de basis voor de uiteindelijke ondertekening na juridische beoordeling door beide zijden.
+Opgesteld op basis van artikel 28 van de Algemene Verordening Gegevensbescherming (Verordening (EU) 2016/679) en de Uitvoeringswet AVG. Dit document legt de verwerker-verwerkingsverantwoordelijke verhouding tussen partijen vast.
 
 ---
 
@@ -313,6 +313,4 @@ In deze Overeenkomst wordt verstaan onder:
 
 ---
 
-**Einde concept Verwerkersovereenkomst.**
-
-> Dit document is een concept ten behoeve van juridische review. Het is niet gecontroleerd door een bevoegd juridisch adviseur en vormt geen juridisch advies. Beide partijen wordt geadviseerd dit concept door hun juridisch adviseur te laten beoordelen voorafgaand aan ondertekening.
+**Einde Verwerkersovereenkomst.**
