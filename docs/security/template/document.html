@@ -62,5 +62,254 @@
       </div>
     </footer>
   </main>
+
+  <!-- Floating action bar — alleen op scherm; verborgen tijdens print. -->
+  <div class="doc-action-bar" data-doc-key="{{DOC_KEY}}">
+    <button type="button" class="doc-action-button primary" data-action="print" title="Open de printdialoog en sla op als PDF">
+      Download PDF
+    </button>
+    <button type="button" class="doc-action-button" data-action="export" title="Download de ingevulde waardes als JSON-back-up">
+      Export
+    </button>
+    <button type="button" class="doc-action-button danger" data-action="reset" title="Wis alle ingevulde waardes en handtekeningen">
+      Wissen
+    </button>
+  </div>
+
+  <!-- signature_pad library — inline ingebed zodat het document ook offline werkt. -->
+  <script>{{SIGNATURE_PAD_LIB}}</script>
+
+  <!-- Document runtime: localStorage persistence + signature pad init + print-prep. -->
+  <script>
+  (function () {
+    'use strict'
+
+    var actionBar = document.querySelector('.doc-action-bar')
+    var STORAGE_KEY = 'ascentra-doc:' + (actionBar ? actionBar.getAttribute('data-doc-key') : 'unknown')
+
+    function loadStore() {
+      try {
+        return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}')
+      } catch (e) {
+        return {}
+      }
+    }
+
+    function saveStore(data) {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
+      } catch (e) {
+        /* localStorage quota or unavailable — fail silently */
+      }
+    }
+
+    function setField(id, value) {
+      var data = loadStore()
+      if (value === null || value === undefined || value === '') {
+        delete data[id]
+      } else {
+        data[id] = value
+      }
+      saveStore(data)
+    }
+
+    function getField(id) {
+      return loadStore()[id]
+    }
+
+    /* ── Text inputs ──────────────────────────────────────────────────── */
+
+    var textInputs = document.querySelectorAll('input.fillable')
+    textInputs.forEach(function (input) {
+      var id = input.getAttribute('data-field')
+      if (!id) return
+      var saved = getField(id)
+      if (saved) input.value = saved
+      // Auto-size to content for inline flow
+      function autosize() {
+        input.style.width = 'auto'
+        var min = input.parentNode && input.parentNode.tagName === 'TD' ? 140 : 220
+        var measured = input.scrollWidth + 16
+        input.style.width = Math.max(min, measured) + 'px'
+      }
+      input.addEventListener('input', function () {
+        setField(id, input.value)
+        autosize()
+      })
+      // Initial size
+      requestAnimationFrame(autosize)
+    })
+
+    /* ── Signature blocks ─────────────────────────────────────────────── */
+
+    var signaturePads = []
+
+    function initSignatureBlock(block) {
+      var id = block.getAttribute('data-field')
+      if (!id) return
+
+      var canvas = block.querySelector('canvas.signature-canvas')
+      if (!canvas) return
+
+      // High-DPI support: scale the canvas backing store so strokes are crisp
+      // on retina displays. We must redo this on resize.
+      function resizeCanvas() {
+        var ratio = Math.max(window.devicePixelRatio || 1, 1)
+        var rect = canvas.getBoundingClientRect()
+        canvas.width = rect.width * ratio
+        canvas.height = rect.height * ratio
+        var ctx = canvas.getContext('2d')
+        if (ctx) ctx.scale(ratio, ratio)
+      }
+      resizeCanvas()
+
+      var pad = new SignaturePad(canvas, {
+        backgroundColor: 'rgba(0,0,0,0)',
+        penColor: '#0E2240',
+        minWidth: 0.6,
+        maxWidth: 2.2,
+        throttle: 16,
+        velocityFilterWeight: 0.7,
+      })
+
+      signaturePads.push({ id: id, block: block, canvas: canvas, pad: pad })
+
+      // Restore from storage
+      var saved = getField(id)
+      if (saved) {
+        pad.fromDataURL(saved, { ratio: window.devicePixelRatio || 1 })
+        block.classList.add('has-signature')
+      }
+
+      pad.addEventListener('endStroke', function () {
+        if (pad.isEmpty()) {
+          setField(id, null)
+          block.classList.remove('has-signature')
+        } else {
+          setField(id, pad.toDataURL('image/png'))
+          block.classList.add('has-signature')
+        }
+      })
+
+      // Resize handler — re-renders the saved signature on resize
+      window.addEventListener('resize', function () {
+        var data = pad.toData()
+        resizeCanvas()
+        if (data && data.length) pad.fromData(data)
+      })
+
+      // Clear button
+      var clearBtn = block.querySelector('.signature-clear')
+      if (clearBtn) {
+        clearBtn.addEventListener('click', function (event) {
+          event.preventDefault()
+          pad.clear()
+          setField(id, null)
+          block.classList.remove('has-signature')
+          // Remove any print image left over from a previous print
+          var printImg = block.querySelector('img.signature-print')
+          if (printImg) printImg.remove()
+        })
+      }
+    }
+
+    if (typeof SignaturePad !== 'undefined') {
+      document.querySelectorAll('.signature-block').forEach(initSignatureBlock)
+    }
+
+    /* ── Print preparation ────────────────────────────────────────────── */
+    /* Browsers cannot include a live <canvas> in the printed PDF reliably.
+       We add an <img> sibling with the rasterised signature just before the
+       print, and remove it again afterwards. The print stylesheet hides the
+       canvas and shows the image. */
+
+    function preparePrint() {
+      signaturePads.forEach(function (entry) {
+        var existing = entry.block.querySelector('img.signature-print')
+        if (existing) existing.remove()
+        if (entry.pad.isEmpty()) return
+        var img = document.createElement('img')
+        img.className = 'signature-print'
+        img.src = entry.pad.toDataURL('image/png')
+        img.alt = 'Handtekening'
+        entry.block.appendChild(img)
+      })
+
+      // Convert text inputs to spans so the printed PDF shows the value
+      // without any input chrome. We replace each input with a span with
+      // the same class so the print stylesheet leaves them styled
+      // consistently with the surrounding text.
+      var inputs = document.querySelectorAll('input.fillable')
+      inputs.forEach(function (input) {
+        if (input.dataset.printSpanned === '1') return
+        var span = document.createElement('span')
+        span.className = 'fillable'
+        span.textContent = input.value || ''
+        span.style.borderBottom = 'none'
+        span.style.background = 'transparent'
+        span.dataset.printPlaceholder = '1'
+        input.dataset.printSpanned = '1'
+        input.style.display = 'none'
+        input.parentNode.insertBefore(span, input.nextSibling)
+      })
+    }
+
+    function cleanupPrint() {
+      // Restore inputs after print
+      var spans = document.querySelectorAll('span[data-print-placeholder="1"]')
+      spans.forEach(function (span) {
+        span.parentNode.removeChild(span)
+      })
+      var inputs = document.querySelectorAll('input.fillable[data-print-spanned="1"]')
+      inputs.forEach(function (input) {
+        input.style.display = ''
+        delete input.dataset.printSpanned
+      })
+    }
+
+    // Use beforeprint / afterprint events for browsers that fire them.
+    window.addEventListener('beforeprint', preparePrint)
+    window.addEventListener('afterprint', cleanupPrint)
+
+    /* ── Action bar buttons ───────────────────────────────────────────── */
+
+    if (actionBar) {
+      actionBar.addEventListener('click', function (event) {
+        var btn = event.target.closest('button[data-action]')
+        if (!btn) return
+        var action = btn.getAttribute('data-action')
+
+        if (action === 'print') {
+          // Some browsers don't fire beforeprint, so we call preparePrint
+          // explicitly and schedule cleanup after a short delay.
+          preparePrint()
+          setTimeout(function () {
+            window.print()
+            setTimeout(cleanupPrint, 500)
+          }, 50)
+        }
+
+        if (action === 'export') {
+          var data = loadStore()
+          var blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+          var url = URL.createObjectURL(blob)
+          var a = document.createElement('a')
+          a.href = url
+          a.download = (actionBar.getAttribute('data-doc-key') || 'document') + '-ingevuld.json'
+          document.body.appendChild(a)
+          a.click()
+          document.body.removeChild(a)
+          URL.revokeObjectURL(url)
+        }
+
+        if (action === 'reset') {
+          if (!window.confirm('Alle ingevulde waardes en handtekeningen wissen?')) return
+          localStorage.removeItem(STORAGE_KEY)
+          window.location.reload()
+        }
+      })
+    }
+  })()
+  </script>
 </body>
 </html>

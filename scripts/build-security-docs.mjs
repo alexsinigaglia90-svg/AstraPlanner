@@ -119,6 +119,62 @@ function escapeHtml(str) {
     .replace(/>/g, '&gt;')
 }
 
+function escapeAttr(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Placeholder transformation
+// ────────────────────────────────────────────────────────────────────────────
+//
+// Walks the rendered HTML and replaces:
+//
+//   1.  [INVULLEN ...] markers  →  <input class="fillable">
+//   2.  long underscore runs    →  <span class="signature-block">…</span>
+//
+// Each generated field carries a deterministic data-field id of the form
+// `field-N` (counter resets per document), so the runtime in the template
+// can persist values to localStorage and rehydrate them on the next visit.
+
+function transformPlaceholders(html) {
+  let counter = 0
+
+  // 1. INVULLEN-markers → text inputs
+  html = html.replace(/\[INVULLEN([^\]]*)\]/g, (_match, rest) => {
+    counter++
+    const id = `field-${counter}`
+    let hint = (rest || '').trim()
+    if (hint.startsWith(':')) hint = hint.slice(1).trim()
+    if (hint.startsWith('—')) hint = hint.slice(1).trim()
+    // "door X: hint" → "hint"
+    const doorMatch = hint.match(/^door\s+[^:]+:\s*(.+)$/i)
+    if (doorMatch) hint = doorMatch[1].trim()
+    // "op moment van ondertekening: datum" → "datum"
+    const opMatch = hint.match(/^op\s+moment\s+van\s+ondertekening:\s*(.+)$/i)
+    if (opMatch) hint = opMatch[1].trim()
+    if (!hint) hint = 'In te vullen'
+    return `<input type="text" class="fillable" data-field="${id}" placeholder="${escapeAttr(hint)}" autocomplete="off" />`
+  })
+
+  // 2. Signature lines (20+ underscores) → signature blocks
+  html = html.replace(/_{20,}/g, () => {
+    counter++
+    const id = `field-${counter}`
+    return (
+      `<span class="signature-block" data-field="${id}">` +
+      `<canvas class="signature-canvas"></canvas>` +
+      `<button type="button" class="signature-clear" title="Wissen">×</button>` +
+      `</span>`
+    )
+  })
+
+  return html
+}
+
 // ────────────────────────────────────────────────────────────────────────────
 // Build pipeline
 // ────────────────────────────────────────────────────────────────────────────
@@ -131,6 +187,22 @@ function buildAll() {
   ensureDir(path.join(DIST_DIR, '..', 'template'))
 
   const template = readFileSync(TEMPLATE_FILE, 'utf8')
+
+  // Inline the signature_pad UMD bundle so the rendered documents work
+  // offline (no CDN dependency, no network call). The library is small
+  // (~12 KB minified) and we accept the per-document duplication in
+  // exchange for self-contained HTML files that can be e-mailed or
+  // moved to a USB stick without losing functionality.
+  const signaturePadPath = path.join(
+    ROOT,
+    'node_modules',
+    'signature_pad',
+    'dist',
+    'signature_pad.umd.min.js',
+  )
+  const signaturePadSource = existsSync(signaturePadPath)
+    ? readFileSync(signaturePadPath, 'utf8')
+    : '/* signature_pad not installed */'
 
   const sourceFiles = readdirSync(SRC_DIR)
     .filter((f) => f.endsWith('.md'))
@@ -154,7 +226,11 @@ function buildAll() {
     // Strip the first H1 from the markdown body — the cover page already
     // shows the title, so we don't want to repeat it inside the article.
     const bodyMarkdown = markdown.replace(/^#\s+.+\n+/m, '')
-    const html = marked.parse(bodyMarkdown)
+    let html = marked.parse(bodyMarkdown)
+
+    // Replace [INVULLEN ...] markers and signature lines with interactive
+    // form fields. After this step the document is fillable in a browser.
+    html = transformPlaceholders(html)
 
     const filled = fillTemplate(template, {
       EYEBROW: escapeHtml(meta.eyebrow),
@@ -164,13 +240,15 @@ function buildAll() {
       VERSION: escapeHtml(meta.version),
       DATE: escapeHtml(meta.date),
       CLASSIFICATION: escapeHtml(meta.classification),
+      DOC_KEY: escapeAttr(baseName),
+      SIGNATURE_PAD_LIB: signaturePadSource,
       CONTENT: html,
     })
 
     const outPath = path.join(DIST_DIR, `${baseName}.html`)
     writeFileSync(outPath, filled, 'utf8')
     built++
-    console.log(`[build-docs] ✓ ${baseName}.html`)
+    console.log(`[build-docs] ${baseName}.html`)
   }
 
   // Also create a tiny index.html in dist/ that links to all generated docs,
