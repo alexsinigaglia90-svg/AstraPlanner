@@ -35,3 +35,37 @@ jobs:
         env:
           NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
           NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder
+
+  security-audit:
+    name: Dependency Security Audit
+    runs-on: ubuntu-latest
+    # Run in parallel with quality; a failing audit should not block merges
+    # silently but must be visible as a red X on the PR.
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - run: npm ci
+
+      # Fail the job if any HIGH or CRITICAL severity vulnerability is present
+      # in production dependencies. MODERATE and below are allowed — we
+      # explicitly track known dev-only moderates (vitest/vite/esbuild) in the
+      # security document and accept them until upstream fixes ship.
+      #
+      # --omit=dev excludes devDependencies so that a vitest CVE does not
+      # block a release; production runtime dependencies are the only ones
+      # that carry end-user risk.
+      - name: npm audit (production, high+)
+        run: npm audit --omit=dev --audit-level=high
+
+      # Separately, do a full audit (including dev deps) that ONLY reports —
+      # it never fails the job. This gives us visibility into the dev-chain
+      # vulnerabilities so we notice when a fix lands upstream without
+      # adding noise to the "required status check" list.
+      - name: npm audit (full, report only)
+        if: always()
+        run: npm audit || true
