@@ -9,6 +9,7 @@ import {
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { anonymizeEmployees, buildPseudonymMap, pseudonymFor } from '@/lib/ai/anonymizer'
 
 export async function POST(req: Request) {
   /* ── Auth ─────────────────────────────────────────────────── */
@@ -227,7 +228,13 @@ export async function POST(req: Request) {
           .single()
 
         if (error) return { error: error.message }
-        return { success: true, employee: data }
+        // Strip PII before returning to the AI: the model only sees the pseudonym
+        // and the (non-personal) employee_number. The actual name is persisted
+        // in the database via the insert above.
+        return {
+          success: true,
+          employee: data ? { ref: pseudonymFor(orgId, data.id), id: data.id, employee_number: data.employee_number } : null,
+        }
       },
     }),
 
@@ -244,7 +251,9 @@ export async function POST(req: Request) {
           .limit(50)
 
         if (error) return { error: error.message }
-        return { employees: (data ?? []).map(e => ({ ...e, full_name: `${e.first_name} ${e.last_name}` })), count: data?.length ?? 0 }
+        // PII redaction: replace first_name/last_name/full_name with a stable
+        // per-org pseudonym before the result is fed back to Claude.
+        return { employees: anonymizeEmployees(orgId, data), count: data?.length ?? 0 }
       },
     }),
 
@@ -414,7 +423,12 @@ export async function POST(req: Request) {
 
         const { data, error } = await admin.from('employee').insert(rows).select('id, first_name, last_name')
         if (error) return { error: error.message }
-        return { success: true, added: data?.length ?? 0, employees: data }
+        // PII redaction on the response: only the pseudonym is sent back to Claude.
+        return {
+          success: true,
+          added: data?.length ?? 0,
+          employees: anonymizeEmployees(orgId, data),
+        }
       },
     }),
 
@@ -588,12 +602,14 @@ export async function POST(req: Request) {
       inputSchema: z.object({}),
       execute: async () => {
         const { data: skills } = await admin.from('employee_skill').select('employee_id, process_id, proficiency_level').eq('organization_id', orgId).eq('status', 'active')
-        const { data: emps } = await admin.from('employee').select('id, first_name, last_name').eq('organization_id', orgId).eq('status', 'active')
+        // PII redaction: we only need the employee id here, not first/last name.
+        // The id is used to derive a stable per-org pseudonym below.
+        const { data: emps } = await admin.from('employee').select('id').eq('organization_id', orgId).eq('status', 'active')
         const { data: procs } = await admin.from('process').select('id, name').eq('organization_id', orgId).eq('is_active', true)
         const { data: wp } = await admin.from('workload_plan').select('process_id, coverage_pct').eq('organization_id', orgId)
 
         const procNames = Object.fromEntries((procs ?? []).map(p => [p.id, p.name]))
-        const empNames = Object.fromEntries((emps ?? []).map(e => [e.id, `${e.first_name} ${e.last_name}`]))
+        const empPseudonyms = buildPseudonymMap(orgId, (emps ?? []).map(e => String(e.id)))
 
         // Find processes with lowest coverage (highest need)
         const coverageByProcess = new Map<string, number[]>()
@@ -613,7 +629,7 @@ export async function POST(req: Request) {
 
           for (const [empId] of needsTraining) {
             suggestions.push({
-              employee: empNames[empId] ?? empId,
+              employee: empPseudonyms.get(empId) ?? pseudonymFor(orgId, empId),
               learn_process: procNames[process_id] ?? process_id,
               reason: `Dit proces heeft de laagste dekking en deze medewerker heeft maar ${skillsPerEmp.get(empId)?.size ?? 0} skills.`,
             })
