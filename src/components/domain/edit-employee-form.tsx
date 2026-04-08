@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { motion } from 'framer-motion'
-import { Save, Trash2, AlertTriangle } from 'lucide-react'
+import { Save, Trash2, AlertTriangle, ShieldAlert } from 'lucide-react'
 import { trpc } from '@/lib/trpc/client'
 import { scalePress, bouncy } from '@/lib/motion'
 import { GlassSelect } from '@/components/domain/glass-select'
@@ -91,6 +91,7 @@ export function EditEmployeeForm({ employee, onClose, onDeleted, isNew }: EditEm
   const utils = trpc.useUtils()
   const upsert = trpc.workforce.upsertEmployee.useMutation()
   const deleteMut = trpc.workforce.deleteEmployee.useMutation()
+  const eraseMut = trpc.workforce.eraseEmployee.useMutation()
   const crewsQuery = trpc.org.listCrews.useQuery({ site_id: employee.home_site_id })
   const rolesQuery = trpc.org.listRoles.useQuery({ site_id: employee.home_site_id })
 
@@ -111,6 +112,10 @@ export function EditEmployeeForm({ employee, onClose, onDeleted, isNew }: EditEm
   const [error, setError] = useState<string | null>(null)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [showEraseConfirm, setShowEraseConfirm] = useState(false)
+  const [eraseReason, setEraseReason] = useState('')
+  const [eraseAck, setEraseAck] = useState(false)
+  const [eraseError, setEraseError] = useState<string | null>(null)
 
   const update = (key: string, value: unknown) =>
     setForm((prev) => ({ ...prev, [key]: value }))
@@ -153,6 +158,23 @@ export function EditEmployeeForm({ employee, onClose, onDeleted, isNew }: EditEm
       setDeleteError(msg)
     }
   }
+
+  const handleErase = async () => {
+    setEraseError(null)
+    try {
+      await eraseMut.mutateAsync({
+        id: employee.id,
+        reason: eraseReason.trim(),
+      })
+      await utils.workforce.listEmployees.invalidate()
+      onDeleted?.()
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Erasure failed'
+      setEraseError(msg)
+    }
+  }
+
+  const canErase = eraseReason.trim().length >= 3 && eraseAck && !eraseMut.isPending
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -468,6 +490,171 @@ export function EditEmployeeForm({ employee, onClose, onDeleted, isNew }: EditEm
               }}
             >
               {deleteMut.isPending ? 'Deleting...' : 'Yes, Delete'}
+            </button>
+          </div>
+        </motion.div>
+      )}
+
+      {/* AVG art. 17 — Right to be forgotten (erasure)
+          Distinct from Delete: this anonymises the row instead of removing
+          it, so historical shift_assignment / payroll rows remain consistent.
+          Always visible because it must work even for employees with
+          planning history (that is the entire point — terminated employees
+          keep a planning history that can only be broken by AVG erasure). */}
+      {!showEraseConfirm ? (
+        <button
+          onClick={() => setShowEraseConfirm(true)}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            padding: '8px 14px',
+            borderRadius: 'var(--radius-sm)',
+            border: '1px solid rgba(168,85,247,0.25)',
+            backgroundColor: 'transparent',
+            color: 'rgb(147,51,234)',
+            fontFamily: 'var(--font-body)',
+            fontSize: '13px',
+            fontWeight: 500,
+            cursor: 'pointer',
+            alignSelf: 'flex-start',
+          }}
+        >
+          <ShieldAlert size={14} />
+          AVG-recht op vergetelheid (art. 17)
+        </button>
+      ) : (
+        <motion.div
+          initial={{ opacity: 0, y: -4 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={bouncy}
+          style={{
+            padding: '16px',
+            borderRadius: 'var(--radius-md)',
+            background: 'linear-gradient(135deg, rgba(168,85,247,0.06), rgba(236,72,153,0.04))',
+            border: '1px solid rgba(168,85,247,0.2)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '12px',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+            <ShieldAlert size={18} style={{ color: 'rgb(147,51,234)', flexShrink: 0, marginTop: 1 }} />
+            <div>
+              <p style={{ fontFamily: 'var(--font-body)', fontSize: '14px', fontWeight: 600, color: 'var(--foreground)', margin: 0 }}>
+                {employee.first_name} {employee.last_name} definitief anonimiseren?
+              </p>
+              <p style={{ fontFamily: 'var(--font-body)', fontSize: '13px', color: 'var(--muted-foreground)', margin: '4px 0 0', lineHeight: 1.5 }}>
+                Deze actie is onder de AVG (art. 17 — recht op vergetelheid) en is <strong>onomkeerbaar</strong>. Naam, e-mailadres,
+                telefoonnummer en voorkeuren worden permanent verwijderd. Historische dienstroosters, loonkosten en audit-trail
+                blijven intact onder een geanonimiseerde verwijzing. Gebruik dit uitsluitend bij een expliciet verzoek van de betrokkene.
+              </p>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+            <label
+              style={{
+                fontFamily: 'var(--font-body)',
+                fontSize: '11px',
+                fontWeight: 600,
+                textTransform: 'uppercase' as const,
+                letterSpacing: '0.06em',
+                color: 'var(--muted-foreground)',
+              }}
+            >
+              Reden (bv. DSAR ticket #) <span style={{ color: 'var(--destructive)' }}>*</span>
+            </label>
+            <input
+              style={inputStyle}
+              value={eraseReason}
+              onChange={(e) => setEraseReason(e.target.value)}
+              placeholder="bijv. DSAR-2026-042 — schriftelijk verzoek d.d. ..."
+              maxLength={1000}
+              autoFocus
+            />
+          </div>
+
+          <label
+            style={{
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: '8px',
+              cursor: 'pointer',
+              fontFamily: 'var(--font-body)',
+              fontSize: '13px',
+              color: 'var(--foreground)',
+              lineHeight: 1.4,
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={eraseAck}
+              onChange={(e) => setEraseAck(e.target.checked)}
+              style={{ marginTop: 3, flexShrink: 0 }}
+            />
+            <span>
+              Ik bevestig dat dit een juridisch geldig verzoek om vergetelheid is, en dat deze actie niet ongedaan
+              kan worden gemaakt nadat ik op <em>Definitief anonimiseren</em> klik.
+            </span>
+          </label>
+
+          {eraseError && (
+            <div
+              style={{
+                padding: '8px 12px',
+                borderRadius: 'var(--radius-sm)',
+                backgroundColor: 'rgba(239,68,68,0.08)',
+                fontFamily: 'var(--font-body)',
+                fontSize: '13px',
+                color: 'var(--destructive)',
+              }}
+            >
+              {eraseError}
+            </div>
+          )}
+
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button
+              onClick={() => {
+                setShowEraseConfirm(false)
+                setEraseError(null)
+                setEraseReason('')
+                setEraseAck(false)
+              }}
+              style={{
+                padding: '8px 16px',
+                borderRadius: 'var(--radius-sm)',
+                border: '1px solid var(--border)',
+                backgroundColor: 'var(--card)',
+                color: 'var(--foreground)',
+                fontFamily: 'var(--font-body)',
+                fontSize: '13px',
+                fontWeight: 500,
+                cursor: 'pointer',
+              }}
+            >
+              Annuleer
+            </button>
+            <button
+              onClick={handleErase}
+              disabled={!canErase}
+              style={{
+                padding: '8px 16px',
+                borderRadius: 'var(--radius-sm)',
+                border: 'none',
+                background: canErase
+                  ? 'linear-gradient(135deg, rgb(147,51,234), rgb(219,39,119))'
+                  : 'rgba(147,51,234,0.3)',
+                color: '#fff',
+                fontFamily: 'var(--font-body)',
+                fontSize: '13px',
+                fontWeight: 600,
+                cursor: canErase ? 'pointer' : 'not-allowed',
+                opacity: eraseMut.isPending ? 0.7 : 1,
+              }}
+            >
+              {eraseMut.isPending ? 'Bezig met anonimiseren...' : 'Definitief anonimiseren'}
             </button>
           </div>
         </motion.div>
