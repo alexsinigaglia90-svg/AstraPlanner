@@ -7,7 +7,7 @@ import { bouncy, snappy, scalePress } from '@/lib/motion'
 import { trpc } from '@/lib/trpc/client'
 import { useToast } from '@/components/domain/toast'
 import { useSiteStore } from '@/stores/site-store'
-import * as XLSX from 'xlsx'
+import ExcelJS from 'exceljs'
 import { Step1 } from './demand-upload-step1'
 import { Step2 } from './demand-upload-step2'
 
@@ -100,14 +100,14 @@ function addDays(isoDate: string, days: number): string {
 
 // ── Template generation ──────────────────────────────────────────────────────
 
-function downloadDemandTemplate(
+async function downloadDemandTemplate(
   processes: Array<{ id: string; name: string }>,
   mode: PlanMode = 'week',
   weekCount = 8,
   workDays: number[] = [1, 2, 3, 4, 5],
   existingData?: Map<string, Map<string, number>>,
 ) {
-  const wb = XLSX.utils.book_new()
+  const wb = new ExcelJS.Workbook()
   const columns = mode === 'week'
     ? getNextMondays(weekCount)
     : getWorkDays(weekCount, workDays)
@@ -115,25 +115,28 @@ function downloadDemandTemplate(
   const headerRow = ['Proces', ...columns.map((c) => c.label)]
   const dateRow = ['', ...columns.map((c) => c.date)]
   const modeRow = ['_mode', mode, ...(mode === 'day' ? ['weekCount=' + weekCount] : [])]
-  const dataRows = processes.map((p) => [
-    p.name,
-    ...columns.map((col) => {
-      const vol = existingData?.get(p.id)?.get(col.date)
-      return vol != null && vol > 0 ? vol : ''
-    }),
-  ])
 
-  const allRows = [headerRow, dateRow, modeRow, ...dataRows]
-  const ws = XLSX.utils.aoa_to_sheet(allRows)
-
-  ws['!cols'] = [
-    { wch: 24 },
-    ...columns.map(() => ({ wch: mode === 'day' ? 12 : 16 })),
+  const demandSheet = wb.addWorksheet('Demand')
+  demandSheet.addRow(headerRow)
+  demandSheet.addRow(dateRow)
+  demandSheet.addRow(modeRow)
+  for (const p of processes) {
+    const dataRow: (string | number)[] = [
+      p.name,
+      ...columns.map((col) => {
+        const vol = existingData?.get(p.id)?.get(col.date)
+        return vol != null && vol > 0 ? vol : ''
+      }),
+    ]
+    demandSheet.addRow(dataRow)
+  }
+  demandSheet.columns = [
+    { width: 24 },
+    ...columns.map(() => ({ width: mode === 'day' ? 12 : 16 })),
   ]
 
-  XLSX.utils.book_append_sheet(wb, ws, 'Demand')
-
   const modeLabel = mode === 'week' ? 'Per week' : 'Per dag'
+  const refSheet = wb.addWorksheet('Referentie')
   const ref = [
     ['AstraPlanner — Demand Forecast Template'],
     [''],
@@ -150,23 +153,66 @@ function downloadDemandTemplate(
     [''],
     [`Gegenereerd: ${new Date().toLocaleDateString('nl-NL', { day: 'numeric', month: 'long', year: 'numeric' })}`],
   ]
-  const wsRef = XLSX.utils.aoa_to_sheet(ref)
-  wsRef['!cols'] = [{ wch: 55 }]
-  XLSX.utils.book_append_sheet(wb, wsRef, 'Referentie')
+  for (const row of ref) refSheet.addRow(row)
+  refSheet.columns = [{ width: 55 }]
 
-  XLSX.writeFile(wb, 'AstraPlanner_Demand_Template.xlsx')
+  // Write workbook to a buffer and trigger a browser download. ExcelJS does
+  // not provide the synchronous writeFile convenience of xlsx, so we wire
+  // the blob-to-anchor flow manually.
+  const buffer = await wb.xlsx.writeBuffer()
+  const blob = new Blob([buffer], {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = 'AstraPlanner_Demand_Template.xlsx'
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
 }
 
 // ── Template parsing ─────────────────────────────────────────────────────────
 
+/**
+ * Unwrap an ExcelJS cell value to a plain scalar. ExcelJS returns rich
+ * objects for formulas, rich text, and hyperlinks — the downstream parsing
+ * logic expects plain strings/numbers.
+ */
+function unwrapCellValue(value: unknown): unknown {
+  if (value === null || value === undefined) return ''
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return value
+  if (value instanceof Date) return value.toISOString().slice(0, 10)
+  if (typeof value === 'object') {
+    const obj = value as { result?: unknown; text?: unknown; richText?: Array<{ text: string }>; hyperlink?: string }
+    if ('richText' in obj && Array.isArray(obj.richText)) return obj.richText.map((r) => r.text).join('')
+    if ('result' in obj && obj.result !== undefined) return obj.result
+    if ('text' in obj && obj.text !== undefined) return obj.text
+    if ('hyperlink' in obj && obj.hyperlink) return obj.hyperlink
+    return ''
+  }
+  return String(value)
+}
+
 function parseFilledTemplate(
-  wb: XLSX.WorkBook,
+  wb: ExcelJS.Workbook,
   processes: Array<{ id: string; name: string }>,
 ): ParseResult {
-  const sheet = wb.Sheets['Demand'] ?? wb.Sheets[wb.SheetNames[0]!]
+  const sheet = wb.getWorksheet('Demand') ?? wb.worksheets[0]
   if (!sheet) return { entries: [], errors: ['Geen "Demand" tabblad gevonden'], unknownProcessNames: [] }
 
-  const raw = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: '' }) as unknown[][]
+  // Convert the worksheet to a 2D array so the existing row-by-row
+  // parsing logic below can stay intact.
+  const raw: unknown[][] = []
+  for (let r = 1; r <= sheet.rowCount; r++) {
+    const row = sheet.getRow(r)
+    const cells: unknown[] = []
+    for (let c = 1; c <= sheet.columnCount; c++) {
+      cells.push(unwrapCellValue(row.getCell(c).value))
+    }
+    raw.push(cells)
+  }
   if (raw.length < 3) return { entries: [], errors: ['Template bevat te weinig rijen'], unknownProcessNames: [] }
 
   const dateRow = raw[1] as string[]
@@ -338,23 +384,22 @@ export function DemandUploadWizard({ open, onClose, siteId, onImported }: Demand
     onClose()
   }, [onClose])
 
-  const processFile = useCallback((file: File) => {
+  const processFile = useCallback(async (file: File) => {
     if (!file.name.match(/\.(xlsx|xls)$/i)) {
       setParseErrors(['Alleen .xlsx of .xls bestanden worden ondersteund']); return
     }
-    const reader = new FileReader()
-    reader.onload = (e) => {
-      try {
-        const data = new Uint8Array(e.target!.result as ArrayBuffer)
-        const wb = XLSX.read(data, { type: 'array' })
-        const result = parseFilledTemplate(wb, demandTypes)
-        setUploadedFile(file)
-        setEntries(result.entries)
-        setParseErrors(result.errors)
-        setUnknownProcessNames(result.unknownProcessNames)
-      } catch { setParseErrors(['Kon het bestand niet lezen.']) }
+    try {
+      const buffer = await file.arrayBuffer()
+      const wb = new ExcelJS.Workbook()
+      await wb.xlsx.load(buffer)
+      const result = parseFilledTemplate(wb, demandTypes)
+      setUploadedFile(file)
+      setEntries(result.entries)
+      setParseErrors(result.errors)
+      setUnknownProcessNames(result.unknownProcessNames)
+    } catch {
+      setParseErrors(['Kon het bestand niet lezen.'])
     }
-    reader.readAsArrayBuffer(file)
   }, [demandTypes])
 
   const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -485,7 +530,9 @@ export function DemandUploadWizard({ open, onClose, siteId, onImported }: Demand
                     planMode={planMode} dayWeekCount={dayWeekCount} workDayPreset={workDayPreset}
                     onPlanModeChange={setPlanMode} onDayWeekCountChange={setDayWeekCount}
                     onWorkDayPresetChange={setWorkDayPreset}
-                    onDownloadTemplate={() => downloadDemandTemplate(demandTypes, planMode, planMode === 'week' ? 8 : dayWeekCount, workDays, existingData)}
+                    onDownloadTemplate={() => {
+                      void downloadDemandTemplate(demandTypes, planMode, planMode === 'week' ? 8 : dayWeekCount, workDays, existingData)
+                    }}
                     onDrop={handleDrop}
                     onDragOver={(e) => { e.preventDefault(); setIsDragging(true) }}
                     onDragLeave={() => setIsDragging(false)}

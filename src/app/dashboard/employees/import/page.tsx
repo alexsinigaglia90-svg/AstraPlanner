@@ -11,7 +11,7 @@ import { useDemoStore } from '@/hooks/use-demo'
 import { useToast } from '@/components/domain/toast'
 import { demoShifts, demoEmployees, demoProcesses } from '@/components/onboarding/demo-seed'
 import { matchCrew, matchRole } from '@/lib/shift-matcher'
-import * as XLSX from 'xlsx'
+import ExcelJS from 'exceljs'
 
 // ── Dataloader column definitions ───────────────────────────────────────────
 // These match what the solver needs (no skills — those are graded individually)
@@ -41,7 +41,75 @@ interface SkillsValidationResult {
 
 // ── Combined template download ──────────────────────────────────────────────
 
-function downloadTemplate(
+/**
+ * Unwrap an ExcelJS cell value to a plain string. ExcelJS returns rich
+ * objects for formulas, rich text, and hyperlinks — downstream parsing
+ * logic expects plain strings.
+ */
+function cellText(value: unknown): string {
+  if (value === null || value === undefined) return ''
+  if (typeof value === 'string') return value
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+  if (value instanceof Date) return value.toISOString().slice(0, 10)
+  if (typeof value === 'object') {
+    const obj = value as { result?: unknown; text?: unknown; richText?: Array<{ text: string }>; hyperlink?: string }
+    if ('richText' in obj && Array.isArray(obj.richText)) return obj.richText.map((r) => r.text).join('')
+    if ('result' in obj && obj.result !== undefined) return String(obj.result)
+    if ('text' in obj && obj.text !== undefined) return String(obj.text)
+    if ('hyperlink' in obj && obj.hyperlink) return String(obj.hyperlink)
+  }
+  return String(value)
+}
+
+/**
+ * Convert a worksheet to a list of Record<string, string> rows, using the
+ * first row as header. Skips rows that are completely empty.
+ */
+function sheetToJson(sheet: ExcelJS.Worksheet): Record<string, string>[] {
+  if (sheet.rowCount < 1) return []
+  const headerRow = sheet.getRow(1)
+  const headers: string[] = []
+  for (let c = 1; c <= sheet.columnCount; c++) {
+    headers.push(cellText(headerRow.getCell(c).value))
+  }
+  const rows: Record<string, string>[] = []
+  for (let r = 2; r <= sheet.rowCount; r++) {
+    const row = sheet.getRow(r)
+    const record: Record<string, string> = {}
+    let hasAnyValue = false
+    for (let c = 1; c <= headers.length; c++) {
+      const key = headers[c - 1]
+      if (!key) continue
+      const text = cellText(row.getCell(c).value)
+      record[key] = text
+      if (text !== '') hasAnyValue = true
+    }
+    if (hasAnyValue) rows.push(record)
+  }
+  return rows
+}
+
+/**
+ * Write an ExcelJS workbook as an .xlsx file and trigger a browser download.
+ * exceljs lacks the synchronous writeFile helper that xlsx provided, so we
+ * funnel the buffer through a Blob + anchor click.
+ */
+async function saveWorkbook(wb: ExcelJS.Workbook, fileName: string) {
+  const buffer = await wb.xlsx.writeBuffer()
+  const blob = new Blob([buffer], {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = fileName
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
+async function downloadTemplate(
   crews: { name: string }[],
   processes: { name: string }[],
   employees: { employee_number: string; first_name: string; last_name: string }[],
@@ -53,30 +121,31 @@ function downloadTemplate(
     return c
   })
 
-  const wb = XLSX.utils.book_new()
+  const wb = new ExcelJS.Workbook()
 
   // Sheet 1: Employees
-  const empHeaders = columns.map((c) => c.label)
-  const empExample = columns.map((c) => c.example)
-  const wsEmp = XLSX.utils.aoa_to_sheet([empHeaders, empExample])
-  wsEmp['!cols'] = columns.map(() => ({ wch: 22 }))
-  XLSX.utils.book_append_sheet(wb, wsEmp, 'Employees')
+  const empSheet = wb.addWorksheet('Employees')
+  empSheet.addRow(columns.map((c) => c.label))
+  empSheet.addRow(columns.map((c) => c.example))
+  empSheet.columns = columns.map(() => ({ width: 22 }))
 
   // Sheet 2: Skills
   if (processes.length > 0) {
+    const skillSheet = wb.addWorksheet('Skills')
     const skillHeaders = ['Employee Name', ...processes.map((p) => p.name)]
+    skillSheet.addRow(skillHeaders)
     const skillExamples = employees.length > 0
       ? employees.slice(0, 3).map((emp) => [
           `${emp.first_name} ${emp.last_name}`,
           ...processes.map(() => ''),
         ])
       : [['Lars van der Berg', ...processes.map(() => '')]]
-    const wsSkills = XLSX.utils.aoa_to_sheet([skillHeaders, ...skillExamples])
-    wsSkills['!cols'] = skillHeaders.map((h) => ({ wch: Math.max(h.length + 2, 16) }))
-    XLSX.utils.book_append_sheet(wb, wsSkills, 'Skills')
+    for (const row of skillExamples) skillSheet.addRow(row)
+    skillSheet.columns = skillHeaders.map((h) => ({ width: Math.max(h.length + 2, 16) }))
   }
 
   // Sheet 3: Reference
+  const refSheet = wb.addWorksheet('Reference')
   const refRows: string[][] = [
     ['Available Crews', 'Instructions'],
     ['', 'Fill Sheet 1 (Employees) with employee data.'],
@@ -92,29 +161,29 @@ function downloadTemplate(
       refRows.push([crews[i]?.name ?? '', ''])
     }
   }
-  const wsRef = XLSX.utils.aoa_to_sheet(refRows)
-  wsRef['!cols'] = [{ wch: 25 }, { wch: 55 }]
-  XLSX.utils.book_append_sheet(wb, wsRef, 'Reference')
+  for (const row of refRows) refSheet.addRow(row)
+  refSheet.columns = [{ width: 25 }, { width: 55 }]
 
-  XLSX.writeFile(wb, 'AstraPlanner_Import_Template.xlsx')
+  await saveWorkbook(wb, 'AstraPlanner_Import_Template.xlsx')
 }
 
 // ── Download pre-filled skills template ─────────────────────────────────────
 
-function downloadSkillsTemplate(
+async function downloadSkillsTemplate(
   employeeNames: string[],
   processes: { name: string }[],
 ) {
-  const wb = XLSX.utils.book_new()
+  const wb = new ExcelJS.Workbook()
 
   // Skills matrix: Employee Name + process columns
+  const skillSheet = wb.addWorksheet('Skills')
   const headers = ['Employee Name', ...processes.map((p) => p.name)]
-  const rows = employeeNames.map((name) => [name, ...processes.map(() => '')])
-  const ws = XLSX.utils.aoa_to_sheet([headers, ...rows])
-  ws['!cols'] = headers.map((h) => ({ wch: Math.max(h.length + 4, 18) }))
-  XLSX.utils.book_append_sheet(wb, ws, 'Skills')
+  skillSheet.addRow(headers)
+  for (const name of employeeNames) skillSheet.addRow([name, ...processes.map(() => '')])
+  skillSheet.columns = headers.map((h) => ({ width: Math.max(h.length + 4, 18) }))
 
   // Reference sheet
+  const refSheet = wb.addWorksheet('Reference')
   const ref = [
     ['Instructions'],
     ['Fill in skill levels 1-5 for each employee/process combination.'],
@@ -122,11 +191,10 @@ function downloadSkillsTemplate(
     ['Leave cells empty or 0 to skip.'],
     ['Column order does not matter — processes are matched by name.'],
   ]
-  const wsRef = XLSX.utils.aoa_to_sheet(ref)
-  wsRef['!cols'] = [{ wch: 60 }]
-  XLSX.utils.book_append_sheet(wb, wsRef, 'Reference')
+  for (const row of ref) refSheet.addRow(row)
+  refSheet.columns = [{ width: 60 }]
 
-  XLSX.writeFile(wb, 'AstraPlanner_Skills_Template.xlsx')
+  await saveWorkbook(wb, 'AstraPlanner_Skills_Template.xlsx')
 }
 
 // ── Fuzzy process name matching ─────────────────────────────────────────────
@@ -358,11 +426,12 @@ export default function EmployeeImportPage() {
 
     try {
       const buffer = await readFile(file)
-      const wb = XLSX.read(new Uint8Array(buffer), { type: 'array' })
-      const empSheet = wb.Sheets['Employees'] ?? wb.Sheets[wb.SheetNames[0]!]
+      const wb = new ExcelJS.Workbook()
+      await wb.xlsx.load(buffer)
+      const empSheet = wb.getWorksheet('Employees') ?? wb.worksheets[0]
       if (!empSheet) throw new Error('No Employees sheet found')
 
-      const empRows = XLSX.utils.sheet_to_json<Record<string, string>>(empSheet, { defval: '' })
+      const empRows = sheetToJson(empSheet)
       const dataRows = empRows.filter((r) => {
         const first = Object.values(r)[0]?.toString().toLowerCase() ?? ''
         return first !== 'required' && first !== 'optional'
@@ -388,8 +457,9 @@ export default function EmployeeImportPage() {
 
     try {
       const buffer = await readFile(file)
-      const wb = XLSX.read(new Uint8Array(buffer), { type: 'array' })
-      const skillSheet = wb.Sheets['Skills'] ?? wb.Sheets[wb.SheetNames[0]!]
+      const wb = new ExcelJS.Workbook()
+      await wb.xlsx.load(buffer)
+      const skillSheet = wb.getWorksheet('Skills') ?? wb.worksheets[0]
       if (!skillSheet) throw new Error('No Skills sheet found')
 
       const processes = (processesQuery.data ?? []) as { id: string; name: string }[]
@@ -398,7 +468,7 @@ export default function EmployeeImportPage() {
         return
       }
 
-      const rawData = XLSX.utils.sheet_to_json<Record<string, string>>(skillSheet, { defval: '' })
+      const rawData = sheetToJson(skillSheet)
       if (rawData.length === 0) {
         setSkillsValidation({ matched: [], employeesMatched: 0, processesMatched: 0, errors: [{ row: 0, message: 'No data rows found in Skills sheet.' }] })
         return
@@ -671,7 +741,7 @@ export default function EmployeeImportPage() {
                 variants={scalePress} whileTap="press" whileHover={{ y: -1 }} transition={snappy}
                 onClick={() => {
                   const emps = (employeesQuery.data?.items ?? []) as { employee_number: string; first_name: string; last_name: string }[]
-                  downloadTemplate(crewsQuery.data ?? [], (processesQuery.data ?? []) as { name: string }[], emps)
+                  void downloadTemplate(crewsQuery.data ?? [], (processesQuery.data ?? []) as { name: string }[], emps)
                 }}
                 className="flex items-center gap-3 w-full group"
                 style={{ padding: '12px 16px', borderRadius: 'var(--radius-md)', border: '1.5px solid rgba(99,102,241,0.12)', background: 'rgba(99,102,241,0.03)', cursor: 'pointer' }}
@@ -717,7 +787,7 @@ export default function EmployeeImportPage() {
               {hasProcesses && (
                 <motion.button
                   variants={scalePress} whileTap="press" whileHover={{ y: -1 }} transition={snappy}
-                  onClick={() => downloadSkillsTemplate(employeeNames, (processesQuery.data ?? []) as { name: string }[])}
+                  onClick={() => void downloadSkillsTemplate(employeeNames, (processesQuery.data ?? []) as { name: string }[])}
                   className="flex items-center gap-3 w-full"
                   style={{ padding: '12px 16px', borderRadius: 'var(--radius-md)', border: '1.5px solid rgba(245,158,11,0.2)', background: 'rgba(245,158,11,0.04)', cursor: 'pointer' }}
                 >

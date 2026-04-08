@@ -4,7 +4,7 @@ import { useState, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { bouncy, snappy } from '@/lib/motion'
 import { Upload, FileSpreadsheet, Check, X } from 'lucide-react'
-import * as XLSX from 'xlsx'
+import ExcelJS from 'exceljs'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -72,6 +72,28 @@ function fuzzyMatchDemandType(
   )
 }
 
+/**
+ * Convert an ExcelJS cell value to a plain string. ExcelJS returns rich
+ * objects for formulas, rich text, and hyperlinks — we unwrap them so the
+ * downstream matching logic can work with plain strings.
+ */
+function cellText(value: unknown): string {
+  if (value === null || value === undefined) return ''
+  if (typeof value === 'string') return value
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+  if (value instanceof Date) return value.toISOString().slice(0, 10)
+  if (typeof value === 'object') {
+    const obj = value as { result?: unknown; text?: unknown; richText?: Array<{ text: string }>; hyperlink?: string }
+    if ('richText' in obj && Array.isArray(obj.richText)) {
+      return obj.richText.map((r) => r.text).join('')
+    }
+    if ('result' in obj && obj.result !== undefined) return String(obj.result)
+    if ('text' in obj && obj.text !== undefined) return String(obj.text)
+    if ('hyperlink' in obj && obj.hyperlink) return String(obj.hyperlink)
+  }
+  return String(value)
+}
+
 function isDemandTypeColumn(header: string): boolean {
   const lower = header.toLowerCase().trim()
   return (
@@ -115,23 +137,54 @@ export function ExcelDropZone({
   }, [])
 
   const parseFile = useCallback(
-    (file: File) => {
-      const reader = new FileReader()
-      reader.onload = (e) => {
-        const data = new Uint8Array(e.target?.result as ArrayBuffer)
-        const workbook = XLSX.read(data, { type: 'array' })
-        const firstSheetName = workbook.SheetNames[0]
-        if (!firstSheetName) return
-        const sheet = workbook.Sheets[firstSheetName]
+    async (file: File) => {
+      try {
+        const buffer = await file.arrayBuffer()
+        const workbook = new ExcelJS.Workbook()
+        await workbook.xlsx.load(buffer)
+
+        const sheet = workbook.worksheets[0]
         if (!sheet) return
 
-        const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, {
-          defval: '',
-        })
-        const firstRow = json[0]
-        if (!firstRow) return
+        // Header row = first non-empty row. We treat row 1 as the header
+        // unless it's empty, in which case we scan down for the first
+        // populated row.
+        let headerRowNumber = 1
+        while (headerRowNumber <= sheet.rowCount) {
+          const row = sheet.getRow(headerRowNumber)
+          if (row.values && (row.values as unknown[]).some((v) => v !== null && v !== undefined && v !== '')) {
+            break
+          }
+          headerRowNumber++
+        }
+        if (headerRowNumber > sheet.rowCount) return
 
-        const columns = Object.keys(firstRow)
+        // Extract column headers. ExcelJS row.values is 1-indexed (index 0 is always null).
+        const headerRow = sheet.getRow(headerRowNumber)
+        const columns: string[] = []
+        for (let c = 1; c <= sheet.columnCount; c++) {
+          const v = headerRow.getCell(c).value
+          columns.push(cellText(v))
+        }
+
+        // Build a JSON-like representation for the remaining rows.
+        const json: Record<string, unknown>[] = []
+        for (let r = headerRowNumber + 1; r <= sheet.rowCount; r++) {
+          const row = sheet.getRow(r)
+          const record: Record<string, unknown> = {}
+          let hasAnyValue = false
+          for (let c = 1; c <= columns.length; c++) {
+            const header = columns[c - 1]
+            if (!header) continue
+            const v = row.getCell(c).value
+            const text = cellText(v)
+            record[header] = text
+            if (text !== '') hasAnyValue = true
+          }
+          if (hasAnyValue) json.push(record)
+        }
+
+        if (json.length === 0) return
 
         // Detect demand type column
         const demandTypeCol: string = columns.find(isDemandTypeColumn) ?? columns[0] ?? ''
@@ -166,8 +219,9 @@ export function ExcelDropZone({
           weekColumns,
           matchedRows,
         })
+      } catch (err) {
+        console.error('[excel-drop-zone] parse error:', err)
       }
-      reader.readAsArrayBuffer(file)
     },
     [demandTypes],
   )

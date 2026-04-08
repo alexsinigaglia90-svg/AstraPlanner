@@ -1,11 +1,16 @@
 import { describe, it, expect } from 'vitest'
-import * as XLSX from 'xlsx'
+import ExcelJS from 'exceljs'
 import { extractXray } from '@/lib/demand/xray'
 
-function makeWorkbook(data: unknown[][], sheetName = 'Sheet1'): XLSX.WorkBook {
-  const ws = XLSX.utils.aoa_to_sheet(data)
-  const wb = XLSX.utils.book_new()
-  XLSX.utils.book_append_sheet(wb, ws, sheetName)
+function makeWorkbook(data: unknown[][], sheetName = 'Sheet1'): ExcelJS.Workbook {
+  const wb = new ExcelJS.Workbook()
+  const ws = wb.addWorksheet(sheetName)
+  for (const row of data) {
+    // ExcelJS treats undefined cells as truly absent — substitute empty
+    // strings so the worksheet's columnCount matches the widest row in the
+    // input, which is what the xray analyzer expects.
+    ws.addRow(row.map((v) => (v === undefined || v === null ? '' : v)))
+  }
   return wb
 }
 
