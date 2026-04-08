@@ -10,7 +10,7 @@ import {
   managerProcedure,
   plannerProcedure,
 } from '../trpc'
-import { createAdminClient } from '../../lib/supabase/admin'
+import { createAdminClientForUser } from '../../lib/supabase/admin'
 import {
   PaginationInput,
   buildPaginatedResult,
@@ -131,7 +131,7 @@ export const workforceRouter = router({
   getEmployee: viewerProcedure
     .input(z.object({ id: z.string().uuid().describe('Employee ID') }))
     .query(async ({ ctx, input }) => {
-      const admin = createAdminClient()
+      const admin = createAdminClientForUser(ctx.user.id)
 
       // Fetch employee, skills, and overrides in parallel
       const [empResult, skillsResult, overridesResult] = await Promise.all([
@@ -229,7 +229,7 @@ export const workforceRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const admin = createAdminClient()
+      const admin = createAdminClientForUser(ctx.user.id)
 
       // Check for duplicate employee_number on create
       if (!input.id) {
@@ -321,7 +321,7 @@ export const workforceRouter = router({
 
       // Use admin client to bypass RLS for bulk operations
       // Auth is already verified by managerProcedure
-      const admin = createAdminClient()
+      const admin = createAdminClientForUser(ctx.user.id)
 
       // Look up or create departments by name
       const deptNames = [
@@ -414,7 +414,7 @@ export const workforceRouter = router({
   listSkillMatrix: plannerProcedure
     .input(z.object({ site_id: z.string().uuid() }))
     .query(async ({ ctx, input }) => {
-      const admin = createAdminClient()
+      const admin = createAdminClientForUser(ctx.user.id)
 
       // Get all department IDs for this site
       const { data: depts } = await admin
@@ -448,7 +448,7 @@ export const workforceRouter = router({
   deleteSkill: managerProcedure
     .input(z.object({ employee_id: z.string().uuid(), process_id: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
-      const admin = createAdminClient()
+      const admin = createAdminClientForUser(ctx.user.id)
       const { error } = await admin
         .from('employee_skill')
         .delete()
@@ -476,7 +476,7 @@ export const workforceRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const admin = createAdminClient()
+      const admin = createAdminClientForUser(ctx.user.id)
       const { data, error } = await admin
         .from('employee_skill')
         .upsert(
@@ -532,7 +532,7 @@ export const workforceRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const admin = createAdminClient()
+      const admin = createAdminClientForUser(ctx.user.id)
       const orgId = ctx.organizationId
 
       const rows = input.skills.map((s) => ({
@@ -653,7 +653,7 @@ export const workforceRouter = router({
   deleteEmployee: managerProcedure
     .input(z.object({ id: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
-      const admin = createAdminClient()
+      const admin = createAdminClientForUser(ctx.user.id)
 
       // Check for planning history (shift_assignment records)
       const { count, error: countErr } = await admin
@@ -687,7 +687,7 @@ export const workforceRouter = router({
   bulkDeleteEmployees: managerProcedure
     .input(z.object({ ids: z.array(z.string().uuid()).min(1).max(200) }))
     .mutation(async ({ ctx, input }) => {
-      const admin = createAdminClient()
+      const admin = createAdminClientForUser(ctx.user.id)
 
       // Check which employees have planning history
       const { data: assigned } = await admin
@@ -719,7 +719,7 @@ export const workforceRouter = router({
   bulkArchiveEmployees: managerProcedure
     .input(z.object({ ids: z.array(z.string().uuid()).min(1).max(200) }))
     .mutation(async ({ ctx, input }) => {
-      const admin = createAdminClient()
+      const admin = createAdminClientForUser(ctx.user.id)
 
       const { error } = await admin
         .from('employee')

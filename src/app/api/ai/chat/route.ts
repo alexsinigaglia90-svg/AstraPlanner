@@ -8,7 +8,7 @@ import {
 } from 'ai'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
-import { createAdminClient } from '@/lib/supabase/admin'
+import { createAdminClientForUser } from '@/lib/supabase/admin'
 import { anonymizeEmployees, buildPseudonymMap, pseudonymFor } from '@/lib/ai/anonymizer'
 import { enforceRateLimit, identifierFor } from '@/lib/rate-limit'
 
@@ -41,7 +41,7 @@ export async function POST(req: Request) {
   /* ── Body ─────────────────────────────────────────────────── */
   const { messages }: { messages: UIMessage[] } = await req.json()
 
-  const admin = createAdminClient()
+  const admin = createAdminClientForUser(user.id)
 
   /* ── Tools ────────────────────────────────────────────────── */
   const tools = {

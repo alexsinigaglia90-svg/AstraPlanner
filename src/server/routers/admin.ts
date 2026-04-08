@@ -7,7 +7,7 @@ import {
   managerProcedure,
   viewerProcedure,
 } from '../trpc'
-import { createAdminClient } from '@/lib/supabase/admin'
+import { createAdminClientForUser } from '@/lib/supabase/admin'
 
 const roleEnum = z.enum([
   'tenant_admin', 'site_manager', 'planner', 'supervisor', 'employee', 'viewer',
@@ -43,7 +43,7 @@ export const adminRouter = router({
       })
     )
     .query(async ({ ctx, input }) => {
-      const adminClient = createAdminClient()
+      const adminClient = createAdminClientForUser(ctx.user.id)
 
       // Supabase admin listUsers returns up to 1000 per page; we post-filter by org
       // because there is no server-side filter on app_metadata via the REST API.
@@ -114,7 +114,7 @@ export const adminRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const adminClient = createAdminClient()
+      const adminClient = createAdminClientForUser(ctx.user.id)
       const { data, error } = await adminClient.auth.admin.inviteUserByEmail(input.email, {
         data: {
           full_name: input.full_name,
@@ -342,7 +342,7 @@ export const adminRouter = router({
     }),
 
   listJoinRequests: adminProcedure.query(async ({ ctx }) => {
-    const admin = createAdminClient()
+    const admin = createAdminClientForUser(ctx.user.id)
 
     const { data, error } = await admin
       .from('join_request')
@@ -375,7 +375,7 @@ export const adminRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const admin = createAdminClient()
+      const admin = createAdminClientForUser(ctx.user.id)
 
       // Get the request and verify it belongs to this organization
       const { data: request, error: fetchError } = await admin

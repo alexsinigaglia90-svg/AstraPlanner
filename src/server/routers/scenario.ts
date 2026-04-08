@@ -5,7 +5,7 @@
 import { z } from 'zod'
 import { TRPCError } from '@trpc/server'
 import { router, plannerProcedure, viewerProcedure } from '../trpc'
-import { createAdminClient } from '../../lib/supabase/admin'
+import { createAdminClientForUser } from '../../lib/supabase/admin'
 import { generateTimeSlots as generateTimeSlotsForWeek, buildProcessDemand, buildEmployeeRecords, buildConstraints } from '../../lib/solver/assemble-input'
 import type { ShiftDef, RawEmployee, RawSkill, RotationSlot, WorkloadRow } from '../../lib/solver/assemble-input'
 import { solveGreedy } from '../../lib/solver/greedy'
@@ -97,7 +97,7 @@ export const scenarioRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const admin = createAdminClient()
+      const admin = createAdminClientForUser(ctx.user.id)
       const orgId = ctx.organizationId
 
       // Verify the base plan version exists and belongs to this org
@@ -156,7 +156,7 @@ export const scenarioRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const admin = createAdminClient()
+      const admin = createAdminClientForUser(ctx.user.id)
       const orgId = ctx.organizationId
       const strategy = input.solver_strategy ?? 'greedy'
 
@@ -560,7 +560,7 @@ export const scenarioRouter = router({
   list: plannerProcedure
     .input(z.object({ base_plan_version_id: z.string().uuid() }))
     .query(async ({ ctx, input }) => {
-      const admin = createAdminClient()
+      const admin = createAdminClientForUser(ctx.user.id)
 
       const { data, error } = await admin
         .from('scenario')
@@ -592,7 +592,7 @@ export const scenarioRouter = router({
       })
     )
     .query(async ({ ctx, input }) => {
-      const admin = createAdminClient()
+      const admin = createAdminClientForUser(ctx.user.id)
       const orgId = ctx.organizationId
 
       const [resultA, resultB] = await Promise.all([
@@ -657,7 +657,7 @@ export const scenarioRouter = router({
   promote: plannerProcedure
     .input(z.object({ scenario_id: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
-      const admin = createAdminClient()
+      const admin = createAdminClientForUser(ctx.user.id)
       const orgId = ctx.organizationId
 
       // a. Fetch scenario, verify completed status

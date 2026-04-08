@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { TRPCError } from '@trpc/server'
 import { router, supervisorProcedure, protectedProcedure, managerProcedure } from '../trpc'
-import { createAdminClient } from '@/lib/supabase/admin'
+import { createAdminClientForUser } from '@/lib/supabase/admin'
 import { calculateImpact } from '@/lib/absence/impact'
 import { rankCandidates } from '@/lib/absence/scoring'
 import type { AbsenceContext, ScoringCandidate } from '@/lib/absence/types'
@@ -31,7 +31,7 @@ export const absenceRouter = router({
         })
       }
 
-      const admin = createAdminClient()
+      const admin = createAdminClientForUser(ctx.user.id)
       const { data, error } = await admin
         .from('employee_availability_override')
         .insert({
@@ -60,7 +60,7 @@ export const absenceRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const admin = createAdminClient()
+      const admin = createAdminClientForUser(ctx.user.id)
 
       // Fetch the override to validate ownership
       const { data: existing, error: fetchError } = await admin
@@ -111,7 +111,7 @@ export const absenceRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const admin = createAdminClient()
+      const admin = createAdminClientForUser(ctx.user.id)
       const { data, error } = await admin
         .from('employee_availability_override')
         .insert({
@@ -144,7 +144,7 @@ export const absenceRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const admin = createAdminClient()
+      const admin = createAdminClientForUser(ctx.user.id)
       const { data, error } = await admin
         .from('employee_availability_override')
         .insert({
@@ -173,7 +173,7 @@ export const absenceRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const admin = createAdminClient()
+      const admin = createAdminClientForUser(ctx.user.id)
       const { data, error } = await admin
         .from('employee_availability_override')
         .update({ status: input.approved ? 'confirmed' : 'cancelled' })
@@ -198,7 +198,7 @@ export const absenceRouter = router({
       })
     )
     .query(async ({ ctx, input }) => {
-      const admin = createAdminClient()
+      const admin = createAdminClientForUser(ctx.user.id)
       const today = new Date().toISOString().slice(0, 10)
 
       // Get the supervisor's own crew_id (may not exist for admins/managers)
@@ -280,7 +280,7 @@ export const absenceRouter = router({
       })
     )
     .query(async ({ ctx, input }) => {
-      const admin = createAdminClient()
+      const admin = createAdminClientForUser(ctx.user.id)
       const today = new Date().toISOString().slice(0, 10)
 
       let query = admin
@@ -334,7 +334,7 @@ export const absenceRouter = router({
   listMyLeave: protectedProcedure
     .input(z.object({ site_id: z.string().uuid().optional() }))
     .query(async ({ ctx }) => {
-      const admin = createAdminClient()
+      const admin = createAdminClientForUser(ctx.user.id)
       const { data, error } = await admin
         .from('employee_availability_override')
         .select('id, employee_id, start_date, end_date, override_type, status, reason, created_at')
@@ -365,7 +365,7 @@ export const absenceRouter = router({
       })
     )
     .query(async ({ ctx, input }) => {
-      const admin = createAdminClient()
+      const admin = createAdminClientForUser(ctx.user.id)
 
       // Fetch the employee's skills (process IDs)
       const { data: skills, error: skillsError } = await admin
@@ -430,7 +430,7 @@ export const absenceRouter = router({
       })
     )
     .query(async ({ ctx, input }) => {
-      const admin = createAdminClient()
+      const admin = createAdminClientForUser(ctx.user.id)
 
       // Fetch absent employee info
       const { data: absentEmployee, error: absentError } = await admin

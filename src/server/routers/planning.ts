@@ -5,7 +5,7 @@
 import { z } from 'zod'
 import { TRPCError } from '@trpc/server'
 import { router, plannerProcedure, managerProcedure, viewerProcedure } from '../trpc'
-import { createAdminClient } from '../../lib/supabase/admin'
+import { createAdminClientForUser } from '../../lib/supabase/admin'
 import { solveGreedy } from '../../lib/solver/greedy'
 import { generateTimeSlots, buildProcessDemand, buildEmployeeRecords, buildConstraints } from '../../lib/solver/assemble-input'
 import type { ShiftDef, RawEmployee, RawSkill, RotationSlot, WorkloadRow } from '../../lib/solver/assemble-input'
@@ -78,7 +78,7 @@ export const planningRouter = router({
       })
     )
     .query(async ({ ctx, input }) => {
-      const admin = createAdminClient()
+      const admin = createAdminClientForUser(ctx.user.id)
 
       let query = admin
         .from('plan_version')
@@ -119,7 +119,7 @@ export const planningRouter = router({
   getPlanVersion: viewerProcedure
     .input(z.object({ id: z.string().uuid() }))
     .query(async ({ ctx, input }) => {
-      const admin = createAdminClient()
+      const admin = createAdminClientForUser(ctx.user.id)
 
       const [planResult, assignmentsResult, skillsResult] = await Promise.all([
         admin
@@ -213,7 +213,7 @@ export const planningRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const admin = createAdminClient()
+      const admin = createAdminClientForUser(ctx.user.id)
       const orgId = ctx.organizationId
 
       // Get next version number for this site
@@ -270,7 +270,7 @@ export const planningRouter = router({
   getSolverContext: viewerProcedure
     .input(z.object({ plan_version_id: z.string().uuid() }))
     .query(async ({ ctx, input }) => {
-      const admin = createAdminClient()
+      const admin = createAdminClientForUser(ctx.user.id)
       const orgId = ctx.organizationId
 
       // Fetch plan to get site and period
@@ -409,7 +409,7 @@ export const planningRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const admin = createAdminClient()
+      const admin = createAdminClientForUser(ctx.user.id)
       const orgId = ctx.organizationId
       const strategy = 'greedy'
 
@@ -827,7 +827,7 @@ export const planningRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const admin = createAdminClient()
+      const admin = createAdminClientForUser(ctx.user.id)
       const orgId = ctx.organizationId
 
       // Fetch current state
@@ -944,7 +944,7 @@ export const planningRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const admin = createAdminClient()
+      const admin = createAdminClientForUser(ctx.user.id)
       const orgId = ctx.organizationId
 
       // Verify plan is in draft or optimized status
@@ -1030,7 +1030,7 @@ export const planningRouter = router({
   removeAssignment: plannerProcedure
     .input(z.object({ assignment_id: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
-      const admin = createAdminClient()
+      const admin = createAdminClientForUser(ctx.user.id)
       const orgId = ctx.organizationId
 
       // Fetch the assignment to get plan_version_id
@@ -1087,7 +1087,7 @@ export const planningRouter = router({
   lockAssignment: plannerProcedure
     .input(z.object({ assignment_id: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
-      const admin = createAdminClient()
+      const admin = createAdminClientForUser(ctx.user.id)
 
       const { data, error } = await admin
         .from('shift_assignment_staging')
@@ -1119,7 +1119,7 @@ export const planningRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const admin = createAdminClient()
+      const admin = createAdminClientForUser(ctx.user.id)
 
       // Mark the assignment with override_reason
       const { data, error } = await admin
