@@ -120,6 +120,8 @@ export function roleProcedure(minRole: AppRole) {
 }
 
 // Common role shortcuts
+/** Require the AstraPlanner platform super_admin role (rank 100). */
+export const superAdminProcedure = roleProcedure('super_admin')
 export const adminProcedure = roleProcedure('tenant_admin')
 export const managerProcedure = roleProcedure('site_manager')
 export const plannerProcedure = roleProcedure('planner')

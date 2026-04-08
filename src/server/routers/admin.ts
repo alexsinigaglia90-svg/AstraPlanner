@@ -6,6 +6,7 @@ import {
   adminProcedure,
   managerProcedure,
   viewerProcedure,
+  superAdminProcedure,
 } from '../trpc'
 import { createAdminClientForUser } from '@/lib/supabase/admin'
 
@@ -229,6 +230,66 @@ export const adminRouter = router({
         next_cursor: items.length === input.limit && last ? last.created_at : null,
         total_count: count ?? 0,
       }
+    }),
+
+  // ---------------------------------------------------------------------------
+  // Contact form submissions — platform-level inbox for prospect leads.
+  // Gated on super_admin because these are not tenant-scoped: they come
+  // from unauthenticated visitors and belong to AstraPlanner, not to any
+  // customer organization.
+  // ---------------------------------------------------------------------------
+  listContactSubmissions: superAdminProcedure
+    .input(
+      z.object({
+        status: z
+          .enum(['new', 'triaged', 'contacted', 'spam', 'archived'])
+          .optional(),
+        limit: z.number().int().min(1).max(200).default(50),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const adminClient = createAdminClientForUser(ctx.user.id)
+      let query = adminClient
+        .from('contact_submission')
+        .select(
+          'id, name, company, user_email, message, ip_address, user_agent, status, triaged_by, triaged_at, created_at',
+          { count: 'exact' },
+        )
+        .order('created_at', { ascending: false })
+        .limit(input.limit)
+
+      if (input.status) query = query.eq('status', input.status)
+
+      const { data, error, count } = await query
+      if (error) {
+        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: error.message })
+      }
+
+      return { items: data ?? [], total_count: count ?? 0 }
+    }),
+
+  updateContactSubmissionStatus: superAdminProcedure
+    .input(
+      z.object({
+        id: z.string().uuid(),
+        status: z.enum(['new', 'triaged', 'contacted', 'spam', 'archived']),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const adminClient = createAdminClientForUser(ctx.user.id)
+      const { error } = await adminClient
+        .from('contact_submission')
+        .update({
+          status: input.status,
+          triaged_by: ctx.user.id,
+          triaged_at: new Date().toISOString(),
+        })
+        .eq('id', input.id)
+
+      if (error) {
+        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: error.message })
+      }
+      return { success: true }
     }),
 
   listLaborRules: managerProcedure

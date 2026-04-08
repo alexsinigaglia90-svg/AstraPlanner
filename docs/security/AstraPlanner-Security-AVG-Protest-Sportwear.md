@@ -559,7 +559,7 @@ Dit is de eerlijke kern van dit document. De interne beveiligingsreview heeft ee
 | 8 | **Recht op vergetelheid** | Alleen cascade delete | Expliciete anonimiseringsroutine die PII nullt | Ja |
 | 9 | **Soft-delete op medewerkers** | Niet geïmplementeerd | Toevoegen `deleted_at` kolom + filter in alle queries | Ja |
 | 10 | **Externe pentest** | Niet uitgevoerd | Externe pentest door gekwalificeerde partij vóór productie-uitrol | Optioneel, contractueel onderhandelbaar |
-| 11 | **Contactformulier-logging** | Logt e-mail naar stdout | Persistent opslaan in tabel + redactie uit logs | Ja |
+| 11 | **Contactformulier-logging** | ✅ **Gerealiseerd** — inzendingen worden nu persistent opgeslagen in een dedicated `contact_submission` tabel met `ENABLE ROW LEVEL SECURITY` zonder policies (strikt "deny all" op RLS-niveau, alleen de service-role mag schrijven). Zod-validatie (lengte-caps, e-mailformaat) wordt server-side afgedwongen. Er worden géén PII-velden meer naar stdout/stderr geschreven — alleen het id van een succesvolle inzending wordt gelogd. Retentie van 1 jaar is vastgelegd met een `purge_old_contact_submissions()` cleanup functie. Een `super_admin`-only tRPC endpoint biedt het AstraPlanner-team inzage in de inbox (zie migratie 00019) | — | ✅ Gereed |
 | 12 | **Connection params encryptie** | Kolom bestaat (`BYTEA`), encryptie-code nog te valideren | Implementatie verifiëren of afronden, en beschrijven in dit document | Ja |
 
 ---
