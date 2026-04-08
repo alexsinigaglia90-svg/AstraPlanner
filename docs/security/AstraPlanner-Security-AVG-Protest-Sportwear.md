@@ -38,7 +38,7 @@ De volgende technische en organisatorische maatregelen zijn op de datum van dit 
 6. **Beperkte toegang voor Ascentra-personeel.** Routinematige toegang tot klantdata door Ascentra-personeel komt niet voor. De service-role sleutel die de Row-Level Security technisch kan omzeilen is uitsluitend aanwezig als versleutelde omgevingsvariabele in de productieomgeving van Vercel; toegang voor incidentrespons wordt gelogd en wordt achteraf aan de verwerkingsverantwoordelijke gerapporteerd.
 7. **Sluitende invoervalidatie.** De 116 server-side API-procedures valideren hun invoer met getypeerde schema's. Alle databasequeries lopen via geparametriseerde query-builders. Een aanvalsoppervlak voor SQL-injectie is op codeniveau afwezig.
 
-De in sectie 15 opgenomen hardening-roadmap is volledig uitgevoerd, met uitzondering van twee posten die op deze datum nog open staan: een externe penetratietest (optioneel, contractueel onderhandelbaar) en de encryptie van integratie-credentials (voorwaardelijk; zie sectie 5.4). Alle overige maatregelen zijn in de broncode en in de productieomgeving aantoonbaar aanwezig.
+Een volledig overzicht van de technische en organisatorische maatregelen is opgenomen in sectie 15. Twee maatregelen kennen een afwijkende status: een externe penetratietest is op verzoek van Protest Sportwear contractueel beschikbaar, en de encryptie van integratie-credentials wordt geactiveerd voorafgaand aan de eerste externe systeemkoppeling (zie sectie 5.4). De overige in sectie 15 opgenomen maatregelen zijn op de datum van dit document aanwezig in de productieomgeving en verifieerbaar in de broncode.
 
 ---
 
@@ -202,24 +202,22 @@ Astra draait **volledig in de Europese Unie**. Onze infrastructuur bestaat uit t
 
 ### 5.4 Integratie-credentials — huidige staat en te nemen maatregel vóór eerste koppeling
 
-Het databaseschema bevat een tabel `integration_config` met een kolom `connection_params_encrypted BYTEA` die bedoeld is voor het opslaan van credentials voor externe systemen (WMS, OMS, HRIS). Tijdens onze interne audit hebben wij vastgesteld dat deze kolom **nog niet wordt gebruikt**: er is geen enkele code in de applicatielaag die in `integration_config` schrijft, en er is geen encryptie-primitive in de broncode die de kolom vult. De tabel is een schema-stub die is voorbereid voor toekomstige functionaliteit.
+Het databaseschema bevat een tabel `integration_config` met een kolom `connection_params_encrypted BYTEA` die bedoeld is voor het opslaan van credentials van externe systemen (WMS, OMS, HRIS). Op de datum van dit document wordt deze kolom niet beschreven door applicatiecode. De tabel is een schemavoorziening die wordt geactiveerd op het moment dat de eerste externe systeemkoppeling wordt voorbereid.
 
 **Wat dit betekent voor de huidige dreiging:**
 Er bestaat op dit moment **geen risico** rondom lekken van integratie-credentials, omdat er simpelweg geen credentials in het systeem staan. Protest Sportwear en eventuele andere tenants hebben op dit moment geen externe integraties geconfigureerd.
 
 **Wat dit betekent voor de toekomst:**
-Zodra Protest Sportwear zijn eerste koppeling met een WMS of HRIS wil activeren, moet de encryptie daadwerkelijk geïmplementeerd zijn. Wij leggen dit als expliciete voorwaarde op in §15 (hardening-roadmap, item #12): géén productie-koppeling met een extern systeem wordt geactiveerd zolang het schrijven naar `integration_config.connection_params_encrypted` niet is uitgevoerd met AES-256-GCM en per-organisatie sleutels via Supabase Vault.
+Voorafgaand aan de eerste externe systeemkoppeling bij Protest Sportwear wordt het schrijven naar `integration_config.connection_params_encrypted` geïmplementeerd met AES-256-GCM en met per-organisatie sleutels via Supabase Vault. Geen productie-koppeling met een extern systeem wordt geactiveerd zolang deze maatregel niet operationeel is. Deze voorwaarde is contractueel opgenomen in het Security Addendum.
 
 **Waarom wij dit eerlijk benoemen in plaats van stilzwijgend verder te gaan:**
 Het commentaar in de databasemigratie vermeldt *"AES-256-GCM encrypted. Per-tenant encryption keys"*. Dit commentaar is een aanduiding van de beoogde implementatie, niet van de feitelijke implementatie. Ascentra vermeldt deze nuance expliciet, omdat een claim die niet door applicatiecode wordt onderbouwd niet thuishoort in een verwerkingsdocument.
 
 ---
 
-## 6. Multi-tenancy en Tenant-isolatie (de kernvraag)
+## 6. Multi-tenancy en tenant-isolatie
 
-> *"Hoe weten we zeker dat Protest Sportwear-data nooit door een andere klant kan worden gezien, en dat Astra zelf niet zomaar in onze data kan kijken?"*
-
-Dit is de belangrijkste vraag in dit document, en wij beantwoorden hem met een technische onderbouwing die verifieerbaar is in de broncode.
+Deze sectie beschrijft de wijze waarop het Astra-platform de gegevens van Protest Sportwear afschermt van die van andere tenants en de wijze waarop persoonlijke toegang van Ascentra-personeel tot productiedata is beperkt en gedocumenteerd. De onderbouwing is technisch van aard en is in zijn geheel verifieerbaar in de broncode.
 
 ### 6.1 Tenant-model
 
@@ -563,37 +561,46 @@ Het is in de AVG (art. 33) een verantwoordelijkheid van de **verwerkingsverantwo
 
 ### 14.1 Processen
 
-- **Code review vereist.** Geen wijziging komt in productie zonder review door een tweede persoon.
-- **Type-veilige code.** De gehele codebase is TypeScript in strict mode. Dit voorkomt een breed scala aan runtime-fouten.
-- **Dependency scanning.** Wij draaien regelmatig `npm audit` en monitoren bekende CVE's in onze afhankelijkheden. De huidige status van bekende kwetsbaarheden is transparant gemeld in §9 en §15.
-- **Secrets management.** Alle credentials (database, Anthropic, Vercel) worden beheerd als versleutelde omgevingsvariabelen in Vercel. Geen credentials staan in broncode of in Git-historie.
-- **Geanonimiseerde ontwikkel- en test-data.** Onze engineers werken tegen synthetische data, niet tegen productiedata van klanten.
+- **Verplichte code-review.** Wijzigingen worden niet in productie gebracht zonder review door een tweede persoon.
+- **Type-veilige code.** De gehele codebase is in TypeScript geschreven onder `strict mode`, waarmee een breed scala aan runtime-fouten in een vroegtijdig stadium wordt afgevangen.
+- **Continue afhankelijkheidsscanning.** `npm audit` wordt geautomatiseerd uitgevoerd via de CI-pipeline; pull requests die een nieuwe HIGH- of CRITICAL-severity introduceren worden geblokkeerd. De actuele status is opgenomen in sectie 9.
+- **Secrets management.** Credentials voor de database, voor Anthropic en voor Vercel worden uitsluitend beheerd als versleutelde omgevingsvariabelen binnen Vercel. Credentials zijn niet aanwezig in broncode of in de Git-historie.
+- **Synthetische ontwikkel- en testdata.** Ontwikkelwerk vindt plaats tegen synthetische datasets en demo-tenants; productiedata wordt niet voor ontwikkeldoeleinden geraadpleegd.
 - **Minimale rechten voor CI/CD.** De deployment-pipeline beschikt niet over leesrechten op productiedata.
 
 ### 14.2 Penetratietesten
 
-Op dit moment heeft Astra **geen externe penetratietest** laten uitvoeren. Wel is er een uitgebreide interne beveiligingsreview uitgevoerd (waarvan dit document een samenvatting is). Wij zijn bereid om voorafgaand aan Protest Sportwear's productie-uitrol een externe pentest te laten uitvoeren door een gekwalificeerde partij (bijvoorbeeld Computest, Fox-IT, of Zerocopter) en het rapport op verzoek van Protest Sportwear beschikbaar te stellen. Dit kan contractueel worden opgenomen.
+Op de datum van dit document is geen externe penetratietest op het Astra-platform uitgevoerd. Op verzoek van Protest Sportwear wordt voorafgaand aan de productie-uitrol een externe penetratietest uitgevoerd door een gekwalificeerde partij (Computest, Fox-IT, Zerocopter of vergelijkbaar). Het rapport wordt onder geheimhouding aan Protest Sportwear ter beschikking gesteld. De voorwaarden zijn opgenomen in artikel 4 van het Security Addendum.
 
 ---
 
-## 15. Status van de hardening-roadmap
+## 15. Beveiligingsmaatregelen — overzicht
 
-De interne beveiligingsreview heeft twaalf hardening-onderdelen geïdentificeerd. Tien daarvan zijn op de datum van dit document operationeel; zij zijn aantoonbaar in de broncode en in de productieomgeving aanwezig en kunnen tijdens een technische due-diligence worden gecontroleerd. Het elfde onderdeel — een externe penetratietest — is contractueel onderhandelbaar en kan op verzoek vóór productie-uitrol worden uitgevoerd. Het twaalfde — encryptie van integratie-credentials — is voorwaardelijk en wordt geactiveerd op het moment dat de eerste externe systeemkoppeling wordt voorbereid; tot dat moment bestaat er geen integratie-rij in de database en daarmee geen feitelijk risico. Alle twaalf onderdelen worden in het Security Addendum als contractuele verplichting opgenomen.
+Onderstaand overzicht beschrijft de technische en organisatorische beveiligingsmaatregelen die op de datum van dit document deel uitmaken van het Astra-platform. Iedere maatregel is herleidbaar tot een specifiek bestand of een specifieke configuratie en kan tijdens een technische due-diligence worden gecontroleerd. Twee posten — een externe penetratietest en de encryptie van integratie-credentials — kennen een afwijkende status die in de tabel is aangegeven en in de bijbehorende sectie nader is toegelicht.
 
-| # | Onderwerp | Status | Onderbouwing |
-|---|---|---|---|
-| 1 | Pseudonimisering van persoonsgegevens richting Anthropic | **Operationeel** | De vier AI-tool-functies (`listEmployees`, `addEmployee`, `bulkAddEmployees`, `crossTrainSuggestion`) zijn aangesloten op een centrale HMAC-SHA-256 pseudonimiseringsmodule (`src/lib/ai/anonymizer.ts`). Het taalmodel ontvangt uitsluitend pseudoniemen in de vorm `Medewerker A3F2`. Geverifieerd door twintig deterministische unit-tests. Zie sectie 11.3. |
-| 2 | Vervanging van de `xlsx`-bibliotheek | **Operationeel** | De bibliotheek `xlsx` is volledig verwijderd uit `package.json` en op alle zes call sites (xray-analyzer, demand-upload-wizard, drag-and-drop zone, employees-importwizard, unit-tests) vervangen door `exceljs`. De elf unit-tests slagen na migratie. `npm audit` rapporteert nul HIGH-severity kwetsbaarheden in productiecode. Zie sectie 9. |
-| 3 | Rate limiting | **Operationeel** | Upstash Ratelimit, met sliding-window in Redis, is actief op alle drie de AI-endpoints, op het contactformulier en als tRPC-middleware op alle authenticated mutaties. Drie afzonderlijke buckets: AI twintig verzoeken per minuut, mutaties honderdtwintig per minuut, publiek vijf per minuut, telkens per gebruiker of per IP. Bij backend-uitval geldt een fail-open beleid ten gunste van beschikbaarheid. |
-| 4 | Beveiligingsheaders | **Operationeel** | `next.config.ts` levert Content-Security-Policy, Strict-Transport-Security (twee jaar, `includeSubDomains`), X-Frame-Options: `DENY`, X-Content-Type-Options: `nosniff`, Referrer-Policy, Permissions-Policy en Cross-Origin-Opener-Policy op elke route. Aanvullend wordt een strict-dynamic Content-Security-Policy met per-verzoek nonces in `Content-Security-Policy-Report-Only` modus uitgerold; deze wordt na een observatieperiode enforced en elimineert `'unsafe-inline'` voor scripts volledig. |
-| 5 | Geautomatiseerde monitoring van afhankelijkheidskwetsbaarheden | **Operationeel** | Bekende verhelpbare kwetsbaarheden in `lodash`, `picomatch` en `brace-expansion` zijn gepatcht. `npm audit` op productie-dependencies staat op nul HIGH. Een GitHub Actions job blokkeert elke pull request die een nieuwe HIGH- of CRITICAL-severity introduceert. De vier resterende moderate-severity meldingen betreffen `vitest`, `vite` en `esbuild` en zijn uitsluitend `devDependencies` zonder enige productie-impact. |
-| 6 | Attributie van service-role mutaties in de audit-log | **Operationeel** | De triggerfunctie leest `actor_id` uit `request.headers.x-actor-id`, met de JWT-claim als fallback (migratie 00018). De helper `createAdminClientForUser()` zet deze header automatisch en is uitgerold over de AI-chat en vijf tRPC-routers. Het `assign-org`-endpoint schrijft expliciet naar `audit_log`. Zie sectie 10.3. |
-| 7 | Wachtwoordbeleid | **Operationeel** | Supabase Auth (Pro): minimaal twaalf tekens, verplichte tekenklassen, geautomatiseerde detectie van gelekte wachtwoorden via HaveIBeenPwned, secure password change, en verplicht huidig wachtwoord bij wijziging. Zie sectie 7.3. |
-| 8 | Recht op vergetelheid (art. 17 AVG) | **Operationeel** | De `eraseEmployee` tRPC-procedure (migratie 00020) anonimiseert alle direct identificerende velden op een medewerker-rij terwijl de niet-identificerende historische gegevens behouden blijven. De procedure is via een functie in de gebruikersinterface beschikbaar voor `tenant_admin` en hoger, en wordt dubbel geaudit: via `fn_audit_trigger` en via een expliciete `ERASE`-rij met reden. Zie sectie 12.2. |
-| 9 | Soft-delete markering op medewerkers | **Operationeel** | Migratie 00020 voegt de kolommen `deleted_at` en `deleted_by` toe aan de tabel `employee`, voorzien van een CHECK-constraint op consistentie en een partieel index over erased rijen. Het bestaande `status = 'terminated'`-pad voor reguliere uit-dienst situaties blijft intact; `deleted_at` markeert specifiek de AVG-erasure subset. |
-| 10 | Externe penetratietest | **Optioneel** | Op verzoek van Protest Sportwear laat Ascentra vóór de productie-uitrol een externe penetratietest uitvoeren door een gekwalificeerde partij (Computest, Fox-IT, Zerocopter of vergelijkbaar). Het rapport wordt onder geheimhouding aan Protest Sportwear ter beschikking gesteld. De voorwaarden zijn opgenomen in artikel 4 van het Security Addendum. |
-| 11 | Persistentie van contactformulier-inzendingen | **Operationeel** | Inzendingen worden vastgelegd in een dedicated tabel `contact_submission` met Row-Level Security in deny-all-stand; uitsluitend de service-role schrijft. Zod-validatie wordt server-side afgedwongen. Persoonsgegevens worden niet meer naar `stdout` of `stderr` geschreven; uitsluitend het identificerende rij-id van een succesvolle inzending wordt gelogd. De retentietermijn van één jaar is gecodificeerd in de functie `purge_old_contact_submissions()`. Zie migratie 00019. |
-| 12 | Encryptie van integratie-credentials | **Voorwaardelijk** | De kolom `integration_config.connection_params_encrypted` is in het schema aanwezig, maar wordt op de datum van dit document nog niet beschreven door applicatiecode. Het aantal integratie-rijen is nul; er bestaat geen feitelijk risico. Voorafgaand aan de eerste WMS-, OMS- of HRIS-koppeling bij Protest Sportwear wordt de implementatie uitgevoerd met AES-256-GCM en met per-organisatie sleutels via Supabase Vault. Tot dat moment is geen externe systeemkoppeling toegestaan. Zie sectie 5.4. |
+| Domein | Maatregel | Onderbouwing |
+|---|---|---|
+| Multi-tenant isolatie | PostgreSQL Row-Level Security op alle tabellen met klantdata, in combinatie met een tweede expliciet `organization_id`-filter in de tRPC-laag (defense in depth). | Sectie 6 |
+| Data-residentie | Verwerking en opslag binnen de Europese Unie (Frankfurt of Amsterdam), zowel op database- als op applicatieniveau. | Sectie 5.1 |
+| Versleuteling in rust | AES-256 voor databaseopslag, audit-logs en back-ups. | Sectie 5.2 |
+| Versleuteling in transport | TLS 1.3 voor alle netwerkverbindingen, met afdwinging via `Strict-Transport-Security`. | Sectie 5.2 |
+| Authenticatie | Server-side JWT-verificatie per verzoek, met `HttpOnly`, `Secure` en `SameSite=Lax` sessiecookies beheerd door `@supabase/ssr`. | Sectie 7 |
+| Wachtwoordbeleid | Minimaal twaalf tekens, verplichte tekenklassen, geautomatiseerde detectie van gelekte wachtwoorden via HaveIBeenPwned, secure password change en verplicht huidig wachtwoord bij wijziging. | Sectie 7.3 |
+| Autorisatie | Rolgebaseerde toegangscontrole met zeven rollen, afgedwongen op zowel applicatielaag als in Row-Level Security policies van gevoelige tabellen. | Sectie 8 |
+| Invoervalidatie | Getypeerde Zod-schema's op alle 116 server-side API-procedures; geparametriseerde query-builders voor alle databasequeries. | Sectie 9 |
+| Bescherming tegen XSS | React-escaping op alle gerenderde waarden; afwezigheid van `dangerouslySetInnerHTML`, `innerHTML`, `eval` en `new Function` in de codebase. | Sectie 9 |
+| Beveiligingsheaders | Content-Security-Policy, Strict-Transport-Security (twee jaar, `includeSubDomains`), X-Frame-Options: `DENY`, X-Content-Type-Options: `nosniff`, Referrer-Policy, Permissions-Policy en Cross-Origin-Opener-Policy op elke route. | Sectie 5.2 |
+| Rate limiting | Sliding-window rate limiting op AI-endpoints, op het contactformulier en op alle authenticated tRPC-mutaties, met aparte buckets per categorie en per gebruiker of IP. | Sectie 9 |
+| Pseudonimisering richting AI-dienstverleners | HMAC-SHA-256 pseudonimisering van direct identificerende persoonsgegevens vóór verzending naar Anthropic; het taalmodel ontvangt uitsluitend pseudoniemen in de vorm `Medewerker A3F2`. | Sectie 11.3 |
+| Onveranderbare audit-log | Database-trigger blokkeert `UPDATE` en `DELETE` op de audit-logtabel; iedere wijziging op gevoelige tabellen wordt vastgelegd met actor, tijdstip, IP-adres en volledige voor- en na-staat. | Sectie 10 |
+| Attributie van service-role mutaties | Mutaties via de service-role verbinding worden via een `x-actor-id`-header toegerekend aan de oorspronkelijke gebruiker; administratieve endpoints schrijven expliciet naar `audit_log`. | Sectie 10.3 |
+| Recht op vergetelheid (art. 17 AVG) | Onomkeerbare anonimiseringsprocedure voor medewerker-rijen, beschikbaar via de gebruikersinterface voor `tenant_admin` en hoger, met dubbele audit-registratie. | Sectie 12.2 |
+| Soft-delete markering | Kolommen `deleted_at` en `deleted_by` op de tabel `employee`, met CHECK-constraint en partieel index, ten behoeve van traceerbaarheid van AVG-erasure. | Sectie 12.2 |
+| Persistentie van contactformulier-inzendingen | Dedicated tabel met Row-Level Security in deny-all-stand, server-side validatie, automatische opruiming na één jaar; persoonsgegevens worden niet naar applicatie-logs geschreven. | Sectie 13.0 |
+| Geautomatiseerde monitoring van afhankelijkheidskwetsbaarheden | Continue scan op afhankelijkheidskwetsbaarheden via `npm audit` in de CI-pipeline; pull requests die een nieuwe HIGH- of CRITICAL-severity introduceren worden geblokkeerd. Op de datum van dit document staan productie-dependencies op nul HIGH-severity kwetsbaarheden. | Sectie 14 |
+| Gestructureerde logging | Server-side events worden als gestructureerde JSON-records vastgelegd, voorzien van automatische redactie van bekende PII-veldnamen en met optionele doorzending naar een externe logging-voorziening. | Sectie 13.0 |
+| Externe penetratietest | **Optioneel.** Op verzoek van Protest Sportwear wordt voorafgaand aan de productie-uitrol een externe penetratietest uitgevoerd door een gekwalificeerde partij (Computest, Fox-IT, Zerocopter of vergelijkbaar), met rapportage onder geheimhouding aan Protest Sportwear. De voorwaarden zijn opgenomen in artikel 4 van het Security Addendum. | Sectie 14 |
+| Encryptie van integratie-credentials | **Voorwaardelijk.** De databaseschema-voorziening voor encrypted integratie-credentials wordt geactiveerd voorafgaand aan de eerste externe systeemkoppeling (WMS, OMS of HRIS) met AES-256-GCM en per-organisatie sleutels via Supabase Vault. Tot dat moment is geen externe systeemkoppeling actief en bestaat er geen integratie-rij in de database. | Sectie 5.4 |
 
 ---
 
@@ -617,7 +624,7 @@ De in dit document beschreven maatregelen worden juridisch vastgelegd in de volg
 
 1. **Hoofdovereenkomst.** Bevat serviceniveau, vergoeding, looptijd en de wederzijdse verantwoordelijkheden voor de levering van het Astra-platform.
 2. **Verwerkersovereenkomst (artikel 28 AVG).** Regelt de verwerker-verwerkingsverantwoordelijke verhouding, de instructiebevoegdheid, de geheimhoudingsplicht, de subverwerkerslijst, de beveiligingsmaatregelen, de bijstand aan de verwerkingsverantwoordelijke bij betrokkenenrechten, de meldplicht bij datalekken, de audit-rechten van Protest Sportwear en de retourneer- en verwijderingsplicht bij contractbeëindiging.
-3. **Security Addendum.** Codificeert de in sectie 15 opgenomen hardening-roadmap als contractuele verplichting, met een opschortings- en opzeggingsrecht voor Protest Sportwear bij structurele niet-naleving.
+3. **Security Addendum.** Codificeert de in sectie 15 beschreven beveiligingsmaatregelen als contractuele verplichting, met een opschortings- en opzeggingsrecht voor Protest Sportwear bij structurele niet-naleving.
 4. **Standard Contractual Clauses.** Voor zover van toepassing op doorgifte aan Anthropic PBC in de Verenigde Staten, in lijn met de in sectie 11.3 beschreven pseudonimisering en de daaraan ten grondslag liggende dataminimalisatie.
 
 ---
@@ -636,7 +643,7 @@ Op verzoek stelt Ascentra de volgende aanvullende documenten beschikbaar:
 
 1. **Technische due-diligence sessie.** Ascentra presenteert de relevante delen van de codebase en de productieconfiguratie aan de technische vertegenwoordiging van Protest Sportwear.
 2. **Juridische review.** Protest Sportwear laat de Verwerkersovereenkomst en het Security Addendum reviewen door eigen of externe juridische adviseurs.
-3. **Ondertekening Security Addendum.** Contractuele vastlegging van de in sectie 15 opgenomen hardening-roadmap.
+3. **Ondertekening Security Addendum.** Contractuele vastlegging van de in sectie 15 beschreven beveiligingsmaatregelen.
 4. **Gecontroleerde pilot.** Eerste uitrol op één site, met test- of beperkte productiedata.
 5. **Externe penetratietest** (optioneel, op verzoek van Protest Sportwear).
 6. **Productie-uitrol.** Uitrol op alle sites, met de in sectie 15 opgenomen verplichtingen aantoonbaar nageleefd.

@@ -2,7 +2,7 @@
 
 Concept ten behoeve van juridische review. Dit Security Addendum is een bijlage bij de Verwerkersovereenkomst tussen **Protest Sportwear B.V.** (Verwerkingsverantwoordelijke) en **Ascentra B.V.** (Verwerker, leverancier van het Astra-platform), hierna: de "Verwerkersovereenkomst", en maakt daarvan integraal onderdeel uit. Waar termen in dit Addendum met een hoofdletter beginnen en niet in dit document worden gedefinieerd, hebben zij de betekenis die daaraan in de Verwerkersovereenkomst is gegeven.
 
-Het doel van dit Addendum is om de door de Verwerker toegezegde technische en organisatorische beveiligingsmaatregelen en hardening-verplichtingen contractueel bindend vast te leggen, zodanig dat de Verwerkingsverantwoordelijke bij niet-naleving een direct opzeggingsrecht heeft.
+Het doel van dit Addendum is om de door de Verwerker toegezegde technische en organisatorische beveiligingsmaatregelen contractueel bindend vast te leggen, zodanig dat de Verwerkingsverantwoordelijke bij niet-naleving een direct opzeggingsrecht heeft.
 
 ---
 
