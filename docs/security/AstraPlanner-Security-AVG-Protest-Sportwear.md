@@ -52,7 +52,7 @@ Voor de lezer die snel een totaaloverzicht wil van de beschermingslagen rondom d
 
 **Bescherming op transport (afluisteren).** Elke verbinding tussen browser en applicatie, tussen applicatie en database, en tussen applicatie en derde partijen verloopt over **TLS 1.3**. HTTP wordt geweigerd. Sessiecookies zijn `HttpOnly`, `Secure` en `SameSite=Lax`, waardoor JavaScript in de browser de sessietoken niet kan benaderen en cross-site aanvallen op de sessie standaard worden geblokkeerd. → *Onderbouwing: §5.2 en §7.4*
 
-**Bescherming in rust (toegang tot opslag).** Alle data — operationele tabellen, audit-logs, back-ups — wordt op schijfniveau versleuteld met **AES-256**. Wachtwoorden worden door Supabase Auth opgeslagen als bcrypt-hashes met salt; AstraPlanner-code ziet of verwerkt nooit een leesbaar wachtwoord. Credentials van koppelingen met externe systemen (WMS, HRIS) worden in een dedicated `BYTEA`-kolom AES-256-GCM versleuteld. → *Onderbouwing: §5.2*
+**Bescherming in rust (toegang tot opslag).** Alle data — operationele tabellen, audit-logs, back-ups — wordt op schijfniveau versleuteld met **AES-256** door Supabase. Wachtwoorden worden door Supabase Auth opgeslagen als bcrypt-hashes met salt; AstraPlanner-code ziet of verwerkt nooit een leesbaar wachtwoord. → *Onderbouwing: §5.2*
 
 **Bescherming tegen andere klanten (multi-tenant isolatie — de belangrijkste vraag).** Elke regel data in de database draagt het `organization_id` van Protest Sportwear. Op **alle 20+ tabellen met klantdata** is **PostgreSQL Row-Level Security (RLS)** geactiveerd. Dat betekent: bij elke query voert de database zelf, vóór er ook maar één rij wordt teruggegeven, een controle uit dat het `organization_id` van de rij overeenkomt met het `organization_id` uit de JWT van de aanvragende gebruiker. Deze controle is niet te omzeilen vanuit de applicatielaag. Bovenop RLS hanteert de tRPC-API een tweede, expliciete `WHERE organization_id = ctx.organizationId`-filter — defense in depth. Cross-tenant data-toegang is, zelfs bij een hypothetische programmeerfout in één van beide lagen, technisch geblokkeerd door de andere. → *Onderbouwing: §6.1 t/m §6.4*
 
@@ -184,19 +184,32 @@ AstraPlanner draait **volledig in de Europese Unie**. Onze infrastructuur bestaa
 |---|---|---|
 | Data in rust — database | AES-256 | Supabase (AWS KMS-onderliggend) |
 | Data in rust — back-ups | AES-256 | Supabase |
+| Integratie-credentials (WMS/HRIS) — *toekomstige functionaliteit* | AES-256-GCM met per-organisatie sleutels via Supabase Vault (zie §5.4) | AstraPlanner, te implementeren vóór eerste koppeling |
 | Data in rust — logs en audit-log | AES-256 | Supabase (dezelfde schijf-encryptie) |
 | Data in transport — client → server | TLS 1.3 (minimaal TLS 1.2) | Vercel |
 | Data in transport — server → database | TLS 1.3 | Supabase |
 | Data in transport — server → Anthropic | TLS 1.3 met certificate pinning door Anthropic SDK | Anthropic |
 | Wachtwoorden gebruikers | bcrypt met salt (beheerd door Supabase Auth, geen toegang voor AstraPlanner) | Supabase Auth |
 | Sessiecookies | AES-GCM signed + versleuteld door `@supabase/ssr`, verzonden als `HttpOnly` `Secure` `SameSite=Lax` | Supabase SSR-bibliotheek |
-| Integratie-credentials (WMS/HRIS connecties) | Kolom `integration_config.connection_params_encrypted` als `BYTEA`, AES-256-GCM | AstraPlanner applicatie |
 
 ### 5.3 Netwerk en firewallbeleid
 
 - Het platform is uitsluitend bereikbaar via HTTPS. HTTP-verzoeken worden geweigerd dan wel geforceerd doorverwezen.
 - De tRPC API (`/api/trpc/**`) weigert cross-origin verzoeken buiten de toegelaten domeinen op basis van Next.js' standaard same-origin beleid.
 - Alle administratieve endpoints (bijvoorbeeld het toekennen van gebruikers aan een organisatie) vereisen zowel authenticatie als een minimum-rol van `tenant_admin`, en zijn niet bereikbaar voor gebruikers buiten de eigen organisatie.
+
+### 5.4 Integratie-credentials — huidige staat en te nemen maatregel vóór eerste koppeling
+
+Het databaseschema bevat een tabel `integration_config` met een kolom `connection_params_encrypted BYTEA` die bedoeld is voor het opslaan van credentials voor externe systemen (WMS, OMS, HRIS). Tijdens onze interne audit hebben wij vastgesteld dat deze kolom **nog niet wordt gebruikt**: er is geen enkele code in de applicatielaag die in `integration_config` schrijft, en er is geen encryptie-primitive in de broncode die de kolom vult. De tabel is een schema-stub die is voorbereid voor toekomstige functionaliteit.
+
+**Wat dit betekent voor de huidige dreiging:**
+Er bestaat op dit moment **geen risico** rondom lekken van integratie-credentials, omdat er simpelweg geen credentials in het systeem staan. Protest Sportwear en eventuele andere tenants hebben op dit moment geen externe integraties geconfigureerd.
+
+**Wat dit betekent voor de toekomst:**
+Zodra Protest Sportwear zijn eerste koppeling met een WMS of HRIS wil activeren, moet de encryptie daadwerkelijk geïmplementeerd zijn. Wij leggen dit als expliciete voorwaarde op in §15 (hardening-roadmap, item #12): géén productie-koppeling met een extern systeem wordt geactiveerd zolang het schrijven naar `integration_config.connection_params_encrypted` niet is uitgevoerd met AES-256-GCM en per-organisatie sleutels via Supabase Vault.
+
+**Waarom wij dit eerlijk benoemen in plaats van stilzwijgend verder te gaan:**
+Het zou eenvoudig zijn geweest om op basis van het schema-commentaar de aanwezigheid van encryptie als feit te presenteren — het commentaar in de migratie zegt letterlijk *"AES-256-GCM encrypted. Per-tenant encryption keys"*. Maar commentaar is geen implementatie, en wij weigeren om een feitelijk onjuiste claim in een security-document richting Protest Sportwear op te nemen. Dit type eerlijkheid is wat wij bedoelen met de werkwijze die in de inleiding van dit document staat.
 
 ---
 
@@ -560,7 +573,7 @@ Dit is de eerlijke kern van dit document. De interne beveiligingsreview heeft ee
 | 9 | **Soft-delete op medewerkers** | Niet geïmplementeerd | Toevoegen `deleted_at` kolom + filter in alle queries | Ja |
 | 10 | **Externe pentest** | Niet uitgevoerd | Externe pentest door gekwalificeerde partij vóór productie-uitrol | Optioneel, contractueel onderhandelbaar |
 | 11 | **Contactformulier-logging** | ✅ **Gerealiseerd** — inzendingen worden nu persistent opgeslagen in een dedicated `contact_submission` tabel met `ENABLE ROW LEVEL SECURITY` zonder policies (strikt "deny all" op RLS-niveau, alleen de service-role mag schrijven). Zod-validatie (lengte-caps, e-mailformaat) wordt server-side afgedwongen. Er worden géén PII-velden meer naar stdout/stderr geschreven — alleen het id van een succesvolle inzending wordt gelogd. Retentie van 1 jaar is vastgelegd met een `purge_old_contact_submissions()` cleanup functie. Een `super_admin`-only tRPC endpoint biedt het AstraPlanner-team inzage in de inbox (zie migratie 00019) | — | ✅ Gereed |
-| 12 | **Connection params encryptie** | Kolom bestaat (`BYTEA`), encryptie-code nog te valideren | Implementatie verifiëren of afronden, en beschrijven in dit document | Ja |
+| 12 | **Integratie-credentials encryptie** | Kolom `integration_config.connection_params_encrypted` bestaat in het schema, maar is nooit geschreven door applicatiecode — er is géén encryptie-implementatie aanwezig. Vastgesteld bij codebase-audit april 2026 (zie §5.4). Momenteel geen risico omdat er nul integratie-rijen bestaan | Implementatie van AES-256-GCM encryptie met per-organisatie sleutels via Supabase Vault, plus een corresponderende decryptie-routine aan lees-zijde. **Blokkerende voorwaarde** voor het activeren van de eerste WMS/OMS/HRIS-koppeling bij Protest Sportwear | Ja |
 
 ---
 
