@@ -1,0 +1,452 @@
+/* =============================================================================
+ * Ascentra brand stylesheet voor security/AVG documenten
+ * -----------------------------------------------------------------------------
+ * Wordt geïnjecteerd door scripts/build-security-docs.mjs in elk gegenereerd
+ * HTML-document onder docs/security/dist/. Render in een browser, druk af
+ * naar PDF (Ctrl+P → Bestemming: PDF) voor een afgewerkt document.
+ *
+ * Brand reference (per april 2026):
+ *   Primair    Ascentra Navy   #0E2240   logo, headers, accents
+ *   Cream      Ascentra Cream  #EFEDE3   page background, callouts
+ *   Ink        Body text       #1A2333
+ *   Muted      Secondary text  #5A6478
+ *   Hairline   Borders         #D8D5C8
+ *   White      Card surface    #FFFFFF
+ *
+ * Typografie:
+ *   Inter               sans-serif voor body, headings, tables
+ *   Cormorant Garamond  serif voor display headings, taglines
+ * ============================================================================= */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&display=swap');
+
+:root {
+  --ascentra-navy: #0E2240;
+  --ascentra-navy-soft: #1B3258;
+  --ascentra-cream: #EFEDE3;
+  --ascentra-cream-warm: #E6E3D5;
+  --ascentra-ink: #1A2333;
+  --ascentra-muted: #5A6478;
+  --ascentra-hairline: #D8D5C8;
+  --ascentra-white: #FFFFFF;
+  --ascentra-success: #1F6F3E;
+  --ascentra-warn: #B5651D;
+
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --font-display: 'Cormorant Garamond', 'Times New Roman', serif;
+
+  --max-content: 780px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--ascentra-cream);
+  color: var(--ascentra-ink);
+  font-family: var(--font-sans);
+  font-size: 11pt;
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: 'kern' 1, 'liga' 1, 'calt' 1;
+}
+
+/* ── Layout ─────────────────────────────────────────────────────────────── */
+
+.page {
+  max-width: var(--max-content);
+  margin: 0 auto;
+  padding: 56px 64px 96px;
+  background: var(--ascentra-white);
+  border: 1px solid var(--ascentra-hairline);
+  box-shadow: 0 20px 60px -30px rgba(14, 34, 64, 0.18);
+}
+
+/* ── Cover page ─────────────────────────────────────────────────────────── */
+
+.cover {
+  background: var(--ascentra-navy);
+  color: var(--ascentra-cream);
+  padding: 96px 64px 72px;
+  margin: -56px -64px 64px;
+  position: relative;
+  overflow: hidden;
+}
+
+.cover::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(239, 237, 227, 0.08) 0%, transparent 50%),
+    radial-gradient(circle at 0% 100%, rgba(239, 237, 227, 0.06) 0%, transparent 60%);
+  pointer-events: none;
+}
+
+.cover-inner {
+  position: relative;
+  z-index: 1;
+}
+
+.cover-mark {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 56px;
+}
+
+.cover-logo {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--ascentra-cream);
+  color: var(--ascentra-navy);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-size: 38px;
+  font-weight: 600;
+  font-style: italic;
+  letter-spacing: -0.04em;
+  flex-shrink: 0;
+}
+
+.cover-wordmark {
+  font-family: var(--font-display);
+  font-size: 32px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ascentra-cream);
+}
+
+.cover-eyebrow {
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: rgba(239, 237, 227, 0.6);
+  margin-bottom: 16px;
+}
+
+.cover-title {
+  font-family: var(--font-display);
+  font-size: 42px;
+  font-weight: 500;
+  line-height: 1.12;
+  letter-spacing: -0.015em;
+  margin: 0 0 24px;
+  color: var(--ascentra-cream);
+  max-width: 560px;
+}
+
+.cover-subtitle {
+  font-family: var(--font-display);
+  font-size: 19px;
+  font-weight: 400;
+  font-style: italic;
+  line-height: 1.4;
+  color: rgba(239, 237, 227, 0.8);
+  margin: 0 0 64px;
+  max-width: 520px;
+}
+
+.cover-meta {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 24px 48px;
+  padding-top: 32px;
+  border-top: 1px solid rgba(239, 237, 227, 0.18);
+  font-family: var(--font-sans);
+}
+
+.cover-meta dt {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(239, 237, 227, 0.55);
+  margin-bottom: 4px;
+}
+
+.cover-meta dd {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ascentra-cream);
+}
+
+.cover-tagline {
+  margin-top: 56px;
+  padding-top: 24px;
+  border-top: 1px solid rgba(239, 237, 227, 0.18);
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: 16px;
+  color: rgba(239, 237, 227, 0.7);
+  text-align: right;
+}
+
+/* ── Body typografie ────────────────────────────────────────────────────── */
+
+.content h1,
+.content h2,
+.content h3,
+.content h4 {
+  font-family: var(--font-display);
+  color: var(--ascentra-navy);
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+  margin-top: 2.4em;
+  margin-bottom: 0.6em;
+  font-weight: 600;
+}
+
+.content h1 {
+  font-size: 32px;
+  margin-top: 1.2em;
+  padding-bottom: 0.5em;
+  border-bottom: 2px solid var(--ascentra-navy);
+}
+
+.content h2 {
+  font-size: 24px;
+  padding-bottom: 0.4em;
+  border-bottom: 1px solid var(--ascentra-hairline);
+}
+
+.content h3 {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.content h4 {
+  font-size: 14px;
+  font-family: var(--font-sans);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ascentra-muted);
+}
+
+.content p {
+  margin: 0 0 1.2em;
+  text-align: justify;
+  hyphens: auto;
+}
+
+.content strong {
+  color: var(--ascentra-navy);
+  font-weight: 600;
+}
+
+.content em {
+  font-style: italic;
+}
+
+.content a {
+  color: var(--ascentra-navy);
+  text-decoration: underline;
+  text-decoration-color: var(--ascentra-hairline);
+  text-underline-offset: 3px;
+}
+
+.content a:hover {
+  text-decoration-color: var(--ascentra-navy);
+}
+
+.content ul,
+.content ol {
+  margin: 0 0 1.2em;
+  padding-left: 1.6em;
+}
+
+.content li {
+  margin-bottom: 0.4em;
+}
+
+.content li::marker {
+  color: var(--ascentra-navy);
+}
+
+.content blockquote {
+  margin: 1.4em 0;
+  padding: 1em 1.4em;
+  background: var(--ascentra-cream);
+  border-left: 3px solid var(--ascentra-navy);
+  font-family: var(--font-display);
+  font-style: italic;
+  color: var(--ascentra-ink);
+  font-size: 13pt;
+}
+
+.content blockquote p:last-child {
+  margin-bottom: 0;
+}
+
+.content code {
+  font-family: 'JetBrains Mono', 'Consolas', 'Monaco', monospace;
+  font-size: 0.86em;
+  background: var(--ascentra-cream);
+  color: var(--ascentra-navy);
+  padding: 1px 6px;
+  border-radius: 3px;
+  border: 1px solid var(--ascentra-hairline);
+}
+
+.content pre {
+  background: var(--ascentra-navy);
+  color: var(--ascentra-cream);
+  padding: 16px 20px;
+  border-radius: 4px;
+  overflow-x: auto;
+  font-size: 9pt;
+  line-height: 1.5;
+  margin: 1.2em 0;
+}
+
+.content pre code {
+  background: transparent;
+  border: none;
+  color: inherit;
+  padding: 0;
+  font-size: inherit;
+}
+
+.content hr {
+  border: none;
+  height: 1px;
+  background: var(--ascentra-hairline);
+  margin: 3em 0;
+}
+
+/* ── Tabellen ───────────────────────────────────────────────────────────── */
+
+.content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1.6em 0;
+  font-size: 10pt;
+  background: var(--ascentra-white);
+}
+
+.content thead {
+  background: var(--ascentra-navy);
+  color: var(--ascentra-cream);
+}
+
+.content th {
+  padding: 12px 14px;
+  text-align: left;
+  font-weight: 600;
+  font-size: 10pt;
+  letter-spacing: 0.02em;
+  border-bottom: 2px solid var(--ascentra-navy);
+}
+
+.content td {
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--ascentra-hairline);
+  vertical-align: top;
+}
+
+.content tbody tr:nth-child(even) {
+  background: rgba(239, 237, 227, 0.4);
+}
+
+.content tbody tr:hover {
+  background: rgba(14, 34, 64, 0.04);
+}
+
+/* ── Document footer ────────────────────────────────────────────────────── */
+
+.doc-footer {
+  margin-top: 64px;
+  padding-top: 24px;
+  border-top: 1px solid var(--ascentra-hairline);
+  font-family: var(--font-sans);
+  font-size: 9pt;
+  color: var(--ascentra-muted);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 24px;
+}
+
+.doc-footer-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.doc-footer-mark {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--ascentra-navy);
+  color: var(--ascentra-cream);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 600;
+  font-style: italic;
+}
+
+.doc-footer-meta {
+  text-align: right;
+  line-height: 1.4;
+}
+
+/* ── Print stylesheet ───────────────────────────────────────────────────── */
+
+@media print {
+  html, body {
+    background: var(--ascentra-white);
+  }
+
+  .page {
+    max-width: none;
+    margin: 0;
+    border: none;
+    box-shadow: none;
+    padding: 0;
+  }
+
+  .cover {
+    margin: 0 0 48px;
+    padding: 64px 48px 48px;
+    page-break-after: always;
+  }
+
+  .content h1,
+  .content h2 {
+    page-break-after: avoid;
+  }
+
+  .content h3,
+  .content h4 {
+    page-break-after: avoid;
+  }
+
+  .content table,
+  .content blockquote,
+  .content pre {
+    page-break-inside: avoid;
+  }
+
+  .content tr {
+    page-break-inside: avoid;
+  }
+
+  @page {
+    size: A4;
+    margin: 18mm 16mm 22mm;
+  }
+}

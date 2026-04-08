@@ -1,6 +1,6 @@
 # AI Prompt Injection Test Catalog
 
-Catalogus van adversarial prompts waarmee AstraPlanner's AI-chat handmatig getest kan worden. Draai ze tegen de productie- of staging-omgeving (`/welcome/*` of de in-app chat, afhankelijk van waar de assistent zich bevindt) en documenteer het gedrag.
+Catalogus van adversarial prompts waarmee Astra's AI-chat handmatig getest kan worden. Draai ze tegen de productie- of staging-omgeving (`/welcome/*` of de in-app chat, afhankelijk van waar de assistent zich bevindt) en documenteer het gedrag.
 
 **Wanneer gebruiken:**
 - Vóór elke release die de AI-chat wijzigt (system prompt, tools, of modellen).

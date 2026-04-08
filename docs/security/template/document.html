@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{{TITLE}} — Ascentra</title>
+  <meta name="author" content="Ascentra B.V." />
+  <meta name="description" content="{{SUBTITLE}}" />
+  <link rel="stylesheet" href="../template/ascentra-brand.css" />
+</head>
+<body>
+  <main class="page">
+    <header class="cover">
+      <div class="cover-inner">
+        <div class="cover-mark">
+          <div class="cover-logo">A</div>
+          <div class="cover-wordmark">ASCENTRA</div>
+        </div>
+
+        <div class="cover-eyebrow">{{EYEBROW}}</div>
+        <h1 class="cover-title">{{TITLE}}</h1>
+        <p class="cover-subtitle">{{SUBTITLE}}</p>
+
+        <dl class="cover-meta">
+          <div>
+            <dt>Opgesteld voor</dt>
+            <dd>{{RECIPIENT}}</dd>
+          </div>
+          <div>
+            <dt>Document versie</dt>
+            <dd>{{VERSION}}</dd>
+          </div>
+          <div>
+            <dt>Documentdatum</dt>
+            <dd>{{DATE}}</dd>
+          </div>
+          <div>
+            <dt>Classificatie</dt>
+            <dd>{{CLASSIFICATION}}</dd>
+          </div>
+        </dl>
+
+        <p class="cover-tagline">Operational excellence, engineered with intelligence.</p>
+      </div>
+    </header>
+
+    <article class="content">
+      {{CONTENT}}
+    </article>
+
+    <footer class="doc-footer">
+      <div class="doc-footer-brand">
+        <div class="doc-footer-mark">A</div>
+        <div>
+          <strong>Ascentra B.V.</strong><br />
+          Oranjestraat 11, 9401 KE Assen — KvK 98227548
+        </div>
+      </div>
+      <div class="doc-footer-meta">
+        {{TITLE}}<br />
+        Versie {{VERSION}} — {{DATE}}
+      </div>
+    </footer>
+  </main>
+</body>
+</html>

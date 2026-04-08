@@ -1,4 +1,4 @@
-# AstraPlanner — Informatiebeveiliging & AVG-Verwerkingsdocument
+# Astra — Informatiebeveiliging & AVG-Verwerkingsdocument
 
 **Vertrouwelijk — bestemd voor Protest Sportwear B.V.**
 
@@ -6,11 +6,11 @@
 |---|---|
 | **Opgesteld voor** | Protest Sportwear B.V. — Veerpolder 7, 2361 KX Warmond — KvK 28055371 |
 | **Ter attentie van** | Dhr. M. Werkman, Warehouse Manager |
-| **Opgesteld door** | AstraPlanner — `[INVULLEN: juridische entiteit, KvK, adres]` |
+| **Opgesteld door** | Ascentra B.V. — Oranjestraat 11, 9401 KE Assen — KvK 98227548 — leverancier van het Astra-platform |
 | **Document versie** | 1.0 |
 | **Documentdatum** | 8 april 2026 |
 | **Classificatie** | Vertrouwelijk — alleen voor geadresseerde |
-| **Geldigheid** | Dit document weerspiegelt de technische en organisatorische maatregelen van AstraPlanner per bovenstaande datum en wordt bij elke materiële wijziging herzien. |
+| **Geldigheid** | Dit document weerspiegelt de technische en organisatorische maatregelen van Astra per bovenstaande datum en wordt bij elke materiële wijziging herzien. |
 
 ---
 
@@ -18,7 +18,7 @@
 
 Geachte heer Werkman,
 
-Dit document beschrijft in detail hoe AstraPlanner de data van Protest Sportwear behandelt, beveiligt en beschermt. Het is opgesteld naar aanleiding van uw — terechte — wens om, voorafgaand aan een contractuele samenwerking, een diepgaand begrip te krijgen van (1) de technische beveiligingsmaatregelen, (2) de naleving van de Algemene Verordening Gegevensbescherming (AVG/GDPR), en (3) de mate waarin AstraPlanner zélf toegang heeft tot uw gegevens.
+Dit document beschrijft in detail hoe Astra de data van Protest Sportwear behandelt, beveiligt en beschermt. Het is opgesteld naar aanleiding van uw — terechte — wens om, voorafgaand aan een contractuele samenwerking, een diepgaand begrip te krijgen van (1) de technische beveiligingsmaatregelen, (2) de naleving van de Algemene Verordening Gegevensbescherming (AVG/GDPR), en (3) de mate waarin Astra zélf toegang heeft tot uw gegevens.
 
 Wij hanteren in dit document een uitgangspunt van **volledige transparantie**. Waar onze beveiliging sterk is, onderbouwen wij dat met concrete technische feiten. Waar wij nog verbeteringen doorvoeren voorafgaand aan uw productie-uitrol, benoemen wij die eveneens expliciet, inclusief de planning en contractuele borging. Wij zijn van mening dat dit de enige integere manier is om een vertrouwensrelatie op te bouwen met een organisatie die haar werkgeversverantwoordelijkheden serieus neemt.
 
@@ -28,7 +28,7 @@ Dit document is opgesteld op basis van een **technische code-audit** van onze ei
 
 ## 2. Management Samenvatting
 
-AstraPlanner is een **multi-tenant SaaS-platform** voor personeelsplanning in warehouse-, logistiek- en productieomgevingen. Het platform wordt aangeboden vanuit de Europese Unie, draait op twee Europese infrastructuurleveranciers (Supabase en Vercel) en verwerkt als gegevensverwerker (in de zin van artikel 28 AVG) persoonsgegevens van medewerkers namens u als verwerkingsverantwoordelijke.
+Astra is een **multi-tenant SaaS-platform** voor personeelsplanning in warehouse-, logistiek- en productieomgevingen. Het platform wordt aangeboden vanuit de Europese Unie, draait op twee Europese infrastructuurleveranciers (Supabase en Vercel) en verwerkt als gegevensverwerker (in de zin van artikel 28 AVG) persoonsgegevens van medewerkers namens u als verwerkingsverantwoordelijke.
 
 **Kern-garanties die wij feitelijk kunnen waarmaken:**
 
@@ -37,7 +37,7 @@ AstraPlanner is een **multi-tenant SaaS-platform** voor personeelsplanning in wa
 3. **Versleuteling in rust en tijdens transport** — AES-256 voor data at rest (beheerd door Supabase), TLS 1.3 voor alle netwerkverbindingen.
 4. **Authenticatie met server-side verificatie** — Sessies worden per verzoek opnieuw geverifieerd tegen Supabase Auth; sessiecookies zijn `HttpOnly` en `SameSite=Lax`.
 5. **Onveranderbare audit-log** — Elke wijziging op gevoelige tabellen (medewerkers, vaardigheden, planningen, dienstroosters, arbeidsregels, beschikbaarheid) wordt geregistreerd in een audit-logtabel die technisch onveranderbaar is: `UPDATE`- en `DELETE`-operaties worden op databaseniveau geweigerd.
-6. **Minimale toegang voor AstraPlanner-medewerkers** — Niemand binnen AstraPlanner heeft routinematige operationele toegang tot klantdata. Toegang tot productiesystemen is beperkt tot een beperkt aantal beheerders, uitsluitend voor incidentrespons, en wordt gelogd door onze infrastructuurleveranciers.
+6. **Minimale toegang voor Astra-medewerkers** — Niemand binnen Astra heeft routinematige operationele toegang tot klantdata. Toegang tot productiesystemen is beperkt tot een beperkt aantal beheerders, uitsluitend voor incidentrespons, en wordt gelogd door onze infrastructuurleveranciers.
 7. **Invoervalidatie overal** — Alle 116 server-side API-procedures valideren hun input met strikte, typed schema's (Zod). Er is geen SQL-injection-oppervlak: alle queries lopen via geparametriseerde query-builders.
 
 **Wat wij vóór uw productie-uitrol contractueel borgen (sectie 15):** hardening van AI-datastromen, invoering van rate limiting, toevoeging van applicatie-brede security headers (CSP/HSTS), vervanging van een kwetsbare Excel-parseerbibliotheek, en volledige implementatie van recht-op-vergetelheid.
@@ -52,19 +52,19 @@ Voor de lezer die snel een totaaloverzicht wil van de beschermingslagen rondom d
 
 **Bescherming op transport (afluisteren).** Elke verbinding tussen browser en applicatie, tussen applicatie en database, en tussen applicatie en derde partijen verloopt over **TLS 1.3**. HTTP wordt geweigerd. Sessiecookies zijn `HttpOnly`, `Secure` en `SameSite=Lax`, waardoor JavaScript in de browser de sessietoken niet kan benaderen en cross-site aanvallen op de sessie standaard worden geblokkeerd. → *Onderbouwing: §5.2 en §7.4*
 
-**Bescherming in rust (toegang tot opslag).** Alle data — operationele tabellen, audit-logs, back-ups — wordt op schijfniveau versleuteld met **AES-256** door Supabase. Wachtwoorden worden door Supabase Auth opgeslagen als bcrypt-hashes met salt; AstraPlanner-code ziet of verwerkt nooit een leesbaar wachtwoord. → *Onderbouwing: §5.2*
+**Bescherming in rust (toegang tot opslag).** Alle data — operationele tabellen, audit-logs, back-ups — wordt op schijfniveau versleuteld met **AES-256** door Supabase. Wachtwoorden worden door Supabase Auth opgeslagen als bcrypt-hashes met salt; Astra-code ziet of verwerkt nooit een leesbaar wachtwoord. → *Onderbouwing: §5.2*
 
 **Bescherming tegen andere klanten (multi-tenant isolatie — de belangrijkste vraag).** Elke regel data in de database draagt het `organization_id` van Protest Sportwear. Op **alle 20+ tabellen met klantdata** is **PostgreSQL Row-Level Security (RLS)** geactiveerd. Dat betekent: bij elke query voert de database zelf, vóór er ook maar één rij wordt teruggegeven, een controle uit dat het `organization_id` van de rij overeenkomt met het `organization_id` uit de JWT van de aanvragende gebruiker. Deze controle is niet te omzeilen vanuit de applicatielaag. Bovenop RLS hanteert de tRPC-API een tweede, expliciete `WHERE organization_id = ctx.organizationId`-filter — defense in depth. Cross-tenant data-toegang is, zelfs bij een hypothetische programmeerfout in één van beide lagen, technisch geblokkeerd door de andere. → *Onderbouwing: §6.1 t/m §6.4*
 
-**Bescherming tegen AstraPlanner-personeel.** Niemand binnen AstraPlanner heeft routinematige toegang tot de productiedata van Protest Sportwear. De zogeheten *service-role sleutel* die RLS kan omzeilen bestaat uitsluitend als versleutelde omgevingsvariabele in Vercel's productieomgeving en is via één bestand serverside beschikbaar. De sleutel staat **nooit** in broncode, **nooit** in Git, en nooit op een werkplek; dit is verifieerbaar door git-historie over `.env*`-paden. Toegang door een persoon tot productiedata is uitsluitend toegestaan bij een kritiek incident of op uw expliciet verzoek, wordt onveranderbaar gelogd door Supabase, en wordt achteraf aan u gerapporteerd. Onze engineers werken in dagelijkse ontwikkeling met synthetische data. → *Onderbouwing: §6.6*
+**Bescherming tegen Astra-personeel.** Niemand binnen Astra heeft routinematige toegang tot de productiedata van Protest Sportwear. De zogeheten *service-role sleutel* die RLS kan omzeilen bestaat uitsluitend als versleutelde omgevingsvariabele in Vercel's productieomgeving en is via één bestand serverside beschikbaar. De sleutel staat **nooit** in broncode, **nooit** in Git, en nooit op een werkplek; dit is verifieerbaar door git-historie over `.env*`-paden. Toegang door een persoon tot productiedata is uitsluitend toegestaan bij een kritiek incident of op uw expliciet verzoek, wordt onveranderbaar gelogd door Supabase, en wordt achteraf aan u gerapporteerd. Onze engineers werken in dagelijkse ontwikkeling met synthetische data. → *Onderbouwing: §6.6*
 
 **Bescherming tegen aanvallers van buitenaf.** Alle 116 server-side API-procedures valideren hun input met strikte typed schema's (Zod) — kwaadaardige payloads worden vóór elke businesslogica geweigerd. Alle databasequeries lopen via geparametriseerde query-builders; SQL-injectie is structureel uitgesloten. Een volledige scan van de codebase op gevaarlijke patronen (`dangerouslySetInnerHTML`, `innerHTML`, `eval`, `new Function`) geeft **nul** treffers; klassieke XSS-aanvallen worden door React's standaard HTML-escaping geblokkeerd. Authenticatie wordt **per request** server-side geverifieerd tegen Supabase Auth, niet alleen lokaal gedecodeerd. Rolbevoegdheden worden zowel in de applicatielaag als in de RLS-policies van gevoelige tabellen afgedwongen. → *Onderbouwing: §7, §8, §9*
 
-**Bescherming als er tóch iets misgaat (auditbaarheid en incident response).** Elke wijziging op de zes meest gevoelige tabellen (medewerkers, vaardigheden, planningen, dienstroosters, arbeidsregels, beschikbaarheid) wordt vastgelegd in een **onveranderbare audit-log**: een databasetrigger weigert technisch elke `UPDATE` of `DELETE` op deze tabel. De audit-log bevat wie, wanneer, vanaf welk IP, welke actie, en de volledige snapshot vóór en ná de wijziging. Bij een vermoedelijk datalek meldt AstraPlanner u **binnen 24 uur** met een eerste rapportage, en levert binnen 72 uur de informatie die u nodig heeft om aan uw eigen meldplicht aan de Autoriteit Persoonsgegevens te voldoen. → *Onderbouwing: §10 en §13*
+**Bescherming als er tóch iets misgaat (auditbaarheid en incident response).** Elke wijziging op de zes meest gevoelige tabellen (medewerkers, vaardigheden, planningen, dienstroosters, arbeidsregels, beschikbaarheid) wordt vastgelegd in een **onveranderbare audit-log**: een databasetrigger weigert technisch elke `UPDATE` of `DELETE` op deze tabel. De audit-log bevat wie, wanneer, vanaf welk IP, welke actie, en de volledige snapshot vóór en ná de wijziging. Bij een vermoedelijk datalek meldt Astra u **binnen 24 uur** met een eerste rapportage, en levert binnen 72 uur de informatie die u nodig heeft om aan uw eigen meldplicht aan de Autoriteit Persoonsgegevens te voldoen. → *Onderbouwing: §10 en §13*
 
 **Bescherming tegen ongewenste AI-doorgifte (per realisatie april 2026).** Persoonsgegevens van medewerkers van Protest Sportwear worden **niet** in originele vorm verzonden naar Anthropic's Claude API. Alle medewerkernamen worden vóór elke AI-aanroep deterministisch gepseudonimiseerd met een HMAC-SHA-256 over een per-organisatie geheime salt. Het AI-model ziet uitsluitend tokens als `employee-a3f2b1`. Pseudoniemen worden server-side teruggemapt vóór weergave aan de gebruiker. Onder deze architectuur verlaten direct identificerende persoonsgegevens de Europese Unie niet, en worden de meest stringente eisen van de AVG inzake doorgifte aan derde landen (hoofdstuk V) op deze gegevensstroom niet getriggerd. → *Onderbouwing: §11.3*
 
-**Wat dit samen betekent.** Zelfs in het ongunstigste denkbare scenario — een aanvaller bemachtigt geldige inloggegevens van een willekeurige andere AstraPlanner-klant — kan die aanvaller géén byte data van Protest Sportwear inzien, omdat de RLS-policy in PostgreSQL hem blokkeert vóór de query überhaupt rijen retourneert. En in het scenario dat een ontwikkelaar van AstraPlanner een fout maakt in de applicatielaag, wordt diezelfde fout onmiddellijk opgevangen door RLS daaronder. Dat is wat wij met *defense in depth* bedoelen, en het is de reden waarom wij durven stellen dat tenant-isolatie geen marketing-belofte is, maar een technische eigenschap van het systeem.
+**Wat dit samen betekent.** Zelfs in het ongunstigste denkbare scenario — een aanvaller bemachtigt geldige inloggegevens van een willekeurige andere Astra-klant — kan die aanvaller géén byte data van Protest Sportwear inzien, omdat de RLS-policy in PostgreSQL hem blokkeert vóór de query überhaupt rijen retourneert. En in het scenario dat een ontwikkelaar van Astra een fout maakt in de applicatielaag, wordt diezelfde fout onmiddellijk opgevangen door RLS daaronder. Dat is wat wij met *defense in depth* bedoelen, en het is de reden waarom wij durven stellen dat tenant-isolatie geen marketing-belofte is, maar een technische eigenschap van het systeem.
 
 ---
 
@@ -78,23 +78,26 @@ Voor de lezer die snel een totaaloverzicht wil van de beschermingslagen rondom d
 - KvK: 28055371
 - Aanspreekpunt voor dit document: Dhr. M. Werkman, Warehouse Manager
 
-Protest Sportwear is in de zin van de AVG de **verwerkingsverantwoordelijke** voor alle persoonsgegevens die in AstraPlanner worden vastgelegd. Dit betekent dat Protest Sportwear bepaalt welk doel en met welke middelen er gegevens verwerkt worden.
+Protest Sportwear is in de zin van de AVG de **verwerkingsverantwoordelijke** voor alle persoonsgegevens die in Astra worden vastgelegd. Dit betekent dat Protest Sportwear bepaalt welk doel en met welke middelen er gegevens verwerkt worden.
 
 ### 3.2 Verwerker
 
-**AstraPlanner** — `[INVULLEN: juridische entiteit, KvK-nummer, bezoekadres, correspondentieadres]`
+**Ascentra B.V.** — leverancier van het Astra-platform
+- Oranjestraat 11, 9401 KE Assen
+- KvK: 98227548
+- *Operational excellence, engineered with intelligence*
 - Contact beveiliging en privacy: `[INVULLEN: e-mailadres, telefoon]`
 - Meldpunt datalek (24/7): `[INVULLEN: e-mailadres of telefoonnummer]`
 
-AstraPlanner is de **verwerker** in de zin van artikel 28 AVG. Wij verwerken persoonsgegevens uitsluitend op basis van schriftelijke instructies van Protest Sportwear, zoals vastgelegd in de tussen partijen te sluiten **Verwerkersovereenkomst**.
+Astra is de **verwerker** in de zin van artikel 28 AVG. Wij verwerken persoonsgegevens uitsluitend op basis van schriftelijke instructies van Protest Sportwear, zoals vastgelegd in de tussen partijen te sluiten **Verwerkersovereenkomst**.
 
 ### 3.3 Functionaris Gegevensbescherming
 
-AstraPlanner heeft geen wettelijk verplichte Functionaris Gegevensbescherming aangesteld. De rol van eerste aanspreekpunt voor privacy- en beveiligingsvraagstukken wordt vervuld door `[INVULLEN: naam + functie + e-mailadres]`.
+Astra heeft geen wettelijk verplichte Functionaris Gegevensbescherming aangesteld. De rol van eerste aanspreekpunt voor privacy- en beveiligingsvraagstukken wordt vervuld door `[INVULLEN: naam + functie + e-mailadres]`.
 
 ### 3.4 Subverwerkers
 
-AstraPlanner maakt gebruik van de volgende subverwerkers. Geen andere derde partijen krijgen toegang tot persoonsgegevens van Protest Sportwear.
+Astra maakt gebruik van de volgende subverwerkers. Geen andere derde partijen krijgen toegang tot persoonsgegevens van Protest Sportwear.
 
 | Subverwerker | Rol | Locatie data | Certificeringen | Juridische grondslag transfer |
 |---|---|---|---|---|
@@ -110,7 +113,7 @@ AstraPlanner maakt gebruik van de volgende subverwerkers. Geen andere derde part
 
 ### 4.1 Doel van de verwerking
 
-AstraPlanner verwerkt persoonsgegevens uitsluitend ten behoeve van:
+Astra verwerkt persoonsgegevens uitsluitend ten behoeve van:
 1. Het opstellen, optimaliseren en beheren van dienstroosters en inzetplanningen;
 2. Het registreren van verzuim, verlof en beschikbaarheidswijzigingen;
 3. Het bijhouden van vaardigheden, certificeringen en training voor inzetbaarheid;
@@ -135,11 +138,11 @@ Op basis van het databaseschema verwerken wij de volgende categorieën. Deze lij
 | **Audit-metadata** | `actor_id`, `actor_ip_address`, `before_state`, `after_state` | `audit_log` | IP-adres = persoonsgegeven |
 | **Sessie en authenticatie** | e-mail, gehashed wachtwoord, sessietokens | beheerd door Supabase Auth | Nee |
 
-**Bijzondere categorieën (art. 9 AVG).** Het veld `reason` in de tabel `employee_availability_override` is een vrije-tekstveld. Afhankelijk van hoe Protest Sportwear dit invult, kán het gezondheidsgegevens bevatten (bijvoorbeeld "ziekteverlof wegens operatie"). AstraPlanner beveelt met klem aan om in dit veld uitsluitend neutrale verzuimcategorieën op te nemen (bijvoorbeeld "ziekte", "verlof", "bijzonder verlof") en géén medische details. Wij bieden Protest Sportwear ondersteuning bij het opstellen van een interne invulinstructie.
+**Bijzondere categorieën (art. 9 AVG).** Het veld `reason` in de tabel `employee_availability_override` is een vrije-tekstveld. Afhankelijk van hoe Protest Sportwear dit invult, kán het gezondheidsgegevens bevatten (bijvoorbeeld "ziekteverlof wegens operatie"). Astra beveelt met klem aan om in dit veld uitsluitend neutrale verzuimcategorieën op te nemen (bijvoorbeeld "ziekte", "verlof", "bijzonder verlof") en géén medische details. Wij bieden Protest Sportwear ondersteuning bij het opstellen van een interne invulinstructie.
 
 ### 4.3 Betrokkenen
 
-De betrokkenen wiens gegevens in AstraPlanner worden verwerkt zijn:
+De betrokkenen wiens gegevens in Astra worden verwerkt zijn:
 - Medewerkers van Protest Sportwear (inclusief uitzendkrachten en gedetacheerden, indien geregistreerd);
 - Interne gebruikers (planners, supervisors, managers) van het platform;
 - Contactpersonen bij Protest Sportwear voor contractuele communicatie.
@@ -161,7 +164,7 @@ De betrokkenen wiens gegevens in AstraPlanner worden verwerkt zijn:
 
 ### 5.1 Hostingomgeving
 
-AstraPlanner draait **volledig in de Europese Unie**. Onze infrastructuur bestaat uit twee gescheiden lagen:
+Astra draait **volledig in de Europese Unie**. Onze infrastructuur bestaat uit twee gescheiden lagen:
 
 **Database-laag — Supabase (PostgreSQL 15+, tier: Pro)**
 - Fysieke locatie: Frankfurt, Duitsland (`eu-central-1`) of Amsterdam, Nederland (`eu-west-1`) — afhankelijk van het voor Protest Sportwear in te richten project.
@@ -184,12 +187,12 @@ AstraPlanner draait **volledig in de Europese Unie**. Onze infrastructuur bestaa
 |---|---|---|
 | Data in rust — database | AES-256 | Supabase (AWS KMS-onderliggend) |
 | Data in rust — back-ups | AES-256 | Supabase |
-| Integratie-credentials (WMS/HRIS) — *toekomstige functionaliteit* | AES-256-GCM met per-organisatie sleutels via Supabase Vault (zie §5.4) | AstraPlanner, te implementeren vóór eerste koppeling |
+| Integratie-credentials (WMS/HRIS) — *toekomstige functionaliteit* | AES-256-GCM met per-organisatie sleutels via Supabase Vault (zie §5.4) | Astra, te implementeren vóór eerste koppeling |
 | Data in rust — logs en audit-log | AES-256 | Supabase (dezelfde schijf-encryptie) |
 | Data in transport — client → server | TLS 1.3 (minimaal TLS 1.2) | Vercel |
 | Data in transport — server → database | TLS 1.3 | Supabase |
 | Data in transport — server → Anthropic | TLS 1.3 met certificate pinning door Anthropic SDK | Anthropic |
-| Wachtwoorden gebruikers | bcrypt met salt (beheerd door Supabase Auth, geen toegang voor AstraPlanner) | Supabase Auth |
+| Wachtwoorden gebruikers | bcrypt met salt (beheerd door Supabase Auth, geen toegang voor Astra) | Supabase Auth |
 | Sessiecookies | AES-GCM signed + versleuteld door `@supabase/ssr`, verzonden als `HttpOnly` `Secure` `SameSite=Lax` | Supabase SSR-bibliotheek |
 
 ### 5.3 Netwerk en firewallbeleid
@@ -197,7 +200,7 @@ AstraPlanner draait **volledig in de Europese Unie**. Onze infrastructuur bestaa
 - Het platform is uitsluitend bereikbaar via HTTPS. HTTP-verzoeken worden geweigerd dan wel geforceerd doorverwezen.
 - De tRPC API (`/api/trpc/**`) weigert cross-origin verzoeken buiten de toegelaten domeinen op basis van Next.js' standaard same-origin beleid.
 - Alle administratieve endpoints (bijvoorbeeld het toekennen van gebruikers aan een organisatie) vereisen zowel authenticatie als een minimum-rol van `tenant_admin`, en zijn niet bereikbaar voor gebruikers buiten de eigen organisatie.
-- **Supabase Realtime** wordt door AstraPlanner minimaal gebruikt — uitsluitend voor één publicatie (`join_request`) die live statusupdates toont aan een gebruiker die in de onboarding-wachtrij zit. Deze tabel is RLS-beveiligd (zie migratie 00021): een gebruiker ziet uitsluitend zijn eigen rij, en tenant-admins van de doelorganisatie zien alleen pending requests voor hún organisatie. Er is geen andere realtime-publicatie actief. Toekomstige realtime features zullen dezelfde RLS-first aanpak volgen.
+- **Supabase Realtime** wordt door Astra minimaal gebruikt — uitsluitend voor één publicatie (`join_request`) die live statusupdates toont aan een gebruiker die in de onboarding-wachtrij zit. Deze tabel is RLS-beveiligd (zie migratie 00021): een gebruiker ziet uitsluitend zijn eigen rij, en tenant-admins van de doelorganisatie zien alleen pending requests voor hún organisatie. Er is geen andere realtime-publicatie actief. Toekomstige realtime features zullen dezelfde RLS-first aanpak volgen.
 
 ### 5.4 Integratie-credentials — huidige staat en te nemen maatregel vóór eerste koppeling
 
@@ -216,7 +219,7 @@ Het zou eenvoudig zijn geweest om op basis van het schema-commentaar de aanwezig
 
 ## 6. Multi-tenancy en Tenant-isolatie (de kernvraag)
 
-> *"Hoe weten we zeker dat Protest Sportwear-data nooit door een andere klant kan worden gezien, en dat AstraPlanner zelf niet zomaar in onze data kan kijken?"*
+> *"Hoe weten we zeker dat Protest Sportwear-data nooit door een andere klant kan worden gezien, en dat Astra zelf niet zomaar in onze data kan kijken?"*
 
 Dit is de belangrijkste vraag in dit document, en wij beantwoorden hem met een technische onderbouwing die verifieerbaar is in de broncode.
 
@@ -245,7 +248,7 @@ Dit betekent: ook al zou een kwaadwillende een query kunnen injecteren die probe
 
 ### 6.3 Dubbele beveiliging in de applicatielaag
 
-Bovenop RLS hanteert AstraPlanner een tweede beveiligingslaag in de tRPC-API. Elke API-procedure (en dat zijn er op dit moment 116) verifieert het `organization_id` van de aanvragende gebruiker en voegt dit handmatig toe aan elke query als `WHERE organization_id = ctx.organizationId`. Dit is een *defense in depth*-principe: ook als een ontwikkelaar per ongeluk een RLS-policy te ruim zou definiëren, vangt de applicatielaag die fout op.
+Bovenop RLS hanteert Astra een tweede beveiligingslaag in de tRPC-API. Elke API-procedure (en dat zijn er op dit moment 116) verifieert het `organization_id` van de aanvragende gebruiker en voegt dit handmatig toe aan elke query als `WHERE organization_id = ctx.organizationId`. Dit is een *defense in depth*-principe: ook als een ontwikkelaar per ongeluk een RLS-policy te ruim zou definiëren, vangt de applicatielaag die fout op.
 
 ### 6.4 Rollenhiërarchie binnen een tenant
 
@@ -253,7 +256,7 @@ Binnen één organisatie hanteren wij zeven rollen, met oplopende bevoegdheden:
 
 | Rol | Niveau | Typische bevoegdheden |
 |---|---|---|
-| `super_admin` | 100 | AstraPlanner platform-beheer (zie §6.6) |
+| `super_admin` | 100 | Astra platform-beheer (zie §6.6) |
 | `tenant_admin` | 90 | Volledige beheerrechten binnen de eigen organisatie |
 | `site_manager` | 70 | Beheer van één of meer sites |
 | `planner` | 50 | Opstellen en wijzigen van dienstroosters |
@@ -268,27 +271,27 @@ Elke API-procedure specificeert expliciet welk minimum-rolniveau vereist is. De 
 Het enige HTTP-endpoint dat in theorie een gebruiker aan een andere organisatie kan koppelen (`/api/admin/assign-org`) heeft drie cumulatieve controles:
 1. De aanvrager moet minimaal `tenant_admin` zijn;
 2. Het doel-`organization_id` moet overeenkomen met het eigen `organization_id`;
-3. Alleen `super_admin` (AstraPlanner-platformbeheer) mag hiervan afwijken.
+3. Alleen `super_admin` (Astra-platformbeheer) mag hiervan afwijken.
 
-### 6.6 Toegang door AstraPlanner-personeel
+### 6.6 Toegang door Astra-personeel
 
 Wij begrijpen dat de vraag *"kunnen jullie zelf in onze data kijken?"* centraal staat. Ons antwoord is zo eerlijk mogelijk:
 
-**Wat technisch zou kunnen:** AstraPlanner beschikt over een `super_admin`-rol en over een zogenaamde *service-role sleutel* waarmee de RLS-afscherming kan worden omzeild. Deze bevoegdheden zijn technisch onvermijdelijk bij een SaaS-platform — zonder dergelijke bevoegdheden zouden wij bijvoorbeeld geen back-ups kunnen herstellen, geen incidenten kunnen onderzoeken, en geen schema-migraties kunnen uitvoeren.
+**Wat technisch zou kunnen:** Astra beschikt over een `super_admin`-rol en over een zogenaamde *service-role sleutel* waarmee de RLS-afscherming kan worden omzeild. Deze bevoegdheden zijn technisch onvermijdelijk bij een SaaS-platform — zonder dergelijke bevoegdheden zouden wij bijvoorbeeld geen back-ups kunnen herstellen, geen incidenten kunnen onderzoeken, en geen schema-migraties kunnen uitvoeren.
 
 **Wat wij operationeel garanderen:**
 
 1. **De service-role sleutel wordt niet op werkplekken opgeslagen.** Hij bestaat uitsluitend als een versleutelde omgevingsvariabele binnen Vercel's productieomgeving, en wordt door de applicatiecode alléén server-side geraadpleegd. De sleutel staat nooit in broncode, nooit in Git, en is nooit in de git-historie terechtgekomen (dit is verifieerbaar door een `git log` over `.env*`-paden, die uitsluitend `.env.example` retourneert).
 
-2. **Geen routinematige toegang.** Geen AstraPlanner-medewerker heeft in de dagelijkse werkzaamheden toegang nodig tot klantdata en ontvangt die dan ook niet. Onze eigen engineers werken tegen geanonimiseerde ontwikkeldatabases en tegen demo-tenants.
+2. **Geen routinematige toegang.** Geen Astra-medewerker heeft in de dagelijkse werkzaamheden toegang nodig tot klantdata en ontvangt die dan ook niet. Onze eigen engineers werken tegen geanonimiseerde ontwikkeldatabases en tegen demo-tenants.
 
-3. **Incident-toegang is geprotocolleerd.** Toegang tot productiedata door een persoon is uitsluitend toegestaan bij een kritiek incident of op expliciet verzoek van Protest Sportwear. Dergelijke toegang wordt gelogd bij Supabase (dashboard audit-log, onveranderbaar voor AstraPlanner) en wordt achteraf aan Protest Sportwear gerapporteerd.
+3. **Incident-toegang is geprotocolleerd.** Toegang tot productiedata door een persoon is uitsluitend toegestaan bij een kritiek incident of op expliciet verzoek van Protest Sportwear. Dergelijke toegang wordt gelogd bij Supabase (dashboard audit-log, onveranderbaar voor Astra) en wordt achteraf aan Protest Sportwear gerapporteerd.
 
 4. **De Verwerkersovereenkomst verbiedt verdergaand gebruik.** Enig gebruik van Protest Sportwear-data anders dan strikt noodzakelijk voor het leveren van de dienst is contractueel verboden en levert een direct opzegrecht op voor Protest Sportwear.
 
 5. **Werknemers met productie-toegang zijn gebonden aan een geheimhoudingsverklaring.** `[INVULLEN: verwijzing naar NDA / arbeidsovereenkomst clausule]`
 
-**Wat wij expliciet niet beweren:** wij beweren niet dat het technisch onmogelijk is voor een AstraPlanner-medewerker met kwade opzet om toegang te verkrijgen tot klantdata. Een dergelijke claim zou bij elke SaaS-leverancier oneerlijk zijn. Wat wij wél waarmaken is dat (a) dergelijke toegang geen onderdeel is van normale bedrijfsprocessen, (b) er een onveranderbare audit-trail bestaat, (c) de autorisatie contractueel beperkt is, en (d) wij hierover open en aantoonbaar rapporteren.
+**Wat wij expliciet niet beweren:** wij beweren niet dat het technisch onmogelijk is voor een Astra-medewerker met kwade opzet om toegang te verkrijgen tot klantdata. Een dergelijke claim zou bij elke SaaS-leverancier oneerlijk zijn. Wat wij wél waarmaken is dat (a) dergelijke toegang geen onderdeel is van normale bedrijfsprocessen, (b) er een onveranderbare audit-trail bestaat, (c) de autorisatie contractueel beperkt is, en (d) wij hierover open en aantoonbaar rapporteren.
 
 ---
 
@@ -296,7 +299,7 @@ Wij begrijpen dat de vraag *"kunnen jullie zelf in onze data kijken?"* centraal 
 
 ### 7.1 Inlogproces
 
-AstraPlanner gebruikt **Supabase Auth** voor gebruikersauthenticatie. Dit betekent dat wachtwoorden nooit door AstraPlanner-code worden gezien of verwerkt. Het proces verloopt als volgt:
+Astra gebruikt **Supabase Auth** voor gebruikersauthenticatie. Dit betekent dat wachtwoorden nooit door Astra-code worden gezien of verwerkt. Het proces verloopt als volgt:
 
 1. De gebruiker voert zijn e-mailadres en wachtwoord in op de inlogpagina.
 2. Deze gegevens worden via TLS 1.3 rechtstreeks naar Supabase Auth gestuurd (via de officiële `@supabase/ssr` bibliotheek).
@@ -306,7 +309,7 @@ AstraPlanner gebruikt **Supabase Auth** voor gebruikersauthenticatie. Dit beteke
 
 ### 7.2 Verificatie per verzoek
 
-Bij elke API-aanroep voert AstraPlanner een server-side validatie uit door Supabase Auth's `auth.getUser()` aan te roepen. Dit is een volledige cryptografische verificatie tegen de Supabase-service, geen alleen-lokale decodering. Verlopen of ongeldige sessies worden onmiddellijk geweigerd.
+Bij elke API-aanroep voert Astra een server-side validatie uit door Supabase Auth's `auth.getUser()` aan te roepen. Dit is een volledige cryptografische verificatie tegen de Supabase-service, geen alleen-lokale decodering. Verlopen of ongeldige sessies worden onmiddellijk geweigerd.
 
 ### 7.3 Wachtwoordbeleid
 
@@ -318,7 +321,7 @@ Het wachtwoordbeleid is ingesteld in de productie-omgeving van Supabase Auth (ti
 - **Secure password change.** Een gebruiker moet recent (binnen 24 uur) zijn ingelogd om zijn eigen wachtwoord te mogen wijzigen. Dit voorkomt dat een aanvaller die een slapende sessie bemachtigt het wachtwoord kan wijzigen en de rechtmatige gebruiker buitensluit.
 - **Verplichte opgave van het huidige wachtwoord bij wijziging.** Ook binnen een geldige sessie moet de gebruiker zijn huidige wachtwoord invoeren om een nieuw wachtwoord in te stellen.
 
-**Hash-algoritme.** Wachtwoorden worden door Supabase Auth opgeslagen als bcrypt-hash met salt. AstraPlanner heeft geen toegang tot het leesbare wachtwoord op enig moment, zelfs niet tijdens het inlogproces.
+**Hash-algoritme.** Wachtwoorden worden door Supabase Auth opgeslagen als bcrypt-hash met salt. Astra heeft geen toegang tot het leesbare wachtwoord op enig moment, zelfs niet tijdens het inlogproces.
 
 **Multi-factor authenticatie.** Beschikbaar via Supabase Auth en op verzoek per gebruiker te activeren. Wij adviseren Protest Sportwear om MFA verplicht te stellen voor alle rollen vanaf `planner` (rang 50) en hoger.
 
@@ -328,10 +331,10 @@ Het wachtwoordbeleid is ingesteld in de productie-omgeving van Supabase Auth (ti
 
 De hierboven beschreven regels voor minimum-lengte, verplichte tekenklassen en controle tegen HaveIBeenPwned worden door Supabase Auth afgedwongen op het moment dat een wachtwoord wordt **gezet of gewijzigd**. Bestaande wachtwoorden die vóór de aanscherping van het beleid zijn aangemaakt (en die mogelijk korter of eenvoudiger waren) blijven tot hun eerstvolgende wijziging geldig. Dit is standaardgedrag van Supabase Auth en van vrijwel alle authenticatieplatforms: het tegenovergestelde zou neerkomen op een collectieve account-lockout, wat vanuit een AVG-perspectief (beschikbaarheid, art. 32) ongewenst is.
 
-**Hoe AstraPlanner hiermee omgaat richting Protest Sportwear:**
+**Hoe Astra hiermee omgaat richting Protest Sportwear:**
 
 1. **Bij go-live** sturen wij aan alle Protest Sportwear-gebruikers een verplichte "first login password reset" per e-mail. Tijdens deze reset wordt het nieuwe, strengere wachtwoordbeleid volledig afgedwongen. Na voltooiing hiervan voldoet het volledige gebruikersbestand aan de regels in §7.3.
-2. **Voor de interne AstraPlanner-accounts** die reeds vóór deze aanscherping bestonden wordt dezelfde reset-cyclus uitgevoerd als onderdeel van de pre-go-live checklist.
+2. **Voor de interne Astra-accounts** die reeds vóór deze aanscherping bestonden wordt dezelfde reset-cyclus uitgevoerd als onderdeel van de pre-go-live checklist.
 3. **Periodieke heraanscherping.** Als in de toekomst het beleid verder wordt aangescherpt (bijvoorbeeld naar 14 tekens, of met een verplichte passphrase-structuur) voeren wij dezelfde verplichte-reset procedure uit.
 
 ### 7.4 Sessiebeveiliging — concreet
@@ -349,7 +352,7 @@ Wij passen **geen** expliciete CSRF-tokenregistratie per verzoek toe. Onze CSRF-
 
 ## 8. Autorisatie en Toegangscontrole
 
-Toegangscontrole wordt in AstraPlanner op drie lagen afgedwongen:
+Toegangscontrole wordt in Astra op drie lagen afgedwongen:
 
 **Laag 1 — Authenticatie-middleware (proxy).** Niet-geauthenticeerde verzoeken naar beschermde paden (`/dashboard`, `/plan`, etc.) worden doorverwezen naar de inlogpagina. Dit gebeurt in onze Next.js proxy op elk inkomend HTTP-verzoek.
 
@@ -363,7 +366,7 @@ Toegangscontrole wordt in AstraPlanner op drie lagen afgedwongen:
 
 **Invoervalidatie (strong).** Alle 116 tRPC-API-procedures valideren hun input met **Zod** — een TypeScript-first schemavalidator. Dit betekent dat bijvoorbeeld een verzoek dat een tekst probeert door te geven waar een UUID wordt verwacht, of een negatief getal waar een positief getal wordt verwacht, vóór elke businesslogica wordt geweigerd. De validatie gebeurt server-side; client-side validatie wordt als pure UX-ondersteuning beschouwd en is nooit vertrouwd.
 
-**SQL-injectie (strong).** AstraPlanner construeert nooit SQL-strings met string-concatenatie. Alle databasetoegang loopt via Supabase's geparametriseerde query-builder (`.eq()`, `.insert()`, `.select()`, etc.). Een SQL-injectievector bestaat niet in de huidige codebase.
+**SQL-injectie (strong).** Astra construeert nooit SQL-strings met string-concatenatie. Alle databasetoegang loopt via Supabase's geparametriseerde query-builder (`.eq()`, `.insert()`, `.select()`, etc.). Een SQL-injectievector bestaat niet in de huidige codebase.
 
 **XSS (strong).** React voert standaard HTML-escaping uit op alle gerenderde waarden. Een volledige scan van de codebase op gevaarlijke patronen (`dangerouslySetInnerHTML`, `innerHTML`, `eval`, `new Function`) geeft **nul treffers**. Daarmee is de applicatie intrinsiek beschermd tegen klassieke XSS-aanvallen.
 
@@ -377,7 +380,7 @@ Toegangscontrole wordt in AstraPlanner op drie lagen afgedwongen:
 
 ### 10.1 Wat wordt gelogd
 
-AstraPlanner onderhoudt een **onveranderbare audit-logtabel** (`audit_log`) die wijzigingen registreert op zes categorieën gevoelige gegevens:
+Astra onderhoudt een **onveranderbare audit-logtabel** (`audit_log`) die wijzigingen registreert op zes categorieën gevoelige gegevens:
 
 1. `employee` — alle mutaties op medewerkersgegevens
 2. `employee_skill` — toekenning en wijziging van vaardigheden
@@ -394,7 +397,7 @@ De audit-logtabel is technisch onveranderbaar gemaakt: een databasetrigger (`trg
 
 ### 10.3 Volledige attributie ook voor service-role mutaties — gerealiseerd
 
-Een eerdere interne review had vastgesteld dat wijzigingen die door AstraPlanner's serverlaag worden uitgevoerd via de *service-role verbinding* (AI-chat tools, tRPC routers die de RLS-afscherming overslaan voor performance, en administratieve HTTP-endpoints) niet altijd herleidbaar waren tot een specifieke gebruiker in de audit-log: het veld `actor_id` kon op `NULL` staan omdat de JWT-context van de oorspronkelijke gebruiker niet werd doorgegeven aan de databasesessie. Dit punt is opgelost met twee gekoppelde maatregelen.
+Een eerdere interne review had vastgesteld dat wijzigingen die door Astra's serverlaag worden uitgevoerd via de *service-role verbinding* (AI-chat tools, tRPC routers die de RLS-afscherming overslaan voor performance, en administratieve HTTP-endpoints) niet altijd herleidbaar waren tot een specifieke gebruiker in de audit-log: het veld `actor_id` kon op `NULL` staan omdat de JWT-context van de oorspronkelijke gebruiker niet werd doorgegeven aan de databasesessie. Dit punt is opgelost met twee gekoppelde maatregelen.
 
 **Wijziging 1 — audit trigger leest een expliciete actor-header.** De triggerfunctie `fn_audit_trigger()` is uitgebreid zodat zij `actor_id` in de volgende volgorde bepaalt (zie migratie [`00018_audit_actor_fix.sql`](../../supabase/migrations/00018_audit_actor_fix.sql)):
 1. **`request.headers ->> 'x-actor-id'`** — een HTTP-header die de applicatie meestuurt bij elke service-role databaseverbinding op basis van de oorspronkelijke eindgebruiker.
@@ -415,7 +418,7 @@ Dit is een onderwerp waar wij extra zorgvuldig in willen zijn, omdat AI-verwerki
 
 ### 11.1 Overzicht van AI-integraties
 
-AstraPlanner heeft drie plekken waarop het AI-model Claude (Anthropic) wordt aangeroepen:
+Astra heeft drie plekken waarop het AI-model Claude (Anthropic) wordt aangeroepen:
 
 | Endpoint | Welk model | Welke data gaat naar Anthropic | Bevat persoonsgegevens? |
 |---|---|---|---|
@@ -431,7 +434,7 @@ De **demand-analyse** stuurt alleen bestandsstructuur-metadata en een handvol vo
 
 ### 11.3 Geen direct identificerende persoonsgegevens naar Anthropic — gerealiseerd
 
-Voor de **onboarding chat-assistent**, die een conversationele interface biedt om tijdens de inrichting medewerkers te beheren en te analyseren, hanteert AstraPlanner een **strikte pseudonimiseringsarchitectuur**. Geen enkele tool-functie die wordt aangeroepen door het Claude-model krijgt een voor- of achternaam, e-mailadres of telefoonnummer van een medewerker te zien.
+Voor de **onboarding chat-assistent**, die een conversationele interface biedt om tijdens de inrichting medewerkers te beheren en te analyseren, hanteert Astra een **strikte pseudonimiseringsarchitectuur**. Geen enkele tool-functie die wordt aangeroepen door het Claude-model krijgt een voor- of achternaam, e-mailadres of telefoonnummer van een medewerker te zien.
 
 **Hoe het werkt — technisch.** Voordat een resultaat van een database-query door de AI-laag wordt verwerkt, passeert het de centrale anonimiseringsmodule (`src/lib/ai/anonymizer.ts`). Deze module verwijdert alle direct identificerende velden (`first_name`, `last_name`, `full_name`, `email`, `phone`) en vervangt ze door een **stabiele, leesbare pseudoniem** zoals `Medewerker A3F2`. De pseudoniem wordt gegenereerd via een **HMAC-SHA-256** over het employee-id, met als sleutel een geheime, per-organisatie variërende salt. De AI ziet dus uitsluitend deze pseudoniem; de werkelijke naam blijft binnen de PostgreSQL-database in Frankfurt of Amsterdam.
 
@@ -446,9 +449,9 @@ Voor de **onboarding chat-assistent**, die een conversationele interface biedt o
 **Eén nuance, eerlijk benoemd.** Wanneer een gebruiker tijdens een onboarding-sessie zelf in de chat een nieuwe medewerker aanmaakt door een naam in te tikken (*"voeg Jan Jansen toe als full-time picker"*), bevat dat ene gebruikersbericht uiteraard de naam *"Jan Jansen"* — die naam wordt door Claude geparseerd om te begrijpen welke velden in te vullen. Dit is gegevensverstrekking die door de gebruiker zelf wordt geïnitieerd binnen de uitvoering van zijn taak (vergelijkbaar met een gebruiker die een naam in een e-mailprogramma intypt). De **resultaat-respons** van de tool-functie bevat na onze hardening géén namen meer, zodat de naam in vervolgturns van dezelfde conversatie niet opnieuw door de AI wordt gezien of verwerkt.
 
 **Wat dit betekent onder de AVG:**
-- AstraPlanner stuurt **geen direct identificerende persoonsgegevens** vanuit de database naar Anthropic. De doorgifte naar derde land (VS) is daarmee beperkt tot pseudoniemen en operationele metadata, en niet tot identificeerbare persoonsgegevens.
+- Astra stuurt **geen direct identificerende persoonsgegevens** vanuit de database naar Anthropic. De doorgifte naar derde land (VS) is daarmee beperkt tot pseudoniemen en operationele metadata, en niet tot identificeerbare persoonsgegevens.
 - Voor de uitzondering hierboven (gebruiker tikt zelf een naam in een prompt) blijft de doorgifte gegrond op de Standard Contractual Clauses (Module 2) in de DPA met Anthropic, en op de instructie van de gebruiker (Protest Sportwear) zelf.
-- AstraPlanner is daarmee **niet langer afhankelijk** van een Zero Data Retention-overeenkomst met Anthropic voor de bescherming van naam- en contactgegevens van de medewerkers van Protest Sportwear. ZDR blijft een mogelijke aanvullende beheersmaatregel die wij later kunnen toevoegen, maar is geen voorwaarde voor de in dit document beschreven garanties.
+- Astra is daarmee **niet langer afhankelijk** van een Zero Data Retention-overeenkomst met Anthropic voor de bescherming van naam- en contactgegevens van de medewerkers van Protest Sportwear. ZDR blijft een mogelijke aanvullende beheersmaatregel die wij later kunnen toevoegen, maar is geen voorwaarde voor de in dit document beschreven garanties.
 
 **Verifieerbaarheid.** De volledige implementatie is geconcentreerd in twee bestanden en is door uw IT-afdeling controleerbaar tijdens een technische due diligence:
 - `src/lib/ai/anonymizer.ts` — de pseudonimiseringsmodule (~95 regels);
@@ -460,7 +463,7 @@ In onze contracten met Anthropic én in het standaard Anthropic API-beleid is va
 
 ### 11.5 Geen geautomatiseerde besluitvorming in de zin van art. 22 AVG
 
-AstraPlanner's AI-laag adviseert, maar neemt **geen** bindende beslissingen die rechtsgevolgen hebben voor medewerkers. Elke wijziging in diensten, roosters of medewerkergegevens vereist een menselijke bevestiging (planner of tenant_admin). Dit sluit de toepassing van art. 22 AVG (verbod op geautomatiseerde individuele besluitvorming) uit.
+Astra's AI-laag adviseert, maar neemt **geen** bindende beslissingen die rechtsgevolgen hebben voor medewerkers. Elke wijziging in diensten, roosters of medewerkergegevens vereist een menselijke bevestiging (planner of tenant_admin). Dit sluit de toepassing van art. 22 AVG (verbod op geautomatiseerde individuele besluitvorming) uit.
 
 ---
 
@@ -468,30 +471,30 @@ AstraPlanner's AI-laag adviseert, maar neemt **geen** bindende beslissingen die 
 
 ### 12.1 Grondslag voor verwerking (art. 6)
 
-AstraPlanner verwerkt persoonsgegevens namens Protest Sportwear. De rechtsgrondslag voor de verwerking is primair:
+Astra verwerkt persoonsgegevens namens Protest Sportwear. De rechtsgrondslag voor de verwerking is primair:
 - **Art. 6 lid 1 sub b AVG** — noodzakelijk voor de uitvoering van de arbeidsovereenkomst;
 - **Art. 6 lid 1 sub c AVG** — voor zover de verwerking nodig is voor wettelijke verplichtingen van Protest Sportwear als werkgever (bijvoorbeeld arbeidstijdenregistratie);
 - **Art. 6 lid 1 sub f AVG** — gerechtvaardigd belang van Protest Sportwear bij een efficiënte personeelsplanning, getoetst aan de belangen en rechten van betrokkenen.
 
-De afweging van deze grondslagen is de verantwoordelijkheid van Protest Sportwear als verwerkingsverantwoordelijke. AstraPlanner ondersteunt Protest Sportwear desgewenst bij het opstellen van een register van verwerkingsactiviteiten (art. 30 AVG).
+De afweging van deze grondslagen is de verantwoordelijkheid van Protest Sportwear als verwerkingsverantwoordelijke. Astra ondersteunt Protest Sportwear desgewenst bij het opstellen van een register van verwerkingsactiviteiten (art. 30 AVG).
 
 ### 12.2 Rechten van betrokkenen (art. 15-22)
 
-AstraPlanner ondersteunt Protest Sportwear in het faciliteren van de volgende rechten. In de meeste gevallen is de verantwoordelijkheid contractueel bij Protest Sportwear belegd, met technische ondersteuning door AstraPlanner.
+Astra ondersteunt Protest Sportwear in het faciliteren van de volgende rechten. In de meeste gevallen is de verantwoordelijkheid contractueel bij Protest Sportwear belegd, met technische ondersteuning door Astra.
 
 | Recht | Ondersteuning |
 |---|---|
-| **Recht op inzage** (art. 15) | Een `tenant_admin` kan van elke medewerker een volledig overzicht uit het systeem genereren. Een data subject access request-export (JSON/CSV) op verzoek van Protest Sportwear wordt door AstraPlanner binnen 5 werkdagen geleverd. |
+| **Recht op inzage** (art. 15) | Een `tenant_admin` kan van elke medewerker een volledig overzicht uit het systeem genereren. Een data subject access request-export (JSON/CSV) op verzoek van Protest Sportwear wordt door Astra binnen 5 werkdagen geleverd. |
 | **Recht op rectificatie** (art. 16) | Alle medewerkervelden kunnen door bevoegde gebruikers worden gewijzigd via de standaard-UI. Wijzigingen worden in de audit-log vastgelegd. |
 | **Recht op vergetelheid** (art. 17) | **Gerealiseerd.** De `eraseEmployee` tRPC-procedure (toegankelijk voor `tenant_admin` en hoger) voert een anonimisering uit die direct identificerende velden verwijdert (`first_name` → `'VERWIJDERD'`, `last_name` → `'VERWIJDERD'`, `email`/`phone` → `NULL`, `preferences_json`/`metadata_json` → `{}`) terwijl niet-identificerende gegevens (employee_number, contract_type, hourly_rate, werktijden) behouden blijven voor historische planning en loonkosten. De getroffen rij krijgt `deleted_at` + `deleted_by` (migratie 00020) zodat DSAR-uitvoeringen audit-baar zijn. Elke erasure wordt dubbel gelogd: via de bestaande `fn_audit_trigger` (onveranderbaar, met volledige voor/na-snapshot) én via een expliciete `audit_log`-rij met `action = 'ERASE'`, de reden van de erasure, en de oorspronkelijke naam in `metadata_json`. |
 | **Recht op beperking van verwerking** (art. 18) | Via status `suspended` kan een medewerker worden uitgesloten van planning zonder verwijdering. |
-| **Recht op overdraagbaarheid** (art. 20) | AstraPlanner levert op verzoek van Protest Sportwear een gestructureerde export (CSV of JSON) van alle data van een betrokkene binnen 5 werkdagen. |
+| **Recht op overdraagbaarheid** (art. 20) | Astra levert op verzoek van Protest Sportwear een gestructureerde export (CSV of JSON) van alle data van een betrokkene binnen 5 werkdagen. |
 | **Recht van bezwaar** (art. 21) | Zie §11.5 — er is geen geautomatiseerde besluitvorming met rechtsgevolgen; hiermee is het recht van bezwaar in praktijk beperkt tot uitzondering op verwerkingsdoelen, te regelen door Protest Sportwear als werkgever. |
 | **Art. 22 — geautomatiseerde besluitvorming** | Niet van toepassing, zie §11.5. |
 
 ### 12.3 Dataminimalisatie (art. 5 lid 1 sub c)
 
-AstraPlanner verzamelt uitsluitend velden die noodzakelijk zijn voor personeelsplanning. Optionele velden (bijvoorbeeld `phone`, `email`) zijn niet verplicht; Protest Sportwear kan zelf bepalen welke velden worden ingevuld. Wij adviseren om het vrije-tekstveld `reason` (verzuimreden) **niet** te gebruiken voor medische details (zie §4.2).
+Astra verzamelt uitsluitend velden die noodzakelijk zijn voor personeelsplanning. Optionele velden (bijvoorbeeld `phone`, `email`) zijn niet verplicht; Protest Sportwear kan zelf bepalen welke velden worden ingevuld. Wij adviseren om het vrije-tekstveld `reason` (verzuimreden) **niet** te gebruiken voor medische details (zie §4.2).
 
 ### 12.4 Opslagbeperking (art. 5 lid 1 sub e)
 
@@ -503,7 +506,7 @@ Zie §5 (encryptie), §6 (tenant-isolatie), §10 (audit logging).
 
 ### 12.6 Verantwoordingsplicht (art. 5 lid 2)
 
-Dit document is onderdeel van de verantwoording die AstraPlanner aan Protest Sportwear aflegt. Wij leveren op verzoek aanvullende documentatie zoals:
+Dit document is onderdeel van de verantwoording die Astra aan Protest Sportwear aflegt. Wij leveren op verzoek aanvullende documentatie zoals:
 - Register van verwerkingsactiviteiten (art. 30);
 - Data Protection Impact Assessment (DPIA) template;
 - Sub-verwerkerslijst met DPA's;
@@ -516,7 +519,7 @@ Dit document is onderdeel van de verantwoording die AstraPlanner aan Protest Spo
 
 ### 13.0 Logging en log-retentie voor incident-reconstructie
 
-**Structured server-side logging.** AstraPlanner gebruikt een centrale `logger`-module (`src/lib/logger.ts`) die alle significante server-side events als gestructureerde JSON-records uitschrijft in plaats van vrije console-strings. Elk event heeft minimaal een `level`, `event`-naam, `timestamp`, `service`-identifier, en structured context. Dit maakt logs direct doorzoekbaar in elk downstream systeem.
+**Structured server-side logging.** Astra gebruikt een centrale `logger`-module (`src/lib/logger.ts`) die alle significante server-side events als gestructureerde JSON-records uitschrijft in plaats van vrije console-strings. Elk event heeft minimaal een `level`, `event`-naam, `timestamp`, `service`-identifier, en structured context. Dit maakt logs direct doorzoekbaar in elk downstream systeem.
 
 **Automatische PII-redactie.** De logger past vóór het schrijven een redactor toe op bekende gevoelige veldnamen (`password`, `token`, `email`, `first_name`, `last_name`, `phone`, `authorization`, etc.) en vervangt de waarden door `[REDACTED]`. Dit is een defense-in-depth maatregel bovenop de basisregel "geen PII in logs". De redactor werkt recursief op nested objects.
 
@@ -536,7 +539,7 @@ Additionele events kunnen door de applicatiecode worden toegevoegd zonder de log
 
 ### 13.1 Procedure
 
-AstraPlanner hanteert de volgende standaardprocedure bij een vermoedelijk beveiligingsincident of datalek:
+Astra hanteert de volgende standaardprocedure bij een vermoedelijk beveiligingsincident of datalek:
 
 | Fase | Termijn | Actie |
 |---|---|---|
@@ -551,11 +554,11 @@ AstraPlanner hanteert de volgende standaardprocedure bij een vermoedelijk beveil
 
 ### 13.2 Meldtermijn aan de Autoriteit Persoonsgegevens
 
-Het is in de AVG (art. 33) een verantwoordelijkheid van de **verwerkingsverantwoordelijke** — Protest Sportwear — om een datalek binnen 72 uur aan de Autoriteit Persoonsgegevens te melden. AstraPlanner ondersteunt Protest Sportwear hierin door binnen 24 uur na vaststelling van een incident de vereiste informatie te leveren, zodat Protest Sportwear ruim binnen de 72-uurstermijn aan zijn meldplicht kan voldoen.
+Het is in de AVG (art. 33) een verantwoordelijkheid van de **verwerkingsverantwoordelijke** — Protest Sportwear — om een datalek binnen 72 uur aan de Autoriteit Persoonsgegevens te melden. Astra ondersteunt Protest Sportwear hierin door binnen 24 uur na vaststelling van een incident de vereiste informatie te leveren, zodat Protest Sportwear ruim binnen de 72-uurstermijn aan zijn meldplicht kan voldoen.
 
 ### 13.3 Contactpunt datalek
 
-**AstraPlanner meldpunt datalek:** `[INVULLEN: e-mailadres + telefoonnummer, 24/7 bereikbaar]`
+**Astra meldpunt datalek:** `[INVULLEN: e-mailadres + telefoonnummer, 24/7 bereikbaar]`
 **Protest Sportwear contactpunt:** Dhr. M. Werkman, Warehouse Manager — `[INVULLEN: e-mailadres, telefoonnummer]`
 
 ---
@@ -573,7 +576,7 @@ Het is in de AVG (art. 33) een verantwoordelijkheid van de **verwerkingsverantwo
 
 ### 14.2 Penetratietesten
 
-Op dit moment heeft AstraPlanner **geen externe penetratietest** laten uitvoeren. Wel is er een uitgebreide interne beveiligingsreview uitgevoerd (waarvan dit document een samenvatting is). Wij zijn bereid om voorafgaand aan Protest Sportwear's productie-uitrol een externe pentest te laten uitvoeren door een gekwalificeerde partij (bijvoorbeeld Computest, Fox-IT, of Zerocopter) en het rapport op verzoek van Protest Sportwear beschikbaar te stellen. Dit kan contractueel worden opgenomen.
+Op dit moment heeft Astra **geen externe penetratietest** laten uitvoeren. Wel is er een uitgebreide interne beveiligingsreview uitgevoerd (waarvan dit document een samenvatting is). Wij zijn bereid om voorafgaand aan Protest Sportwear's productie-uitrol een externe pentest te laten uitvoeren door een gekwalificeerde partij (bijvoorbeeld Computest, Fox-IT, of Zerocopter) en het rapport op verzoek van Protest Sportwear beschikbaar te stellen. Dit kan contractueel worden opgenomen.
 
 ---
 
@@ -593,18 +596,18 @@ Dit is de eerlijke kern van dit document. De interne beveiligingsreview heeft ee
 | 8 | **Recht op vergetelheid** | ✅ **Gerealiseerd** — nieuwe `eraseEmployee` tRPC-procedure (migratie 00020 + `src/server/routers/workforce.ts`) anonimiseert alle direct identificerende PII op een employee-rij terwijl niet-identificerende historische data behouden blijft. Toegankelijk voor `tenant_admin`+, dubbel geaudit via fn_audit_trigger én expliciete `ERASE`-rij met reden. Zie §12.2 | — | ✅ Gereed |
 | 9 | **Soft-delete op medewerkers** | ✅ **Gerealiseerd** — migratie 00020 voegt `deleted_at` + `deleted_by` toe aan `employee` met een CHECK-constraint op consistentie en een partieel index op erased rows. Het bestaande `status = 'terminated'` archiveer-pad blijft intact voor de reguliere uit-dienst flow; `deleted_at` markeert specifiek de AVG-erasure subset | — | ✅ Gereed |
 | 10 | **Externe pentest** | Niet uitgevoerd | Externe pentest door gekwalificeerde partij vóór productie-uitrol | Optioneel, contractueel onderhandelbaar |
-| 11 | **Contactformulier-logging** | ✅ **Gerealiseerd** — inzendingen worden nu persistent opgeslagen in een dedicated `contact_submission` tabel met `ENABLE ROW LEVEL SECURITY` zonder policies (strikt "deny all" op RLS-niveau, alleen de service-role mag schrijven). Zod-validatie (lengte-caps, e-mailformaat) wordt server-side afgedwongen. Er worden géén PII-velden meer naar stdout/stderr geschreven — alleen het id van een succesvolle inzending wordt gelogd. Retentie van 1 jaar is vastgelegd met een `purge_old_contact_submissions()` cleanup functie. Een `super_admin`-only tRPC endpoint biedt het AstraPlanner-team inzage in de inbox (zie migratie 00019) | — | ✅ Gereed |
+| 11 | **Contactformulier-logging** | ✅ **Gerealiseerd** — inzendingen worden nu persistent opgeslagen in een dedicated `contact_submission` tabel met `ENABLE ROW LEVEL SECURITY` zonder policies (strikt "deny all" op RLS-niveau, alleen de service-role mag schrijven). Zod-validatie (lengte-caps, e-mailformaat) wordt server-side afgedwongen. Er worden géén PII-velden meer naar stdout/stderr geschreven — alleen het id van een succesvolle inzending wordt gelogd. Retentie van 1 jaar is vastgelegd met een `purge_old_contact_submissions()` cleanup functie. Een `super_admin`-only tRPC endpoint biedt het Astra-team inzage in de inbox (zie migratie 00019) | — | ✅ Gereed |
 | 12 | **Integratie-credentials encryptie** | Kolom `integration_config.connection_params_encrypted` bestaat in het schema, maar is nooit geschreven door applicatiecode — er is géén encryptie-implementatie aanwezig. Vastgesteld bij codebase-audit april 2026 (zie §5.4). Momenteel geen risico omdat er nul integratie-rijen bestaan | Implementatie van AES-256-GCM encryptie met per-organisatie sleutels via Supabase Vault, plus een corresponderende decryptie-routine aan lees-zijde. **Blokkerende voorwaarde** voor het activeren van de eerste WMS/OMS/HRIS-koppeling bij Protest Sportwear | Ja |
 
 ---
 
 ## 16. Claims die wij expliciet **niet** maken
 
-Omwille van volledige transparantie benoemen wij de claims die AstraPlanner **niet** kan en wil maken:
+Omwille van volledige transparantie benoemen wij de claims die Astra **niet** kan en wil maken:
 
-- AstraPlanner beschikt op dit moment **niet** over een ISO 27001, ISO 27701, SOC 2 of NEN 7510 certificering op bedrijfsniveau. Wij leunen voor infrastructuur-certificeringen op de certificeringen van Supabase en Vercel.
-- AstraPlanner is **geen** geaccrediteerde verwerker voor bijzondere persoonsgegevens in de zin van art. 9 AVG, en het platform is niet ontworpen voor de verwerking van gezondheidsgegevens, etnische afkomst, politieke overtuigingen, of andere bijzondere categorieën.
-- AstraPlanner heeft **geen** Data Protection Officer in formele AVG-zin (hetgeen voor een verwerker van onze omvang en activiteit ook niet wettelijk verplicht is).
+- Astra beschikt op dit moment **niet** over een ISO 27001, ISO 27701, SOC 2 of NEN 7510 certificering op bedrijfsniveau. Wij leunen voor infrastructuur-certificeringen op de certificeringen van Supabase en Vercel.
+- Astra is **geen** geaccrediteerde verwerker voor bijzondere persoonsgegevens in de zin van art. 9 AVG, en het platform is niet ontworpen voor de verwerking van gezondheidsgegevens, etnische afkomst, politieke overtuigingen, of andere bijzondere categorieën.
+- Astra heeft **geen** Data Protection Officer in formele AVG-zin (hetgeen voor een verwerker van onze omvang en activiteit ook niet wettelijk verplicht is).
 - Wij beschikken **niet** over een Zero Data Retention-overeenkomst met Anthropic op dit moment. Wij achten dit ook niet noodzakelijk gegeven de in §11.3 beschreven pseudonimiseringsarchitectuur, maar benoemen het hier omwille van transparantie.
 - Wij hanteren **geen** klant-specifieke encryptiesleutels (customer-managed keys, "bring your own key"). Versleuteling in rust gebruikt platform-beheerde sleutels bij Supabase.
 
@@ -616,7 +619,7 @@ Wij beschouwen deze open en eerlijke benoeming van wat **niet** aanwezig is als 
 
 De in dit document beschreven maatregelen en beloftes worden juridisch geborgd in:
 
-1. **Hoofdovereenkomst** — tussen AstraPlanner en Protest Sportwear, met daarin serviceniveau, prijs, looptijd en verantwoordelijkheden.
+1. **Hoofdovereenkomst** — tussen Astra en Protest Sportwear, met daarin serviceniveau, prijs, looptijd en verantwoordelijkheden.
 2. **Verwerkersovereenkomst (art. 28 AVG)** — waarin de verwerkerrelatie, de instructiebevoegdheid, de geheimhouding, de subverwerkerslijst, de beveiligingsmaatregelen, de bijstand bij betrokkenenrechten, de meldplicht, de audit-rechten van Protest Sportwear, en de retourneer- of verwijderingsplicht na einde contract worden geregeld.
 3. **Security Addendum** — waarin de in §15 opgenomen hardening-roadmap als harde verplichting wordt vastgelegd, met een duidelijke deadline en het recht voor Protest Sportwear om bij gebreke van tijdige naleving de overeenkomst kosteloos op te zeggen.
 4. **Standard Contractual Clauses** — waar nodig, voor doorgifte aan Anthropic in de VS.
@@ -625,7 +628,7 @@ De in dit document beschreven maatregelen en beloftes worden juridisch geborgd i
 
 ## 18. Bijlagen en Vervolgstappen
 
-AstraPlanner stelt op verzoek beschikbaar:
+Astra stelt op verzoek beschikbaar:
 
 - Concept Verwerkersovereenkomst;
 - Concept Security Addendum;
@@ -635,7 +638,7 @@ AstraPlanner stelt op verzoek beschikbaar:
 
 ### 18.1 Voorgesteld vervolgproces
 
-1. **Technische due diligence call** — AstraPlanner presenteert de codebase en beantwoordt alle vragen van de IT-afdeling van Protest Sportwear.
+1. **Technische due diligence call** — Astra presenteert de codebase en beantwoordt alle vragen van de IT-afdeling van Protest Sportwear.
 2. **Review Verwerkersovereenkomst** — juridische review door Protest Sportwear.
 3. **Afsluiten van Security Addendum** — contractuele vastlegging van de hardening-roadmap uit §15.
 4. **Pilot met gecontroleerde scope** — eerste uitrol op één site, met testdata of beperkte productiedata.
@@ -656,13 +659,13 @@ Wij staan ter beschikking voor aanvullende vragen, een technische toelichting me
 
 Met vriendelijke groet,
 
-`[INVULLEN: naam, functie, handtekening]`
-AstraPlanner
+`[INVULLEN: naam ondertekenaar Ascentra, functie, handtekening]`
+Ascentra B.V. — leverancier van het Astra-platform
 
 ---
 
 ### Colofon
 
-Dit document is opgesteld op basis van een code-niveau beveiligingsreview van de AstraPlanner codebase, uitgevoerd op 8 april 2026. Alle technische uitspraken zijn verifieerbaar aan de hand van specifieke bestanden en regels in de broncode en zijn op verzoek tijdens een due-diligence sessie te controleren. Bij materiële wijzigingen in de architectuur of de subverwerkerslijst wordt dit document herzien en opnieuw aan Protest Sportwear verstrekt.
+Dit document is opgesteld op basis van een code-niveau beveiligingsreview van de Astra codebase, uitgevoerd op 8 april 2026. Alle technische uitspraken zijn verifieerbaar aan de hand van specifieke bestanden en regels in de broncode en zijn op verzoek tijdens een due-diligence sessie te controleren. Bij materiële wijzigingen in de architectuur of de subverwerkerslijst wordt dit document herzien en opnieuw aan Protest Sportwear verstrekt.
 
 **Einde document.**

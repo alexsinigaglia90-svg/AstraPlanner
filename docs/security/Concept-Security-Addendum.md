@@ -2,7 +2,7 @@
 
 **CONCEPT ter juridische review — niet ondertekend**
 
-Dit Security Addendum is een bijlage bij de Verwerkersovereenkomst tussen `[INVULLEN: Verwerkingsverantwoordelijke]` en `[INVULLEN: Verwerker — AstraPlanner]` (hierna: de "Verwerkersovereenkomst"), en maakt daarvan integraal onderdeel uit. Waar termen in dit Addendum met een hoofdletter beginnen en niet in dit document worden gedefinieerd, hebben zij de betekenis die daaraan in de Verwerkersovereenkomst is gegeven.
+Dit Security Addendum is een bijlage bij de Verwerkersovereenkomst tussen `[INVULLEN: Verwerkingsverantwoordelijke]` en `[INVULLEN: Verwerker — Astra]` (hierna: de "Verwerkersovereenkomst"), en maakt daarvan integraal onderdeel uit. Waar termen in dit Addendum met een hoofdletter beginnen en niet in dit document worden gedefinieerd, hebben zij de betekenis die daaraan in de Verwerkersovereenkomst is gegeven.
 
 Het doel van dit Addendum is om de door de Verwerker toegezegde technische en organisatorische beveiligingsmaatregelen en hardening-verplichtingen contractueel bindend vast te leggen, zodanig dat de Verwerkingsverantwoordelijke bij niet-naleving een direct opzeggingsrecht heeft.
 
@@ -12,7 +12,7 @@ Het doel van dit Addendum is om de door de Verwerker toegezegde technische en or
 
 1.1 Dit Addendum verduidelijkt en concretiseert de verplichtingen van de Verwerker onder artikel 7 van de Verwerkersovereenkomst (Beveiliging — artikel 32 AVG).
 
-1.2 Het **Security Document** — formeel getiteld "AstraPlanner — Informatiebeveiliging & AVG-Verwerkingsdocument" — is de feitelijke beschrijving van de technische en organisatorische maatregelen zoals die op de ondertekendatum van kracht zijn. Het Security Document is Bijlage A bij de Verwerkersovereenkomst.
+1.2 Het **Security Document** — formeel getiteld "Astra — Informatiebeveiliging & AVG-Verwerkingsdocument" — is de feitelijke beschrijving van de technische en organisatorische maatregelen zoals die op de ondertekendatum van kracht zijn. Het Security Document is Bijlage A bij de Verwerkersovereenkomst.
 
 1.3 Bij strijdigheid tussen dit Addendum en het Security Document prevaleert dit Addendum. Bij strijdigheid tussen dit Addendum en de Verwerkersovereenkomst prevaleert de Verwerkersovereenkomst, behoudens voorzover dit Addendum expliciet beoogt daarvan af te wijken.
 

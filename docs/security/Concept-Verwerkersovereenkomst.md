@@ -18,7 +18,7 @@ hierna te noemen: de **"Verwerkingsverantwoordelijke"**;
 
 **2. Verwerker**
 
-`[INVULLEN: juridische entiteit van AstraPlanner]`, gevestigd te `[INVULLEN: adres]`, ingeschreven in het handelsregister onder nummer `[INVULLEN: KvK]`, te dezen rechtsgeldig vertegenwoordigd door `[INVULLEN: naam vertegenwoordiger + functie]`,
+**Ascentra B.V.**, gevestigd te Oranjestraat 11, 9401 KE Assen, ingeschreven in het handelsregister onder nummer **98227548**, leverancier van het Astra-platform, te dezen rechtsgeldig vertegenwoordigd door `[INVULLEN: naam vertegenwoordiger + functie]`,
 
 hierna te noemen: de **"Verwerker"**;
 
@@ -30,7 +30,7 @@ hierna gezamenlijk te noemen: **"Partijen"**, en elk afzonderlijk "**Partij**";
 
 **In aanmerking nemende dat:**
 
-A. De Verwerkingsverantwoordelijke en de Verwerker een overeenkomst hebben gesloten op grond waarvan de Verwerker het SaaS-platform **AstraPlanner** ter beschikking stelt voor personeelsplanning, vraagvoorspelling, verzuim- en capaciteitsbeheer in een of meerdere warehouse- dan wel productieomgevingen van de Verwerkingsverantwoordelijke (hierna: de **"Hoofdovereenkomst"**);
+A. De Verwerkingsverantwoordelijke en de Verwerker een overeenkomst hebben gesloten op grond waarvan de Verwerker het SaaS-platform **Astra** ter beschikking stelt voor personeelsplanning, vraagvoorspelling, verzuim- en capaciteitsbeheer in een of meerdere warehouse- dan wel productieomgevingen van de Verwerkingsverantwoordelijke (hierna: de **"Hoofdovereenkomst"**);
 
 B. Bij de uitvoering van de Hoofdovereenkomst persoonsgegevens in de zin van artikel 4 lid 1 AVG worden verwerkt waarvan de Verwerkingsverantwoordelijke de verwerkingsverantwoordelijke is en de Verwerker de verwerker in de zin van artikel 4 lid 7 en 8 AVG;
 
@@ -58,9 +58,9 @@ In deze Overeenkomst wordt verstaan onder:
 
 1.6 **Subverwerker**: een door de Verwerker ingeschakelde derde partij die Persoonsgegevens verwerkt ten behoeve van de Verwerker in het kader van de uitvoering van de Hoofdovereenkomst.
 
-1.7 **Hoofdovereenkomst**: de tussen Partijen gesloten overeenkomst waaronder de Verwerker de AstraPlanner-dienst levert aan de Verwerkingsverantwoordelijke.
+1.7 **Hoofdovereenkomst**: de tussen Partijen gesloten overeenkomst waaronder de Verwerker de Astra-dienst levert aan de Verwerkingsverantwoordelijke.
 
-1.8 **Security Document**: het document "AstraPlanner — Informatiebeveiliging & AVG-Verwerkingsdocument" dat de technische en organisatorische maatregelen beschrijft en dat als bijlage bij deze Overeenkomst integraal onderdeel van de afspraken is.
+1.8 **Security Document**: het document "Astra — Informatiebeveiliging & AVG-Verwerkingsdocument" dat de technische en organisatorische maatregelen beschrijft en dat als bijlage bij deze Overeenkomst integraal onderdeel van de afspraken is.
 
 ---
 
@@ -84,7 +84,7 @@ In deze Overeenkomst wordt verstaan onder:
 
 3.1 De volgende categorieën van Betrokkenen zijn aan deze Overeenkomst onderworpen:
 - medewerkers van de Verwerkingsverantwoordelijke, waaronder vaste, tijdelijke, uitzend- en gedetacheerde medewerkers;
-- gebruikers van het AstraPlanner-platform (planners, supervisors, managers, administratoren);
+- gebruikers van het Astra-platform (planners, supervisors, managers, administratoren);
 - contactpersonen van de Verwerkingsverantwoordelijke voor contractuele communicatie.
 
 3.2 De volgende categorieën van Persoonsgegevens worden verwerkt:
@@ -223,9 +223,9 @@ In deze Overeenkomst wordt verstaan onder:
 
 ## Artikel 11 — Geautomatiseerde besluitvorming en AI
 
-11.1 De Verwerker maakt in AstraPlanner gebruik van AI-functionaliteit geleverd door Anthropic PBC (model: Claude). Deze functionaliteit is gebruikt voor het genereren van planningsadviezen, vraag-analyses en conversationele onboarding-ondersteuning.
+11.1 De Verwerker maakt in Astra gebruik van AI-functionaliteit geleverd door Anthropic PBC (model: Claude). Deze functionaliteit is gebruikt voor het genereren van planningsadviezen, vraag-analyses en conversationele onboarding-ondersteuning.
 
-11.2 De AI-functionaliteit is **adviserend van aard** en neemt geen bindende beslissingen die rechtsgevolgen of vergelijkbaar aanzienlijke gevolgen hebben voor Betrokkenen. Elke wijziging in dienstroosters, medewerkerdata of vaardigheden vereist een uitdrukkelijke handmatige bevestiging door een bevoegde gebruiker. Artikel 22 AVG inzake geautomatiseerde individuele besluitvorming is daarmee niet van toepassing op de door AstraPlanner uitgevoerde verwerkingen.
+11.2 De AI-functionaliteit is **adviserend van aard** en neemt geen bindende beslissingen die rechtsgevolgen of vergelijkbaar aanzienlijke gevolgen hebben voor Betrokkenen. Elke wijziging in dienstroosters, medewerkerdata of vaardigheden vereist een uitdrukkelijke handmatige bevestiging door een bevoegde gebruiker. Artikel 22 AVG inzake geautomatiseerde individuele besluitvorming is daarmee niet van toepassing op de door Astra uitgevoerde verwerkingen.
 
 11.3 Direct identificerende persoonsgegevens (voor- en achternaam, e-mailadres, telefoonnummer) worden door de Verwerker vóór verzending naar Anthropic vervangen door stabiele pseudoniemen op basis van een HMAC-SHA-256 berekening met een per-organisatie geheime sleutel. De pseudoniemen zijn niet terug te rekenen naar een naam zonder toegang tot zowel de database als de organisatie-specifieke HMAC-sleutel. De technische onderbouwing is opgenomen in het Security Document.
 
@@ -299,7 +299,7 @@ In deze Overeenkomst wordt verstaan onder:
 
 ## Bijlagen
 
-**Bijlage A** — AstraPlanner Security Document *(`docs/security/AstraPlanner-Security-AVG-Protest-Sportwear.md` of de klant-specifieke variant)*
+**Bijlage A** — Astra Security Document *(`docs/security/Astra-Security-AVG-Protest-Sportwear.md` of de klant-specifieke variant)*
 
 **Bijlage B** — Subverwerkerslijst
 
@@ -307,7 +307,7 @@ In deze Overeenkomst wordt verstaan onder:
 |---|---|---|---|---|
 | 1 | Supabase Inc. | Database (PostgreSQL), authenticatie, sessieopslag | EU (Frankfurt / Amsterdam), onderliggend AWS | Geen transfer — EU-hosting |
 | 2 | Vercel Inc. | Applicatiehosting, serverless functies, CDN | EU-regio voor serverless; globaal CDN zonder persoonsgegevens | Standard Contractual Clauses (voor supportdata) |
-| 3 | Anthropic PBC | AI-inferentie (Claude) voor planningsadviezen en analyse | Verenigde Staten (us-east) | Standard Contractual Clauses Module 2 + pseudonimisering aan AstraPlanner-zijde (zie §11.3 Security Document) |
+| 3 | Anthropic PBC | AI-inferentie (Claude) voor planningsadviezen en analyse | Verenigde Staten (us-east) | Standard Contractual Clauses Module 2 + pseudonimisering aan Astra-zijde (zie §11.3 Security Document) |
 | 4 | Upstash Inc. | Redis voor rate limiting (geen persoonsgegevens — alleen request-identifiers) | EU (Frankfurt) | Geen transfer — EU-hosting |
 
 **Bijlage C** — Security Addendum *(`docs/security/Concept-Security-Addendum.md`)*
