@@ -2,6 +2,7 @@ import { anthropic } from '@ai-sdk/anthropic'
 import { generateObject } from 'ai'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
+import { enforceRateLimit, identifierFor } from '@/lib/rate-limit'
 
 /* ── Schema ──────────────────────────────────────────────────── */
 
@@ -73,6 +74,13 @@ export async function POST(req: Request) {
   if (authErr || !user) {
     return new Response('Unauthorized', { status: 401 })
   }
+
+  /* ── Rate limit ────────────────────────────────────────────── */
+  const rateLimitResponse = await enforceRateLimit(
+    'ai',
+    identifierFor({ userId: user.id, headers: req.headers }),
+  )
+  if (rateLimitResponse) return rateLimitResponse
 
   /* ── Body ──────────────────────────────────────────────────── */
   let xray: unknown

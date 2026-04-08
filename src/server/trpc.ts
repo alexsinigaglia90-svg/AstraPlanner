@@ -3,6 +3,7 @@ import superjson from 'superjson'
 import { createClient } from '@/lib/supabase/server'
 import { type User } from '@supabase/supabase-js'
 import { enforceAuth, hasMinRole } from './middleware/auth'
+import { checkRateLimit, identifierFor } from '@/lib/rate-limit'
 
 // Define the app roles
 export const APP_ROLES = [
@@ -24,10 +25,13 @@ export type Context = {
   organizationId: string | null
   role: AppRole | null
   siteIds: string[]
+  headers: Headers | null
 }
 
 // Create context for each request
-export async function createTRPCContext(): Promise<Context> {
+export async function createTRPCContext(opts?: {
+  headers?: Headers
+}): Promise<Context> {
   const supabase = await createClient()
 
   const {
@@ -45,6 +49,7 @@ export async function createTRPCContext(): Promise<Context> {
     organizationId,
     role,
     siteIds,
+    headers: opts?.headers ?? null,
   }
 }
 
@@ -56,11 +61,37 @@ export const router = t.router
 export const publicProcedure = t.procedure
 export const createCallerFactory = t.createCallerFactory
 
-// Protected procedure — requires auth
-export const protectedProcedure = t.procedure.use(async ({ ctx, next }) => {
-  const authed = enforceAuth(ctx)
-  return next({ ctx: authed })
+/**
+ * Rate-limit middleware. Applied automatically on every authenticated
+ * mutation via {@link protectedProcedure}. Queries are not rate-limited
+ * here because RLS already gates them and read-heavy traffic is normal
+ * during dashboard browsing. The 'mutations' bucket allows 120 writes
+ * per minute per user (see src/lib/rate-limit.ts).
+ */
+const rateLimitMutations = t.middleware(async ({ ctx, type, next }) => {
+  if (type === 'mutation') {
+    const id = identifierFor({
+      userId: ctx.user?.id ?? null,
+      headers: ctx.headers ?? undefined,
+    })
+    const result = await checkRateLimit('mutations', id)
+    if (!result.success) {
+      throw new TRPCError({
+        code: 'TOO_MANY_REQUESTS',
+        message: 'Te veel verzoeken — probeer het over enkele seconden opnieuw.',
+      })
+    }
+  }
+  return next()
 })
+
+// Protected procedure — requires auth + applies rate-limit on mutations
+export const protectedProcedure = t.procedure
+  .use(rateLimitMutations)
+  .use(async ({ ctx, next }) => {
+    const authed = enforceAuth(ctx)
+    return next({ ctx: authed })
+  })
 
 // Authenticated but no org required — for onboarding flows
 export const authenticatedProcedure = t.procedure.use(async ({ ctx, next }) => {

@@ -1,8 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { enforceRateLimit, identifierFor } from '@/lib/rate-limit'
 
 export async function POST(req: NextRequest) {
   try {
+    // Rate limit (public bucket: 5/min per IP). Applied before parsing the
+    // body to keep the abuse path cheap.
+    const rateLimitResponse = await enforceRateLimit(
+      'public',
+      identifierFor({ headers: req.headers }),
+    )
+    if (rateLimitResponse) return rateLimitResponse
+
     const body = await req.json() as { name?: string; company?: string; message?: string }
     const { name, company, message } = body
 

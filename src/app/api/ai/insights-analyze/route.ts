@@ -2,6 +2,7 @@ import { anthropic } from '@ai-sdk/anthropic'
 import { streamText } from 'ai'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { enforceRateLimit, identifierFor } from '@/lib/rate-limit'
 
 export async function POST(req: Request) {
   // Auth check
@@ -11,6 +12,13 @@ export async function POST(req: Request) {
 
   const orgId = user.app_metadata?.organization_id as string | undefined
   if (!orgId) return new Response('No organization', { status: 400 })
+
+  // Rate limit (AI bucket: 20/min per user)
+  const rateLimitResponse = await enforceRateLimit(
+    'ai',
+    identifierFor({ userId: user.id, headers: req.headers }),
+  )
+  if (rateLimitResponse) return rateLimitResponse
 
   const { site_id } = await req.json() as { site_id: string }
   if (!site_id) return new Response('Missing site_id', { status: 400 })

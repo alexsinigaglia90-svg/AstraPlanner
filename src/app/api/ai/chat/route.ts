@@ -10,6 +10,7 @@ import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { anonymizeEmployees, buildPseudonymMap, pseudonymFor } from '@/lib/ai/anonymizer'
+import { enforceRateLimit, identifierFor } from '@/lib/rate-limit'
 
 export async function POST(req: Request) {
   /* ── Auth ─────────────────────────────────────────────────── */
@@ -29,6 +30,13 @@ export async function POST(req: Request) {
   if (!orgId) {
     return new Response('No organization found', { status: 400 })
   }
+
+  /* ── Rate limit ───────────────────────────────────────────── */
+  const rateLimitResponse = await enforceRateLimit(
+    'ai',
+    identifierFor({ userId: user.id, headers: req.headers }),
+  )
+  if (rateLimitResponse) return rateLimitResponse
 
   /* ── Body ─────────────────────────────────────────────────── */
   const { messages }: { messages: UIMessage[] } = await req.json()
