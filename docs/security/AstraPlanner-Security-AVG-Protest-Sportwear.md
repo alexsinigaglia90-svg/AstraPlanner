@@ -197,6 +197,7 @@ AstraPlanner draait **volledig in de Europese Unie**. Onze infrastructuur bestaa
 - Het platform is uitsluitend bereikbaar via HTTPS. HTTP-verzoeken worden geweigerd dan wel geforceerd doorverwezen.
 - De tRPC API (`/api/trpc/**`) weigert cross-origin verzoeken buiten de toegelaten domeinen op basis van Next.js' standaard same-origin beleid.
 - Alle administratieve endpoints (bijvoorbeeld het toekennen van gebruikers aan een organisatie) vereisen zowel authenticatie als een minimum-rol van `tenant_admin`, en zijn niet bereikbaar voor gebruikers buiten de eigen organisatie.
+- **Supabase Realtime** wordt door AstraPlanner minimaal gebruikt — uitsluitend voor één publicatie (`join_request`) die live statusupdates toont aan een gebruiker die in de onboarding-wachtrij zit. Deze tabel is RLS-beveiligd (zie migratie 00021): een gebruiker ziet uitsluitend zijn eigen rij, en tenant-admins van de doelorganisatie zien alleen pending requests voor hún organisatie. Er is geen andere realtime-publicatie actief. Toekomstige realtime features zullen dezelfde RLS-first aanpak volgen.
 
 ### 5.4 Integratie-credentials — huidige staat en te nemen maatregel vóór eerste koppeling
 
