@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClientForUser } from '@/lib/supabase/admin'
+import { logger } from '@/lib/logger'
 
 /**
  * POST /api/admin/assign-org
@@ -99,8 +100,20 @@ export async function POST(request: Request) {
   if (auditError) {
     // The user mutation already succeeded, so we log the audit failure but
     // don't roll back — operator visibility is still preserved via the
-    // server-side error log.
-    console.error('[assign-org] audit_log write failed:', auditError)
+    // structured logger.
+    logger.error('assign_org_audit_write_failed', {
+      supabase_error: auditError.message,
+      target_user_id: targetUser.id,
+      organization_id,
+      caller_id: user.id,
+    })
+  } else {
+    logger.info('assign_org_completed', {
+      target_user_id: targetUser.id,
+      organization_id,
+      role,
+      caller_id: user.id,
+    })
   }
 
   return NextResponse.json({

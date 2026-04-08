@@ -116,8 +116,14 @@ export async function checkRateLimit(
     }
   } catch (err) {
     // Fail open: log, then let the request through. Better than 500ing.
-    // eslint-disable-next-line no-console
-    console.error('[rate-limit] backend error — failing open:', err)
+    // Uses dynamic import to avoid a circular dependency with any
+    // module that may in turn import rate-limit during initial load.
+    void import('./logger').then(({ logger }) =>
+      logger.error('rate_limit_backend_error', {
+        bucket,
+        message: err instanceof Error ? err.message : 'unknown',
+      }),
+    )
     return { success: true, limit: 0, remaining: 0, reset: 0 }
   }
 }

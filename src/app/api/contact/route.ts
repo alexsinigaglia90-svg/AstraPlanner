@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { enforceRateLimit, identifierFor } from '@/lib/rate-limit'
+import { logger } from '@/lib/logger'
 
 /**
  * POST /api/contact
@@ -87,8 +88,11 @@ export async function POST(req: NextRequest) {
 
     if (error || !data) {
       // Log the technical error for ops but never include the submitter's
-      // content — that is still PII.
-      console.error('[contact] persistence failed:', error?.message ?? 'no data returned')
+      // content — that is still PII. The logger redacts any accidental
+      // PII-like fields as defense in depth.
+      logger.error('contact_persistence_failed', {
+        supabase_error: error?.message ?? 'no data returned',
+      })
       return NextResponse.json(
         { error: 'Er is iets misgegaan. Probeer opnieuw.' },
         { status: 500 },
@@ -96,16 +100,15 @@ export async function POST(req: NextRequest) {
     }
 
     // 6. Success log — id only, no PII.
-    console.log('[contact] submission stored', { id: data.id })
+    logger.info('contact_submission_stored', { id: data.id })
 
     return NextResponse.json({ success: true })
   } catch (err) {
     // Unexpected failure path — never include the request body in the log,
     // because it contains PII that we don't want in server logs.
-    console.error(
-      '[contact] unexpected error:',
-      err instanceof Error ? err.message : 'unknown',
-    )
+    logger.error('contact_unexpected_error', {
+      message: err instanceof Error ? err.message : 'unknown',
+    })
     return NextResponse.json(
       { error: 'Er is iets misgegaan. Probeer opnieuw.' },
       { status: 500 },

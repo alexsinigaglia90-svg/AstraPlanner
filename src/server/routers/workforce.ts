@@ -12,6 +12,7 @@ import {
   adminProcedure,
 } from '../trpc'
 import { createAdminClientForUser } from '../../lib/supabase/admin'
+import { logger } from '../../lib/logger'
 import {
   PaginationInput,
   buildPaginatedResult,
@@ -864,7 +865,22 @@ export const workforceRouter = router({
         // Erasure already happened, but audit write failed. Log for ops
         // visibility. This should be extremely rare because the same
         // service-role client performed the update that just succeeded.
-        console.error('[eraseEmployee] explicit audit insert failed:', auditErr.message)
+        logger.error('erasure_audit_write_failed', {
+          employee_id: input.id,
+          organization_id: ctx.organizationId,
+          actor_id: ctx.user.id,
+          supabase_error: auditErr.message,
+        })
+      } else {
+        // Structured success log so a DPO / auditor can query the
+        // external log store for "all ERASE actions by this actor"
+        // without having to open the database.
+        logger.info('erasure_completed', {
+          employee_id: input.id,
+          organization_id: ctx.organizationId,
+          actor_id: ctx.user.id,
+          erased_at: now,
+        })
       }
 
       return {

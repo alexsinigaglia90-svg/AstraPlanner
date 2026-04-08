@@ -514,6 +514,26 @@ Dit document is onderdeel van de verantwoording die AstraPlanner aan Protest Spo
 
 ## 13. Incident Response en Datalekken
 
+### 13.0 Logging en log-retentie voor incident-reconstructie
+
+**Structured server-side logging.** AstraPlanner gebruikt een centrale `logger`-module (`src/lib/logger.ts`) die alle significante server-side events als gestructureerde JSON-records uitschrijft in plaats van vrije console-strings. Elk event heeft minimaal een `level`, `event`-naam, `timestamp`, `service`-identifier, en structured context. Dit maakt logs direct doorzoekbaar in elk downstream systeem.
+
+**Automatische PII-redactie.** De logger past vóór het schrijven een redactor toe op bekende gevoelige veldnamen (`password`, `token`, `email`, `first_name`, `last_name`, `phone`, `authorization`, etc.) en vervangt de waarden door `[REDACTED]`. Dit is een defense-in-depth maatregel bovenop de basisregel "geen PII in logs". De redactor werkt recursief op nested objects.
+
+**Externe log-shipping (optioneel).** Wanneer de omgevingsvariabelen `LOG_INGEST_URL` en `LOG_INGEST_TOKEN` zijn geconfigureerd, worden events parallel gestuurd naar een externe log-ingestion endpoint (Betterstack, Axiom, Datadog, of een vergelijkbare dienst — het formaat is provider-agnostisch JSON met Bearer-authenticatie). De call is **fire-and-forget** met een timeout van 2 seconden, zodat een falende externe dienst nooit invloed heeft op de request-latency.
+
+**Retentie.** Zonder externe shipping worden logs bewaard voor de standaard Vercel-retentie (afhankelijk van abonnement, doorgaans 1-7 dagen). Met externe shipping wordt retentie bepaald door de provider; Betterstack Free biedt 3 dagen, betaalde tiers tot 30 dagen of langer. Dit maakt reconstructie van incidenten tot de vastgestelde retentieperiode mogelijk.
+
+**Events die minimaal worden gelogd:**
+- `rate_limit_backend_error` — Upstash rate-limiter uitval (fail-open)
+- `contact_submission_stored` / `contact_persistence_failed` / `contact_unexpected_error`
+- `assign_org_completed` / `assign_org_audit_write_failed`
+- `erasure_completed` / `erasure_audit_write_failed`
+
+Additionele events kunnen door de applicatiecode worden toegevoegd zonder de logger-architectuur te wijzigen.
+
+---
+
 ### 13.1 Procedure
 
 AstraPlanner hanteert de volgende standaardprocedure bij een vermoedelijk beveiligingsincident of datalek:
