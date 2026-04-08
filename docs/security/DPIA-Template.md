@@ -322,4 +322,4 @@ Vul onderstaand in of de verwerking na alle getroffen maatregelen acceptabel is.
 
 **Einde DPIA-template.**
 
-> **Support:** Indien je vragen hebt bij het invullen van deze DPIA, neem dan contact op met Astra's privacy-contactpunt via `[INVULLEN: e-mailadres]`. Wij helpen je kosteloos met feitelijke vragen over onze verwerking. Voor juridische interpretatie van de AVG verwijzen wij je naar je eigen juridisch adviseur of Functionaris voor Gegevensbescherming.
+> **Support:** Indien je vragen hebt bij het invullen van deze DPIA, neem dan contact op met Ascentra's privacy-contactpunt via `privacy@ascentra.nl`. Wij helpen je kosteloos met feitelijke vragen over onze verwerking en het Astra-platform. Voor juridische interpretatie van de AVG verwijzen wij je naar je eigen juridisch adviseur of Functionaris voor Gegevensbescherming.

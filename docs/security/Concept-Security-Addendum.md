@@ -2,7 +2,7 @@
 
 **CONCEPT ter juridische review — niet ondertekend**
 
-Dit Security Addendum is een bijlage bij de Verwerkersovereenkomst tussen `[INVULLEN: Verwerkingsverantwoordelijke]` en `[INVULLEN: Verwerker — Astra]` (hierna: de "Verwerkersovereenkomst"), en maakt daarvan integraal onderdeel uit. Waar termen in dit Addendum met een hoofdletter beginnen en niet in dit document worden gedefinieerd, hebben zij de betekenis die daaraan in de Verwerkersovereenkomst is gegeven.
+Dit Security Addendum is een bijlage bij de Verwerkersovereenkomst tussen **Protest Sportwear B.V.** (Verwerkingsverantwoordelijke) en **Ascentra B.V.** (Verwerker, leverancier van het Astra-platform), hierna: de "Verwerkersovereenkomst", en maakt daarvan integraal onderdeel uit. Waar termen in dit Addendum met een hoofdletter beginnen en niet in dit document worden gedefinieerd, hebben zij de betekenis die daaraan in de Verwerkersovereenkomst is gegeven.
 
 Het doel van dit Addendum is om de door de Verwerker toegezegde technische en organisatorische beveiligingsmaatregelen en hardening-verplichtingen contractueel bindend vast te leggen, zodanig dat de Verwerkingsverantwoordelijke bij niet-naleving een direct opzeggingsrecht heeft.
 
@@ -132,19 +132,20 @@ De Verwerker realiseert de encryptie van integratie-credentials met AES-256-GCM 
 
 7.2 Wijzigingen in dit Addendum zijn uitsluitend geldig indien schriftelijk overeengekomen door beide Partijen.
 
-7.3 Op dit Addendum is Nederlands recht van toepassing. Geschillen worden beslecht door de bevoegde rechter te `[INVULLEN: rechtbank]`.
+7.3 Op dit Addendum is Nederlands recht van toepassing. Geschillen worden beslecht door de bevoegde rechter van de **Rechtbank Noord-Nederland, locatie Assen**, in lijn met artikel 16.2 van de Verwerkersovereenkomst.
 
 ---
 
 ## Ondertekening
 
-**Aldus overeengekomen en ondertekend in tweevoud op `[INVULLEN: datum]`.**
+**Aldus overeengekomen en ondertekend in tweevoud op `[INVULLEN op moment van ondertekening: datum]`.**
 
 | Verwerkingsverantwoordelijke | Verwerker |
 |---|---|
-| `[INVULLEN: naam vertegenwoordiger]` | `[INVULLEN: naam vertegenwoordiger]` |
-| `[INVULLEN: functie]` | `[INVULLEN: functie]` |
-| Handtekening: | Handtekening: |
+| Protest Sportwear B.V. | Ascentra B.V. |
+| `[INVULLEN door Protest Sportwear: naam tekenbevoegd vertegenwoordiger]` | Alex Sinigaglia |
+| `[INVULLEN door Protest Sportwear: functie]` | Oprichter |
+| Handtekening: ____________________________ | Handtekening: ____________________________ |
 
 ---
 

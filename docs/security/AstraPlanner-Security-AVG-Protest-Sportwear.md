@@ -86,14 +86,14 @@ Protest Sportwear is in de zin van de AVG de **verwerkingsverantwoordelijke** vo
 - Oranjestraat 11, 9401 KE Assen
 - KvK: 98227548
 - *Operational excellence, engineered with intelligence*
-- Contact beveiliging en privacy: `[INVULLEN: e-mailadres, telefoon]`
-- Meldpunt datalek (24/7): `[INVULLEN: e-mailadres of telefoonnummer]`
+- Contact beveiliging en privacy: `privacy@ascentra.nl`
+- Meldpunt datalek (24/7): `incident@ascentra.nl`
 
 Astra is de **verwerker** in de zin van artikel 28 AVG. Wij verwerken persoonsgegevens uitsluitend op basis van schriftelijke instructies van Protest Sportwear, zoals vastgelegd in de tussen partijen te sluiten **Verwerkersovereenkomst**.
 
 ### 3.3 Functionaris Gegevensbescherming
 
-Astra heeft geen wettelijk verplichte Functionaris Gegevensbescherming aangesteld. De rol van eerste aanspreekpunt voor privacy- en beveiligingsvraagstukken wordt vervuld door `[INVULLEN: naam + functie + e-mailadres]`.
+Ascentra heeft geen wettelijk verplichte Functionaris Gegevensbescherming aangesteld. De rol van eerste aanspreekpunt voor privacy- en beveiligingsvraagstukken wordt vervuld door **Alex Sinigaglia, oprichter van Ascentra B.V.**, bereikbaar via `privacy@ascentra.nl`.
 
 ### 3.4 Subverwerkers
 
@@ -289,7 +289,7 @@ Wij begrijpen dat de vraag *"kunnen jullie zelf in onze data kijken?"* centraal 
 
 4. **De Verwerkersovereenkomst verbiedt verdergaand gebruik.** Enig gebruik van Protest Sportwear-data anders dan strikt noodzakelijk voor het leveren van de dienst is contractueel verboden en levert een direct opzegrecht op voor Protest Sportwear.
 
-5. **Werknemers met productie-toegang zijn gebonden aan een geheimhoudingsverklaring.** `[INVULLEN: verwijzing naar NDA / arbeidsovereenkomst clausule]`
+5. **Werknemers met productie-toegang zijn gebonden aan een geheimhoudingsverklaring** opgenomen in hun arbeidsovereenkomst respectievelijk een afzonderlijke NDA. Op de datum van dit document zijn er binnen Ascentra geen werknemers anders dan de oprichter, die als enig bevoegde de productie-toegang beheert. Bij uitbreiding van het team wordt geheimhouding bij elke nieuwe arbeidsovereenkomst contractueel vastgelegd.
 
 **Wat wij expliciet niet beweren:** wij beweren niet dat het technisch onmogelijk is voor een Astra-medewerker met kwade opzet om toegang te verkrijgen tot klantdata. Een dergelijke claim zou bij elke SaaS-leverancier oneerlijk zijn. Wat wij wél waarmaken is dat (a) dergelijke toegang geen onderdeel is van normale bedrijfsprocessen, (b) er een onveranderbare audit-trail bestaat, (c) de autorisatie contractueel beperkt is, en (d) wij hierover open en aantoonbaar rapporteren.
 
@@ -558,8 +558,8 @@ Het is in de AVG (art. 33) een verantwoordelijkheid van de **verwerkingsverantwo
 
 ### 13.3 Contactpunt datalek
 
-**Astra meldpunt datalek:** `[INVULLEN: e-mailadres + telefoonnummer, 24/7 bereikbaar]`
-**Protest Sportwear contactpunt:** Dhr. M. Werkman, Warehouse Manager — `[INVULLEN: e-mailadres, telefoonnummer]`
+**Ascentra meldpunt datalek:** `incident@ascentra.nl` — bij urgentie ook `privacy@ascentra.nl`. Wij streven naar bevestiging van ontvangst binnen één uur tijdens kantooruren en uiterlijk binnen drie uur daarbuiten.
+**Protest Sportwear contactpunt:** Dhr. M. Werkman, Warehouse Manager — `[INVULLEN door Protest Sportwear: e-mailadres, telefoonnummer]`
 
 ---
 
@@ -661,8 +661,11 @@ Wij staan ter beschikking voor aanvullende vragen, een technische toelichting me
 
 Met vriendelijke groet,
 
-`[INVULLEN: naam ondertekenaar Ascentra, functie, handtekening]`
-Ascentra B.V. — leverancier van het Astra-platform
+**Alex Sinigaglia**
+Oprichter, Ascentra B.V.
+Leverancier van het Astra-platform
+
+_Handtekening:_ ____________________________
 
 ---
 

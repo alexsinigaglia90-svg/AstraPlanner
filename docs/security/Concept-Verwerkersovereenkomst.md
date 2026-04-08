@@ -12,13 +12,13 @@ Opgesteld op basis van artikel 28 van de Algemene Verordening Gegevensbeschermin
 
 **1. Verwerkingsverantwoordelijke**
 
-`[INVULLEN: volledige bedrijfsnaam van de klant]`, gevestigd te `[INVULLEN: adres]`, ingeschreven in het handelsregister onder nummer `[INVULLEN: KvK]`, te dezen rechtsgeldig vertegenwoordigd door `[INVULLEN: naam vertegenwoordiger + functie]`,
+**Protest Sportwear B.V.**, gevestigd te Veerpolder 7, 2361 KX Warmond, ingeschreven in het handelsregister onder nummer **28055371**, te dezen rechtsgeldig vertegenwoordigd door `[INVULLEN door Protest Sportwear: naam tekenbevoegd vertegenwoordiger + functie]`,
 
 hierna te noemen: de **"Verwerkingsverantwoordelijke"**;
 
 **2. Verwerker**
 
-**Ascentra B.V.**, gevestigd te Oranjestraat 11, 9401 KE Assen, ingeschreven in het handelsregister onder nummer **98227548**, leverancier van het Astra-platform, te dezen rechtsgeldig vertegenwoordigd door `[INVULLEN: naam vertegenwoordiger + functie]`,
+**Ascentra B.V.**, gevestigd te Oranjestraat 11, 9401 KE Assen, ingeschreven in het handelsregister onder nummer **98227548**, leverancier van het Astra-platform, te dezen rechtsgeldig vertegenwoordigd door **Alex Sinigaglia, oprichter**,
 
 hierna te noemen: de **"Verwerker"**;
 
@@ -184,7 +184,7 @@ In deze Overeenkomst wordt verstaan onder:
 
 8.5 **Logging.** De Verwerker documenteert alle Datalekken, met inbegrip van de feiten omtrent het Datalek, de gevolgen en de genomen corrigerende maatregelen, zodanig dat de Verwerkingsverantwoordelijke kan voldoen aan de verantwoordingsplicht van artikel 33 lid 5 AVG.
 
-8.6 **Contactpunt datalek bij de Verwerker:** `[INVULLEN: e-mailadres + telefoonnummer, 24/7 bereikbaar]`.
+8.6 **Contactpunt datalek bij de Verwerker:** `incident@ascentra.nl` (24/7 monitored), met `privacy@ascentra.nl` als reservekanaal.
 
 ---
 
@@ -281,19 +281,20 @@ In deze Overeenkomst wordt verstaan onder:
 
 16.1 Op deze Overeenkomst is uitsluitend Nederlands recht van toepassing.
 
-16.2 Geschillen die voortvloeien uit of samenhangen met deze Overeenkomst worden uitsluitend voorgelegd aan de bevoegde rechter te `[INVULLEN: rechtbank]`.
+16.2 Geschillen die voortvloeien uit of samenhangen met deze Overeenkomst worden uitsluitend voorgelegd aan de bevoegde rechter van de **Rechtbank Noord-Nederland, locatie Assen**, zijnde de rechtbank van de plaats van vestiging van de Verwerker.
 
 ---
 
 ## Ondertekening
 
-**Aldus overeengekomen en ondertekend in tweevoud op `[INVULLEN: datum]`.**
+**Aldus overeengekomen en ondertekend in tweevoud op `[INVULLEN op moment van ondertekening: datum]`.**
 
 | Verwerkingsverantwoordelijke | Verwerker |
 |---|---|
-| `[INVULLEN: naam vertegenwoordiger]` | `[INVULLEN: naam vertegenwoordiger]` |
-| `[INVULLEN: functie]` | `[INVULLEN: functie]` |
-| Handtekening: | Handtekening: |
+| Protest Sportwear B.V. | Ascentra B.V. |
+| `[INVULLEN door Protest Sportwear: naam tekenbevoegd vertegenwoordiger]` | Alex Sinigaglia |
+| `[INVULLEN door Protest Sportwear: functie]` | Oprichter |
+| Handtekening: ____________________________ | Handtekening: ____________________________ |
 
 ---
 
