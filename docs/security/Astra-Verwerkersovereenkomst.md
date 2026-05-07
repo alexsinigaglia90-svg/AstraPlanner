@@ -170,6 +170,6 @@ Aldus overeengekomen en ondertekend in tweevoud.
 |---|---|
 | Protest Sportwear B.V. | Ascentra B.V. |
 | `[INVULLEN: naam tekenbevoegd vertegenwoordiger]` | Alex Sinigaglia |
-| `[INVULLEN: functie]` | Oprichter |
+| `[INVULLEN: functie]` | General Manager |
 | Datum: `[INVULLEN: datum]` | Datum: `[INVULLEN: datum]` |
 | Handtekening: ____________________________ | Handtekening: ____________________________ |

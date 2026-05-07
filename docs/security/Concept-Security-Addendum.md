@@ -142,7 +142,7 @@ De Verwerker realiseert de encryptie van integratie-credentials met AES-256-GCM 
 |---|---|
 | Protest Sportwear B.V. | Ascentra B.V. |
 | `[INVULLEN door Protest Sportwear: naam tekenbevoegd vertegenwoordiger]` | Alex Sinigaglia |
-| `[INVULLEN door Protest Sportwear: functie]` | Oprichter |
+| `[INVULLEN door Protest Sportwear: functie]` | General Manager |
 | Handtekening: ____________________________ | Handtekening: ____________________________ |
 
 ---

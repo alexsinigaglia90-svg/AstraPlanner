@@ -16,7 +16,7 @@ hierna te noemen: de **"Verwerkingsverantwoordelijke"**;
 
 **2. Verwerker**
 
-**Ascentra B.V.**, gevestigd te Oranjestraat 11, 9401 KE Assen, ingeschreven in het handelsregister onder nummer **98227548**, leverancier van het Astra-platform, te dezen rechtsgeldig vertegenwoordigd door **Alex Sinigaglia, oprichter**,
+**Ascentra B.V.**, gevestigd te Oranjestraat 11, 9401 KE Assen, ingeschreven in het handelsregister onder nummer **98227548**, leverancier van het Astra-platform, te dezen rechtsgeldig vertegenwoordigd door **Alex Sinigaglia, General Manager**,
 
 hierna te noemen: de **"Verwerker"**;
 
@@ -291,7 +291,7 @@ In deze Overeenkomst wordt verstaan onder:
 |---|---|
 | Protest Sportwear B.V. | Ascentra B.V. |
 | `[INVULLEN door Protest Sportwear: naam tekenbevoegd vertegenwoordiger]` | Alex Sinigaglia |
-| `[INVULLEN door Protest Sportwear: functie]` | Oprichter |
+| `[INVULLEN door Protest Sportwear: functie]` | General Manager |
 | Handtekening: ____________________________ | Handtekening: ____________________________ |
 
 ---

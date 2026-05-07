@@ -91,7 +91,7 @@ Astra is de **verwerker** in de zin van artikel 28 AVG. Wij verwerken persoonsge
 
 ### 3.3 Functionaris Gegevensbescherming
 
-Ascentra heeft geen wettelijk verplichte Functionaris Gegevensbescherming aangesteld. De rol van eerste aanspreekpunt voor privacy- en beveiligingsvraagstukken wordt vervuld door **Alex Sinigaglia, oprichter van Ascentra B.V.**, bereikbaar via `privacy@ascentra.nl`.
+Ascentra heeft geen wettelijk verplichte Functionaris Gegevensbescherming aangesteld. De rol van eerste aanspreekpunt voor privacy- en beveiligingsvraagstukken wordt vervuld door **Alex Sinigaglia, General Manager van Ascentra B.V.**, bereikbaar via `privacy@ascentra.nl`.
 
 ### 3.4 Subverwerkers
 
@@ -281,7 +281,7 @@ Ascentra beschikt, zoals iedere SaaS-leverancier, over een `super_admin`-rol en 
 
 **Contractuele beperking.** Ieder gebruik van Protest Sportwear-data anders dan strikt noodzakelijk voor het leveren van de dienst is op grond van de Verwerkersovereenkomst verboden en levert een direct opzegrecht voor Protest Sportwear op.
 
-**Geheimhouding.** Personeel met productie-toegang is gebonden aan een geheimhoudingsverplichting die is opgenomen in de arbeidsovereenkomst dan wel in een afzonderlijke NDA. Op de datum van dit document is de oprichter de enige persoon binnen Ascentra met productie-toegang. Bij uitbreiding van het personeelsbestand wordt deze verplichting bij elke nieuwe arbeidsovereenkomst contractueel vastgelegd.
+**Geheimhouding.** Personeel met productie-toegang is gebonden aan een geheimhoudingsverplichting die is opgenomen in de arbeidsovereenkomst dan wel in een afzonderlijke NDA. Op de datum van dit document is de General Manager de enige persoon binnen Ascentra met productie-toegang. Bij uitbreiding van het personeelsbestand wordt deze verplichting bij elke nieuwe arbeidsovereenkomst contractueel vastgelegd.
 
 Ascentra spreekt zich niet uit over de absolute onmogelijkheid van toegang door een medewerker met kwade opzet — een dergelijke uitspraak zou bij geen enkele SaaS-leverancier juist zijn. Ascentra borgt vier punten: (i) dergelijke toegang maakt geen deel uit van enig regulier bedrijfsproces, (ii) elke toegang levert een onveranderbare audit-trail op, (iii) de autorisatie is contractueel beperkt, en (iv) Ascentra rapporteert hierover transparant aan de verwerkingsverantwoordelijke.
 
@@ -659,7 +659,7 @@ Voor aanvullende informatie, een technische toelichting of het vaststellen van e
 Aldus opgesteld te Assen op 9 april 2026.
 
 **Alex Sinigaglia**
-Oprichter, Ascentra B.V.
+General Manager, Ascentra B.V.
 
 _Handtekening:_ ____________________________
 
