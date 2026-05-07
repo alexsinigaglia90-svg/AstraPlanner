@@ -80,6 +80,15 @@ const DOC_METADATA = {
     date: '9 april 2026',
     classification: 'Intern',
   },
+  'Astra-Beveiliging-Samenvatting': {
+    eyebrow: 'Beveiliging & Privacy — executive samenvatting',
+    title: 'Astra — Beveiliging & Privacy',
+    subtitle: 'Een beknopt overzicht van hoe persoonsgegevens binnen het Astra-platform worden behandeld, beschermd en contractueel verankerd.',
+    recipient: 'Protest Sportwear B.V., t.a.v. Dhr. M. Werkman',
+    version: '1.0',
+    date: '9 april 2026',
+    classification: 'Vertrouwelijk',
+  },
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -270,10 +279,27 @@ function buildAll() {
 
   // Also create a tiny index.html in dist/ that links to all generated docs,
   // so the user can navigate to the whole pack from one entry point.
-  const indexLinks = sourceFiles
-    .filter((f) => DOC_METADATA[f.replace(/\.md$/, '')])
-    .map((f) => {
-      const baseName = f.replace(/\.md$/, '')
+  //
+  // Display order is intentional: the executive summary first (this is what
+  // a customer reads on first contact), followed by the technical and
+  // contractual documents that are made available on request.
+  const DOC_ORDER = [
+    'Astra-Beveiliging-Samenvatting',
+    'AstraPlanner-Security-AVG-Protest-Sportwear',
+    'Concept-Verwerkersovereenkomst',
+    'Concept-Security-Addendum',
+    'DPIA-Template',
+    'ai-prompt-injection-test-catalog',
+  ]
+  const orderedBaseNames = DOC_ORDER
+    .filter((name) => sourceFiles.includes(`${name}.md`))
+    .concat(
+      sourceFiles
+        .map((f) => f.replace(/\.md$/, ''))
+        .filter((name) => DOC_METADATA[name] && !DOC_ORDER.includes(name)),
+    )
+  const indexLinks = orderedBaseNames
+    .map((baseName) => {
       const meta = DOC_METADATA[baseName]
       return `      <li><a href="./${baseName}.html"><strong>${escapeHtml(meta.title)}</strong><br /><span>${escapeHtml(meta.subtitle)}</span></a></li>`
     })
