@@ -80,10 +80,10 @@ const DOC_METADATA = {
     date: '9 april 2026',
     classification: 'Intern',
   },
-  'Astra-Beveiliging-Samenvatting': {
-    eyebrow: 'Beveiliging & Privacy — executive samenvatting',
-    title: 'Astra — Beveiliging & Privacy',
-    subtitle: 'Een beknopt overzicht van hoe persoonsgegevens binnen het Astra-platform worden behandeld, beschermd en contractueel verankerd.',
+  'Astra-Verwerkersovereenkomst': {
+    eyebrow: 'Verwerkersovereenkomst — artikel 28 AVG',
+    title: 'Verwerkersovereenkomst & Beveiligingsbeleid',
+    subtitle: 'Vastlegging van de verwerker-verwerkingsverantwoordelijke verhouding tussen Ascentra B.V. en Protest Sportwear B.V., met geïntegreerd overzicht van de van toepassing zijnde technische en organisatorische beveiligingsmaatregelen.',
     recipient: 'Protest Sportwear B.V., t.a.v. Dhr. M. Werkman',
     version: '1.0',
     date: '9 april 2026',
@@ -284,7 +284,7 @@ function buildAll() {
   // a customer reads on first contact), followed by the technical and
   // contractual documents that are made available on request.
   const DOC_ORDER = [
-    'Astra-Beveiliging-Samenvatting',
+    'Astra-Verwerkersovereenkomst',
     'AstraPlanner-Security-AVG-Protest-Sportwear',
     'Concept-Verwerkersovereenkomst',
     'Concept-Security-Addendum',
